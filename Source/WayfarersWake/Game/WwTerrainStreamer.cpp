@@ -11,6 +11,8 @@
 #include "TextureResource.h"
 #include "Misc/PackageName.h"
 #include "WorldGen/WwVegetation.h"
+#include "WorldGen/WwFlora.h"
+#include "Misc/CommandLine.h"
 #include "Tasks/Task.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -32,7 +34,13 @@ void AWwTerrainStreamer::EndPlay(const EEndPlayReason::Type Reason)
 
 void AWwTerrainStreamer::ClearAll()
 {
-	for (FWwTileSlot& Slot : Slots) if (Slot.Mesh) Slot.Mesh->DestroyComponent();
+	for (FWwTileSlot& Slot : Slots)
+	{
+		if (Slot.Mesh) Slot.Mesh->DestroyComponent();
+		if (Slot.Plants) Slot.Plants->DestroyComponent();
+		if (Slot.Leaves) Slot.Leaves->DestroyComponent();
+	}
+	PlantsShown = 0;
 	for (UInstancedStaticMeshComponent* Component : TreeComponents) if (Component) Component->DestroyComponent();
 	Tiles.Empty(); Pending.Empty(); Desired.Empty(); Slots.Empty(); Free.Empty(); TreeComponents.Empty(); TreeLookup.Empty();
 	TreesShown = 0;
@@ -48,7 +56,7 @@ static FColor Bytes(double R, double G, double B, double A)
 	return FColor(Q(R), Q(G), Q(B), Q(A));
 }
 
-TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees)
+TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass)
 {
 	const double Started = FPlatformTime::Seconds();
 	TSharedPtr<FWwTileData> Data = MakeShared<FWwTileData>();
@@ -71,6 +79,17 @@ TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler&
 	Data->Vertices.Reserve(Total); Data->Normals.Reserve(Total); Data->Colors.Reserve(Total); Data->Uv0.Reserve(Total); Data->Uv1.Reserve(Total);
 	Data->GroundSide = Side;
 	Data->Ground.SetNumUninitialized(Side * 3 * Side);
+	// What the plant rules read (nearest-level tiles only), at full precision as in Thornwake.
+	const bool bFlora = Key.Level == 0 && Grass > 0;
+	TArray<float> FloraHeight, FloraUp, FloraShore, FloraPlants, FloraWetness, FloraGrass;
+	TArray<double> FloraForest;
+	TArray<ww::FTerrainSample> FloraSamples;
+	if (bFlora)
+	{
+		FloraHeight.SetNumUninitialized(VertexCount); FloraUp.SetNumUninitialized(VertexCount); FloraShore.SetNumUninitialized(VertexCount);
+		FloraPlants.SetNumUninitialized(VertexCount); FloraWetness.SetNumUninitialized(VertexCount); FloraGrass.SetNumUninitialized(VertexCount * 3);
+		FloraForest.SetNumUninitialized(VertexCount); FloraSamples.SetNumUninitialized(VertexCount);
+	}
 	for (int32 j = 0; j < Side; j++)
 		for (int32 i = 0; i < Side; i++)
 		{
@@ -118,8 +137,41 @@ TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler&
 				FMath::Min(1.0, Plants) * LavaFree * (1 - .8 * S.Scree));
 			Texel[Side * 2] = Bytes(A.Rock.R * Share + B.Rock.R * Sb, A.Rock.G * Share + B.Rock.G * Sb, A.Rock.B * Share + B.Rock.B * Sb, A.Wetness * Share + B.Wetness * Sb);
 			Data->Uv0.Add(FVector2D(A.RockExposure * Share + B.RockExposure * Sb, S.Scree));
+			if (bFlora)
+			{
+				const int32 K = j * Side + i;
+				FloraHeight[K] = (float)H; FloraUp[K] = (float)Normal.Z; FloraShore[K] = (float)Submerged; FloraForest[K] = Forest; FloraSamples[K] = S;
+				FloraPlants[K] = (float)(FMath::Min(1.0, Plants) * LavaFree * (1 - .8 * S.Scree));
+				FloraWetness[K] = (float)(A.Wetness * Share + B.Wetness * Sb);
+				FloraGrass[K * 3] = (float)((A.Grass.R * Share + B.Grass.R * Sb) * Dark);
+				FloraGrass[K * 3 + 1] = (float)((A.Grass.G * Share + B.Grass.G * Sb) * Dark);
+				FloraGrass[K * 3 + 2] = (float)((A.Grass.B * Share + B.Grass.B * Sb) * Dark);
+			}
 			Data->Uv1.Add(FVector2D((double)i / Cells, (double)j / Cells));
 		}
+
+	if (bFlora)
+	{
+		ww::FFloraGrid FloraGrid;
+		FloraGrid.Side = Side; FloraGrid.Spacing = Spacing; FloraGrid.X0 = X0; FloraGrid.Z0 = Z0;
+		FloraGrid.Height = FloraHeight.GetData(); FloraGrid.Up = FloraUp.GetData(); FloraGrid.Forest = FloraForest.GetData(); FloraGrid.Samples = FloraSamples.GetData();
+		FloraGrid.Shore = FloraShore.GetData(); FloraGrid.Plants = FloraPlants.GetData(); FloraGrid.Wetness = FloraWetness.GetData(); FloraGrid.Grass = FloraGrass.GetData();
+		FloraGrid.bClimateLine = bBiomes;
+		const ww::u64 CoverSeed = ww::FFlora::CoverSeed(Sampler);
+		std::vector<ww::FFloraInstance> Flora;
+		ww::FFlora::Land(FloraGrid, Size, Sea, CoverSeed, Grass, Flora);
+		ww::FFlora::Water(FloraGrid, Size, Sea, CoverSeed, *Plan.Biomes, FMath::Min(1.5, Grass), Flora);
+		Data->Plants.Reserve((int32)Flora.size()); Data->PlantData.Reserve((int32)Flora.size() * 4);
+		for (const ww::FFloraInstance& P : Flora)
+		{
+			const bool bFlat = ww::FFlora::Species(P.Species).Form == ww::EFloraForm::Floating;
+			// (Thornwake: turn about the vertical, then lean about the plant's own sideways axis; the sprite is 1 m)
+			const FQuat Turn = FQuat(FVector::UpVector, P.Yaw) * FQuat(FVector::ForwardVector, P.Tilt);
+			const FTransform Transform(Turn, FVector(P.X * 100.0, P.Z * 100.0, P.Y * 100.0), FVector(P.Size));
+			(bFlat ? Data->Leaves : Data->Plants).Add(Transform);
+			(bFlat ? Data->LeafData : Data->PlantData).Append({ (float)P.Species, P.R, P.G, P.B });
+		}
+	}
 
 	if (bTrees)
 	{
@@ -264,9 +316,9 @@ void AWwTerrainStreamer::LaunchJobs(const TArray<FVector2D>& Viewers)
 		Pending.Add(Key);
 		Shared->InFlight++;
 		UE::Tasks::Launch(UE_SOURCE_LOCATION, [State = Shared, World = Sampler, Key, Base = BaseTile, CellCount = Key.Level == 0 ? Cells * 2 : Cells, Serial = WorldSerial,
-			bTrees = Key.Level < TreeLevels && TreeModels.Num() > 0]()
+			bTrees = Key.Level < TreeLevels && TreeModels.Num() > 0, Grass = PlantMesh ? GrassAmount : 0.0]()
 		{
-			TSharedPtr<FWwTileData> Data = BuildTile(*World, Key, Base, CellCount, bTrees);
+			TSharedPtr<FWwTileData> Data = BuildTile(*World, Key, Base, CellCount, bTrees, Grass);
 			Data->WorldSerial = Serial;
 			State->Done.Enqueue(Data);
 			State->InFlight--;
@@ -340,16 +392,50 @@ void AWwTerrainStreamer::Commit(const TSharedPtr<FWwTileData>& Data)
 		Mesh->SetMaterial(1, WaterMaterial);
 	}
 	Mesh->SetVisibility(false);
+	const FVector Origin(Data->Key.X * Size * 100.0, Data->Key.Y * Size * 100.0, 0.0);
+	SetPlants(Slot.Plants, PlantMesh, Data->Plants, Data->PlantData, Origin);
+	SetPlants(Slot.Leaves, LeafMesh, Data->Leaves, Data->LeafData, Origin);
 	FTile Tile; Tile.Slot = Index;
+	Tile.Plants = Data->Plants.Num() + Data->Leaves.Num();
 	Tile.Trees = MoveTemp(Data->Trees);
 	Tiles.Add(Data->Key, MoveTemp(Tile));
 	TilesBuilt++; TotalBuildMs += Data->BuildMs;
+}
+
+void AWwTerrainStreamer::SetPlants(TObjectPtr<UInstancedStaticMeshComponent>& Component, UStaticMesh* Mesh, const TArray<FTransform>& Transforms, const TArray<float>& Data, const FVector& Origin)
+{
+	if (Component && Component->GetInstanceCount() > 0) Component->ClearInstances();
+	if (Transforms.Num() == 0 || !Mesh) return;
+	if (!Component)
+	{
+		Component = NewObject<UInstancedStaticMeshComponent>(this);
+		Component->SetStaticMesh(Mesh);
+		Component->SetMobility(EComponentMobility::Movable);
+		Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Component->SetCanEverAffectNavigation(false);
+		Component->SetCastShadow(bPlantShadows);
+		Component->SetNumCustomDataFloats(4);
+		Component->SetupAttachment(RootComponent);
+		Component->RegisterComponent();
+	}
+	Component->SetVisibility(false);
+	Component->SetWorldLocation(Origin);
+	Component->AddInstances(Transforms, false, false, false);
+	// (per plant: sprite layer and colour; set in one block, far cheaper than one call per plant)
+	if (Component->PerInstanceSMCustomData.Num() == Data.Num())
+	{
+		FMemory::Memcpy(Component->PerInstanceSMCustomData.GetData(), Data.GetData(), Data.Num() * sizeof(float));
+		Component->MarkRenderStateDirty();
+	}
 }
 
 void AWwTerrainStreamer::ShowTile(const FWwTileKey& Key, FTile& Tile)
 {
 	Tile.bVisible = true;
 	Slots[Tile.Slot].Mesh->SetVisibility(true);
+	if (Slots[Tile.Slot].Plants) Slots[Tile.Slot].Plants->SetVisibility(true);
+	if (Slots[Tile.Slot].Leaves) Slots[Tile.Slot].Leaves->SetVisibility(true);
+	PlantsShown += Tile.Plants;
 	if (Tile.Trees.Num() == 0 || TreeModels.Num() == 0) return;
 	// Trees appear and go with their tile, so each stands exactly once whatever the mix of levels on screen.
 	const int32 Model = Key.Level < NearTreeLevels ? 0 : 1;
@@ -392,6 +478,9 @@ void AWwTerrainStreamer::Release(FTile& Tile)
 	Mesh->SetVisibility(false);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Mesh->ClearAllMeshSections();
+	for (UInstancedStaticMeshComponent* Plants : { Slots[Tile.Slot].Plants.Get(), Slots[Tile.Slot].Leaves.Get() })
+		if (Plants) { Plants->SetVisibility(false); Plants->ClearInstances(); }
+	if (Tile.bVisible) PlantsShown -= Tile.Plants;
 	Free.Add(Tile.Slot);
 	for (const FTreeBatch& Batch : Tile.Batches) TreeComponents[Batch.Component]->RemoveInstancesById(Batch.Ids, false);
 	if (Tile.Batches.Num() > 0) TreesShown -= Tile.Trees.Num();
@@ -471,6 +560,14 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 		if (!TerrainMaterial) { TerrainMaterial = UMaterial::GetDefaultMaterial(MD_Surface); UE_LOG(LogWayfarer, Warning, TEXT("M_WwTerrain missing: run Tools/CreateAssets.cmd")); }
 		if (!WaterMaterial) WaterMaterial = TerrainMaterial;
 		LoadTreeMeshes();
+		if (!PlantMesh)
+		{
+			PlantMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Plants/SM_WwPlantUpright.SM_WwPlantUpright"));
+			LeafMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Plants/SM_WwPlantFlat.SM_WwPlantFlat"));
+			if (!PlantMesh) UE_LOG(LogWayfarer, Warning, TEXT("Plant meshes missing: run Tools/ImportAssets.cmd"));
+			FParse::Value(FCommandLine::Get(), TEXT("WwGrass="), GrassAmount);
+			bPlantShadows = !FParse::Param(FCommandLine::Get(), TEXT("WwNoPlantShadows"));
+		}
 	}
 
 	TArray<FVector2D> Viewers;

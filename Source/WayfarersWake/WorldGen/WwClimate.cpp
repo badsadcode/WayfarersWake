@@ -76,6 +76,8 @@ bool FBiomeRegistry::Parse(const std::string& BiomesJson, const std::string& Set
 		const FJson& veg = b.Find("Vegetation") ? *b.Find("Vegetation") : Empty;
 		o.TreeDensity = veg.NumberOr("TreeDensity", 1); o.GrassAmount = veg.NumberOr("Grass", 1);
 		o.WaterTrees = veg.NumberOr("WaterTrees", 0);
+		o.FloatingPlants = veg.NumberOr("FloatingPlants", 0);
+		o.bHyacinth = veg.StringOr("AquaticPlants", "") == "Hyacinth";
 		{ double size[2]; if (ReadRange(veg, "TreeSize", size)) { o.TreeSizeMin = size[0]; o.TreeSizeMax = size[1]; } }
 		std::vector<std::pair<std::string, double>> treeSets;
 		if (const FJson* trees = veg.Find("Trees")) for (const auto& m : trees->Members) treeSets.emplace_back(m.first, m.second.Num);

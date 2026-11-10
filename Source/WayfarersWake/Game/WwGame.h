@@ -41,7 +41,7 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UPostProcessComponent> Grade;
 	/// Exposure limits by day, in stops of brightening: deep shade and open sun (test switches -WwEv=, -WwEvSun=);
 	/// haze is the fog density (-WwFog=).
-	float ShadeEv = 2.4f, SunEv = 0.6f, Saturation = 1.15f, ExposureBias = -0.7f;
+	float ShadeEv = 4.5f, SunEv = 0.6f, Saturation = 1.15f, ExposureBias = -0.7f;
 };
 
 /// Replicates what defines the world; every machine builds the world from it and streams its own terrain.

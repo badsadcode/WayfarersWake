@@ -304,6 +304,8 @@ struct FBiome
 	double Snow = 0;
 	std::vector<std::pair<std::string, double>> Trees; // asset name, cumulative weight
 	double TreeSizeMin = .8, TreeSizeMax = 1.25, WaterTrees = 0;
+	double FloatingPlants = 0; // floating leaves on still water
+	bool bHyacinth = false;    // AquaticPlants "Hyacinth" (bayou)
 	bool bClassic = false; // the single classic temperate biome (biomes off): species by elevation
 	bool ShapesTerrain() const { return Pools > 0 || Flatten > 0 || Dunes > 0 || Mesas > 0 || Spires > 0; }
 };

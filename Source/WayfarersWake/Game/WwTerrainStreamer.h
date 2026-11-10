@@ -46,6 +46,10 @@ struct FWwTileData
 	/// Trees standing on this tile (levels near enough to show them).
 	struct FTree { int32 Species; FVector Position; float Scale, Yaw; };
 	TArray<FTree> Trees;
+	/// Grass and small plants of a nearest-level tile, ready for instancing: tile-local transforms and, per plant,
+	/// four numbers for the material (sprite layer, colour). Upright plants (crossed sprites) and floating leaves (flat).
+	TArray<FTransform> Plants, Leaves;
+	TArray<float> PlantData, LeafData;
 	double BuildMs = 0;
 };
 
@@ -57,6 +61,8 @@ struct FWwTileSlot
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Mesh;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> Material;
 	UPROPERTY() TObjectPtr<UTexture2D> Ground;
+	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> Plants;
+	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> Leaves;
 };
 
 /// Streams the generated terrain around the players as a quadtree of LOD tiles (Thornwake's nested rings: 64 m tiles of
@@ -90,12 +96,15 @@ public:
 	/// Trees: full models on the finest levels, the distant models on the next ones, none beyond.
 	UPROPERTY(EditAnywhere, Category = "Trees") int32 NearTreeLevels = 2;
 	UPROPERTY(EditAnywhere, Category = "Trees") int32 TreeLevels = 4;
+	/// Grass density as Thornwake's setting (1 = its default; Tom plays with 3; 0 = no plants). Test switch -WwGrass=.
+	UPROPERTY(EditAnywhere, Category = "Plants") double GrassAmount = 3;
 
 	/// True once the finest tile under this place is in the scene (with its collision requested).
 	bool IsGroundReady(const FVector& Location) const;
 
 	int32 GetTileCount() const { return Tiles.Num(); }
 	int32 GetTreeCount() const { return TreesShown; }
+	int32 GetPlantCount() const { return PlantsShown; }
 	int32 GetPendingCount() const { return Pending.Num(); }
 	int32 GetDesiredCount() const { return Desired.Num(); }
 	int32 GetMissingCount() const { return Missing; }
@@ -104,11 +113,11 @@ public:
 	double GetMaxCommitMs() const { return MaxCommitMs; }
 	void ResetStats() { MaxCommitMs = 0; }
 
-	static TSharedPtr<FWwTileData> BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees);
+	static TSharedPtr<FWwTileData> BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass);
 
 private:
 	struct FTreeBatch { int32 Component; TArray<FPrimitiveInstanceId> Ids; };
-	struct FTile { int32 Slot = -1; bool bVisible = false; TArray<FWwTileData::FTree> Trees; TArray<FTreeBatch> Batches; };
+	struct FTile { int32 Slot = -1; int32 Plants = 0; bool bVisible = false; TArray<FWwTileData::FTree> Trees; TArray<FTreeBatch> Batches; };
 	/// Tree instances live in components covering 16 km squares (instance positions are single precision).
 	struct FTreeKey
 	{
@@ -132,19 +141,23 @@ private:
 	void Release(FTile& Tile);
 	void ShowTile(const FWwTileKey& Key, FTile& Tile);
 	void LoadTreeMeshes();
+	void SetPlants(TObjectPtr<UInstancedStaticMeshComponent>& Component, UStaticMesh* Mesh, const TArray<FTransform>& Transforms, const TArray<float>& Data, const FVector& Origin);
 	double TileSize(int32 Level) const { return BaseTile * (double)((int64)1 << Level); }
 
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> TerrainMaterial;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> WaterMaterial;
 	UPROPERTY(Transient) TArray<FWwTileSlot> Slots;
 	UPROPERTY(Transient) TArray<TObjectPtr<UStaticMesh>> TreeMeshes;
+	UPROPERTY(Transient) TObjectPtr<UStaticMesh> PlantMesh;
+	UPROPERTY(Transient) TObjectPtr<UStaticMesh> LeafMesh;
 	UPROPERTY(Transient) TArray<TObjectPtr<UInstancedStaticMeshComponent>> TreeComponents;
 	TArray<int32> Free;
 	/// Per species and model (near, distant): first index into TreeMeshes and how many parts (bark, foliage, cards).
 	struct FTreeModel { int32 First = 0, Count = 0; };
 	TArray<FTreeModel> TreeModels;
 	TMap<FTreeKey, int32> TreeLookup;
-	int32 TreesShown = 0;
+	int32 TreesShown = 0, PlantsShown = 0;
+	bool bPlantShadows = true;
 
 	TMap<FWwTileKey, FTile> Tiles;
 	TSet<FWwTileKey> Pending, Desired;

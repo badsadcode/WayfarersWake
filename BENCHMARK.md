@@ -73,6 +73,18 @@ Standing still in the 64 km world: 330 tiles, 222-240 fps, 1.7 ms average tile b
 
 Tile builds cost two to three times what they did (1.7-3 ms before): each vertex now also gets forest cover, climate and biome colours, and near tiles place their trees. The flying figure is the one to work on: adding and removing thousands of tree instances as tiles change is done on the game thread in one go.
 
+## With grass and plants (10 November 2026)
+
+512 km balanced world, seed 7319, at the river shore of Godot dump `dump-20261109-153359`, 1280x720, editor build with `-game`, hovering still. Single 30 s runs.
+
+| | Plants shown | fps | Tile build (average) |
+|---|---|---|---|
+| Before plants | 0 | 212 | 10.8 ms |
+| Grass density 3 (Tom's Thornwake setting), plant shadows on | 344,578 | 90-91 | 12.9-15.7 ms |
+| The same, plant shadows off | 344,578 | 90 | 13.5 ms |
+
+Thornwake reports 37-49 fps at 1920x1080 in the same scenes with everything on (its dumps), so the two are not comparable yet: this game draws far less. Not measured: walking or flying through grass (each new tile adds about 10,000 plants on the game thread), 1920x1080.
+
 ## Not measured yet
 
 GPU and CPU frame breakdown, 1 % lows over long runs, the scene types of `Content/WorldData/benchmarks.json` (forest, lake, coast, mountain, flight), packaged (non-editor) builds.

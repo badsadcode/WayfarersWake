@@ -175,8 +175,8 @@ void AWwGameMode::LogStats(const TCHAR* Why)
 	const double Average = Frames > 0 ? FrameTimeSum / Frames : 0;
 	const double P99 = FrameTimes.Num() > 0 ? FrameTimes[FMath::Min(FrameTimes.Num() - 1, (int32)(FrameTimes.Num() * 0.99))] : 0;
 	const FVector P = Player->GetActorLocation();
-	UE_LOG(LogWayfarer, Display, TEXT("WwStats[%s] pos=(%.0f, %.0f) m alt=%.0f m travelled=%.1f km tiles=%d trees=%d desired=%d missing=%d pending=%d built=%lld avgBuild=%.2f ms maxCommit=%.2f ms fps=%.1f worstFrame=%.1f ms p99=%.1f ms mem=%.0f MB (start %.0f MB)"),
-		Why, P.X / 100, P.Y / 100, P.Z / 100, Player->GetDistanceTravelled() / 1000, Streamer->GetTileCount(), Streamer->GetTreeCount(), Streamer->GetDesiredCount(), Streamer->GetMissingCount(),
+	UE_LOG(LogWayfarer, Display, TEXT("WwStats[%s] pos=(%.0f, %.0f) m alt=%.0f m travelled=%.1f km tiles=%d trees=%d plants=%d desired=%d missing=%d pending=%d built=%lld avgBuild=%.2f ms maxCommit=%.2f ms fps=%.1f worstFrame=%.1f ms p99=%.1f ms mem=%.0f MB (start %.0f MB)"),
+		Why, P.X / 100, P.Y / 100, P.Z / 100, Player->GetDistanceTravelled() / 1000, Streamer->GetTileCount(), Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetDesiredCount(), Streamer->GetMissingCount(),
 		Streamer->GetPendingCount(), Streamer->GetTilesBuilt(), Streamer->GetAverageBuildMs(), Streamer->GetMaxCommitMs(),
 		Average > 0 ? 1.0 / Average : 0.0, WorstFrame * 1000, P99 * 1000, FPlatformMemory::GetStats().UsedPhysical / 1048576.0, StartMemoryMb);
 	Frames = 0; FrameTimeSum = 0; WorstFrame = 0; FrameTimes.Reset();
@@ -241,8 +241,8 @@ void AWwHUD::DrawHUD()
 	if (const AWwGameState* State = GetWorld()->GetGameState<AWwGameState>())
 		if (const AWwTerrainStreamer* Streamer = State->GetStreamer())
 		{
-			Line(FString::Printf(TEXT("%.0f fps   tiles %d  trees %d  building %d  missing %d   tile build %.1f ms"), 1.0 / FMath::Max(SmoothedFrame, 1e-4), Streamer->GetTileCount(),
-				Streamer->GetTreeCount(), Streamer->GetPendingCount(), Streamer->GetMissingCount(), Streamer->GetAverageBuildMs()), 16, Y, 1.0f);
+			Line(FString::Printf(TEXT("%.0f fps   tiles %d  trees %d  plants %d  building %d  missing %d   tile build %.1f ms"), 1.0 / FMath::Max(SmoothedFrame, 1e-4), Streamer->GetTileCount(),
+				Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetPendingCount(), Streamer->GetMissingCount(), Streamer->GetAverageBuildMs()), 16, Y, 1.0f);
 			Y += 20;
 		}
 	if (const FString Status = Player->GetStatus(); !Status.IsEmpty()) { Line(Status, 16, Y, 1.0f); Y += 20; }

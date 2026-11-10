@@ -35,3 +35,12 @@
 * The dumps show Tom plays with Noor's ground textures, which I had left out as "optional". Ported that style and the ground variety, with the sixteen textures as a texture array.
 * Brightness: the exposure limits I set earlier turned out not to limit anything (changing them by a stop changed nothing in the picture); a plain correction of -0.7 stops does. Field of view now matches Thornwake (59 degrees vertical).
 * Still different from the Godot picture, in order of how much it shows: grass and ground plants, water, rock-kit cliffs, light rays and mist.
+
+## 2026-11-10, session 1 (continued): grass and plants
+
+* Ported Thornwake's plant populations (`GroundCover.Flora.cs`, `Flora.cs`) as `WwFlora`: land grass in six communities, shore plants, floating leaves, underwater plants; 28 sprites imported as a texture array.
+* Started at the place of a second Godot dump (the river shore): the same willows on the bank, grass tufts between them, eelgrass on the river bed.
+* Half the tufts were black: Unreal turns the normal over on back faces, and the sprites' normals lean upward on purpose. The material now turns it back.
+* Re-running the import script failed on assets that other assets point at (they cannot be deleted); it now updates them in place.
+* Cost: 344,578 plants, 212 fps down to 90 hovering still at 1280x720. Plant shadows made no measurable difference.
+* The packaged build's start place, in deep shade, was nearly black: the shade exposure limit set while fixing the washed-out look was too tight (the earlier note that the limits "did not limit anything" was wrong: the sunlit test scenes simply lay inside them). Loosened from 2.4 to 4.5 stops.
