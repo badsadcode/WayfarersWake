@@ -230,7 +230,8 @@ std::vector<double> Prepend(const std::vector<double>& values, double first)
 }
 
 // ---------------------------------------------------------------------------------------------------- build
-FHydrology::FHydrology(const FMacroRaster& InRaster, std::vector<double>& height, const FWorldProfile& profile, const FTerrainStyle& style, u64 seed)
+FHydrology::FHydrology(const FMacroRaster& InRaster, std::vector<double>& height, const FWorldProfile& profile, const FTerrainStyle& style, u64 seed,
+	const std::vector<float>* resist, const std::vector<int>* lakeCells)
 	: Raster(&InRaster), SeaLevel(profile.SeaLevel), MinWidth(style.RiverMinWidth), Style(style)
 {
 	int n = InRaster.Size, count = n * n;
@@ -251,6 +252,7 @@ FHydrology::FHydrology(const FMacroRaster& InRaster, std::vector<double>& height
 			if (r < 0 || height[c] <= 0) continue;
 			double distance = CellDistance(c, r, n) * cell;
 			double f = strength * std::sqrt(area[c]) / distance;
+			if (resist) f *= 1 - (*resist)[c]; // (revision 28: a caldera's rim holds; single precision, as the source)
 			double next = (height[c] + f * height[r]) / (1 + f);
 			// No deposition: depressions stay depressions (they become lakes); land never sinks below the sea.
 			if (next < height[c]) height[c] = Mx(next, .5);
@@ -310,6 +312,9 @@ FHydrology::FHydrology(const FMacroRaster& InRaster, std::vector<double>& height
 		FCandidate& candidate = candidates[ci];
 		const std::vector<int>& members = candidate.Members;
 		bool keep = (int)members.size() >= style.LakeMinCells && candidate.MaxDepth >= style.LakeMinDepth && used + members.size() <= budget;
+		// Revision 28: a caldera's floor is always a lake, beyond the share of the land kept as lakes.
+		if (lakeCells && !keep && candidate.MaxDepth >= style.LakeMinDepth)
+			for (int c : members) if (std::find(lakeCells->begin(), lakeCells->end(), c) != lakeCells->end()) { keep = true; break; }
 		if (!keep) { for (int c : members) height[c] = filled[c]; continue; }
 		used += members.size();
 		int id = (int)Lakes.size();

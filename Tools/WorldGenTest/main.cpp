@@ -15,6 +15,8 @@
 
 using namespace ww;
 
+int RunDump(const std::vector<FWorldProfile>& Profiles, const FBiomeRegistry& Biomes, const std::string& Arg);
+
 static std::string ReadFile(const std::string& Path)
 {
 	std::ifstream In(Path, std::ios::binary);
@@ -56,13 +58,14 @@ int main(int argc, char** argv)
 {
 	if (argc < 2) { std::printf("usage: WorldGenTest <repo root> [--quick] [--sizes] [--bench]\n"); return 2; }
 	std::string root = argv[1];
-	bool quick = false, sizes = false, bench = false; std::string point; int only = 0;
+	bool quick = false, sizes = false, bench = false; std::string point, dump; int only = 0;
 	for (int i = 2; i < argc; i++)
 	{
 		std::string a = argv[i];
 		if (a == "--quick") quick = true; else if (a == "--sizes") sizes = true; else if (a == "--bench") bench = true;
 		else if (a.rfind("--point=", 0) == 0) point = a.substr(8);
 		else if (a.rfind("--rev=", 0) == 0) only = std::stoi(a.substr(6));
+		else if (a.rfind("--dump=", 0) == 0) dump = a.substr(7);
 	}
 	ParallelForHook() = &ThreadedFor;
 
@@ -74,6 +77,7 @@ int main(int argc, char** argv)
 	if (!FBiomeRegistry::Parse(ReadFile(root + "/Tools/WorldGenTest/Fixtures/biomes-build51.json"), ReadFile(root + "/Tools/WorldGenTest/Fixtures/asset_sets-build51.json"), build51, error)) { std::printf("biomes51: %s\n", error.c_str()); return 2; }
 	std::printf("%d profiles, %d biomes in the pool\n", (int)profiles.size(), (int)current.Pool.size());
 
+	if (!dump.empty()) return RunDump(profiles, current, dump);
 	int failures = 0, checks = 0;
 	auto Check = [&](bool ok, const std::string& what) { checks++; if (!ok) { failures++; std::printf("  FAIL %s\n", what.c_str()); } };
 
@@ -97,7 +101,9 @@ int main(int argc, char** argv)
 	const FFixture fixtures[] = { { "terrain-build114.json", 16, &current }, { "terrain-build52.json", 15, &build51 },
 		{ "terrain-build115.json", 17, &current }, { "terrain-build116.json", 18, &current }, { "terrain-build117.json", 19, &current },
 		{ "terrain-r20.json", 20, &current }, { "terrain-build118.json", 21, &current }, { "terrain-r22.json", 22, &current }, { "terrain-build119.json", 23, &current },
-		{ "terrain-build120.json", 24, &current }, { "terrain-r25.json", 25, &current }, { "terrain-r26.json", 26, &current }, { "terrain-build121.json", 27, &current } };
+		{ "terrain-build120.json", 24, &current }, { "terrain-r25.json", 25, &current }, { "terrain-r26.json", 26, &current }, { "terrain-build121.json", 27, &current },
+		{ "terrain-r28.json", 28, &current }, { "terrain-build122.json", 29, &current }, { "terrain-build123.json", 30, &current }, { "terrain-build125.json", 31, &current },
+		{ "terrain-build127.json", 32, &current }, { "terrain-build129.json", 33, &current }, { "terrain-build130.json", 34, &current }, { "terrain-build132.json", 35, &current } };
 	for (const FFixture& fx : fixtures)
 	{
 		FJson expected;

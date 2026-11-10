@@ -421,6 +421,32 @@ FBiomeMap::FBiomeMap(const FWorldPlan& plan, const FClimate& climate, const FBio
 				f[k] = hostFit[k] > 0 ? (float)(hostFit[k] * 2.2 * DetMath::Smooth((mask[k] - threshold) / .06 + .5)) : 0;
 		}
 
+	// ---- revision 28: the volcanic biome on the volcanoes. Revision 34: the land's own biome climbs a volcano's lower
+	// slopes; the volcanic biome keeps an active cone to three quarters of the way down, a quiet cone's upper 40 %,
+	// a caldera's inner half.
+	if (plan.Volcanoes && plan.Volcanoes->Count() > 0)
+	{
+		int volcanic = -1;
+		for (const FBiome& r : pool) if (r.Id == "volcanic" && !excluded[r.Index]) { volcanic = r.Index; break; }
+		bool climb = plan.Style.Revision >= 34;
+		if (volcanic >= 0)
+			plan.Volcanoes->Cones([&](double vx, double vz, double vr, bool caldera, bool active)
+			{
+				for (int k = 0; k < n * n; k++)
+				{
+					if (!land[k]) continue;
+					double d = std::sqrt(Sq(Grid->CellX(k % n) - vx) + Sq(Grid->CellZ(k / n) - vz));
+					double nearCone = climb ? 1 - DetMath::Smooth((d - vr * (active ? .75 : caldera ? .5 : .4)) / (vr * .15))
+						: 1 - DetMath::Smooth((d - vr * .9) / (vr * .3));
+					if (nearCone <= 0) continue;
+					float best = 0;
+					for (int b = 0; b < count; b++) if (fit[b][k] > best) best = fit[b][k];
+					float value = (float)((best > .1f ? best : .1f) * 2.5 * nearCone);
+					if (value > fit[volcanic][k]) fit[volcanic][k] = value;
+				}
+			});
+	}
+
 	// ---- neighbour rules (one soft pass): suppressed near forbidden neighbours, boosted near preferred ones
 	std::vector<int> top(cells, -1);
 	for (int k = 0; k < n * n; k++)
@@ -735,6 +761,12 @@ FWorldPlan::FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& In
 
 	// Big landforms (revision 17 on), before erosion, so rivers flow round, cut through or fill them.
 	if (Style.Revision >= 18 && !Style.Landform("escarpments").Off()) PlanLandforms.push_back(std::make_unique<FEscarpments>(Style.Revision));
+	if (Style.Revision >= 28 && !Style.Landform("volcanoes").Off())
+	{
+		auto Made = std::make_unique<FVolcanoes>(Style.Revision);
+		Volcanoes = Made.get();
+		PlanLandforms.push_back(std::move(Made));
+	}
 	if (!PlanLandforms.empty() && Stage) Stage(1);
 	for (auto& Form : PlanLandforms) Form->Shape(Macro, Manifest, Style.Landform(Form->Id()));
 
@@ -750,9 +782,14 @@ FWorldPlan::FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& In
 	}
 	if (Stage) Stage(2);
 	u64 riverSeed = Hashing::FeatureSeed(Manifest.Seed, 100 + FWorldManifest::CurrentGenerator, Manifest.ProfileDigest, "rivers");
-	Hydrology = std::make_unique<FHydrology>(Macro, height, p, Style, riverSeed);
+	// Revision 28: a caldera's rim resists erosion, and its floor is always a lake.
+	std::vector<float> resist; std::vector<int> calderaCells;
+	bool bResist = Volcanoes && Volcanoes->Resistance(Macro, resist);
+	if (bResist) Volcanoes->LakeCells(Macro, calderaCells);
+	Hydrology = std::make_unique<FHydrology>(Macro, height, p, Style, riverSeed, bResist ? &resist : nullptr, bResist ? &calderaCells : nullptr);
 	for (size_t k = 0; k < height.size(); k++) heightRaster[k] = (float)height[k];
 	Hydrology->RefineSurfaces(Style);
+	if (Volcanoes) Volcanoes->SetLakes(*Hydrology, p.SeaLevel); // (revision 29: islands over their caldera lake's real level)
 	// Canyons (revision 21): placed on the final rivers, before climate. Cirques (revision 23) read the rivers.
 	if (Style.Revision >= 21 && !Style.Landform("canyons").Off()) Canyons = std::make_unique<FCanyons>(*this, Style.Landform("canyons"));
 	if (Style.Revision >= 23 && !Style.Landform("cirques").Off()) Cirques = std::make_unique<FCirques>(*this, Style.Landform("cirques"));
@@ -767,6 +804,7 @@ FWorldPlan::FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& In
 	Climate = std::make_unique<FClimate>(*this, Style.Climate);
 	if (Stage) Stage(4);
 	Biomes = std::make_unique<FBiomeMap>(*this, *Climate, Style.Climate.Biomes ? InBiomes : FBiomeRegistry::ClassicOnly());
+	if (Volcanoes) Volcanoes->Finalize(); // (lava flows traced on the finished plan)
 	BuildMilliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Started).count();
 }
 

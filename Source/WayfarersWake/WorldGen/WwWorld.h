@@ -87,7 +87,7 @@ struct FTerrainStyle
 	FClimateSettings Climate;
 	double MouthBlend = 1, ShoreSlope = 1, BankVariation = 1, MeanderStrength = 1, WanderStrength = 1, WidthVariation = 1;
 
-	static constexpr int PortedRevision = 27;
+	static constexpr int PortedRevision = 35;
 	static FTerrainStyle For(const FWorldProfile& Profile) { FTerrainStyle s; s.LowlandDetail = 20 + Profile.HillHeight * .05; return s; }
 };
 
@@ -196,7 +196,8 @@ public:
 	std::vector<int> LakeCell;
 	double MaxIncision = 0;
 
-	FHydrology(const FMacroRaster& Raster, std::vector<double>& Height, const FWorldProfile& Profile, const FTerrainStyle& Style, u64 Seed);
+	FHydrology(const FMacroRaster& Raster, std::vector<double>& Height, const FWorldProfile& Profile, const FTerrainStyle& Style, u64 Seed,
+		const std::vector<float>* Resist = nullptr, const std::vector<int>* AlwaysLakeCells = nullptr);
 	void RefineSurfaces(const FTerrainStyle& Style);
 
 	int LakeAt(double x, double z) const;
@@ -345,6 +346,7 @@ public:
 	std::unique_ptr<class FCanyons> Canyons;   // revision 21
 	std::unique_ptr<class FCirques> Cirques;   // revision 23
 	std::unique_ptr<class FTroughs> Troughs;   // revisions 24-27
+	class FVolcanoes* Volcanoes = nullptr;      // revision 28 (owned by PlanLandforms)
 	/// Big landform modules applied before erosion (revision 17 on).
 	std::vector<std::unique_ptr<FPlanLandform>> PlanLandforms;
 	double BuildMilliseconds = 0;
@@ -458,6 +460,7 @@ private:
 	const class FCanyons* Canyons = nullptr;
 	const class FCirques* Cirques = nullptr;
 	const class FTroughs* Troughs = nullptr;
+	const class FVolcanoes* Volcanoes = nullptr;
 	std::vector<double> CoastAlongCache; // computed up front (the source caches lazily)
 };
 }

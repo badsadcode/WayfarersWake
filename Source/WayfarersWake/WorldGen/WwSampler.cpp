@@ -116,6 +116,7 @@ FTerrainSampler::FTerrainSampler(std::shared_ptr<const FWorldPlan> InPlan)
 	Canyons = Plan->Canyons && Plan->Canyons->Count() > 0 ? Plan->Canyons.get() : nullptr;
 	Cirques = Plan->Cirques && Plan->Cirques->Count() > 0 ? Plan->Cirques.get() : nullptr;
 	Troughs = Plan->Troughs && Plan->Troughs->Count() > 0 ? Plan->Troughs.get() : nullptr; // (as the source: fjords alone do not count)
+	Volcanoes = Plan->Volcanoes && Plan->Volcanoes->Count() > 0 ? Plan->Volcanoes : nullptr;
 	LandformSeed = SeedOf("landforms");
 	DuneAngle = Hashing::Unit(Hashing::Mix(LandformSeed)) * 6.283185307179586; // prevailing sand-moving wind of this world
 	BuildQuantiles([this](double u, double v) { return PoolNoise(u, v, 1, 0); }, PoolQuantiles, PoolStd);
@@ -210,6 +211,20 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 		double tarn;
 		if (Cirques->Tarn(x, z, height, tarn)) { water = EWaterKind::Pond; level = tarn; }
 	}
+	// Revision 29: a caldera's lake fills all of its floor below the water.
+	if (Volcanoes && water == EWaterKind::None)
+	{
+		double cx, cz;
+		if (Volcanoes->InCaldera(x, z, cx, cz))
+		{
+			int caldera = Hydro.LakeNear(cx, cz);
+			if (caldera >= 0 && height < Hydro.Lakes[caldera].Level - P.SeaLevel) { water = EWaterKind::Lake; level = Hydro.Lakes[caldera].Level; body = caldera; }
+		}
+	}
+	// Revision 31: an active volcano's lava lake, a level surface of molten rock.
+	if (Volcanoes && water == EWaterKind::None) { double lava; if (Volcanoes->LavaLake(x, z, height, lava)) height = lava; }
+	// Revision 28: a quiet volcano's crater lake.
+	if (Volcanoes && water == EWaterKind::None) { double crater; if (Volcanoes->CraterLake(x, z, height, crater)) { water = EWaterKind::Pond; level = crater; } }
 
 	// Stage 6, wetland pools (revision 11): standing water in pool biomes where nothing else is water.
 	// Revision 22: none where a river has cut the ground down by over 2 m (valley sides, canyon and gorge walls).
@@ -236,8 +251,10 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 		height += edit;
 		if (water != EWaterKind::None && P.SeaLevel + height >= level - .02) { water = EWaterKind::None; level = NaNValue(); body = -1; }
 	}
+	double lavaCover = Volcanoes && water == EWaterKind::None ? Volcanoes->LavaFlow(x, z).Cover : 0;
 	FTerrainSample out;
 	if (water != EWaterKind::None) scree = 0;
+	out.Lava = lavaCover;
 	out.Height = P.SeaLevel + height; out.Land = land; out.Mountain = bare > 0 ? Mx(mountainShare, bare) : mountainShare; out.Detail = detail;
 	out.Scree = scree;
 	out.Water = water; out.WaterLevel = level; out.WaterBody = body; out.Plume = lakePlume;

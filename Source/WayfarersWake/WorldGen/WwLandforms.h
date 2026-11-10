@@ -133,4 +133,49 @@ private:
 	int Revision = 0, GridSize = 0;
 	std::vector<int> GridStart, GridItems;
 };
+
+/// Volcanoes and calderas (landform no. 7, revisions 28-32): a plan module raised before erosion, with walking-scale
+/// craters, cliffs, gullies, cinder cones and lava flows, crater lakes and lava lakes.
+class FVolcanoes : public FPlanLandform
+{
+public:
+	explicit FVolcanoes(int InRevision);
+	virtual ~FVolcanoes() override;
+	virtual const char* Id() const override { return "volcanoes"; }
+	virtual void Shape(FMacroRaster& Macro, const FWorldManifest& Manifest, FLandformSetting Setting) override;
+	virtual double Ground(double x, double z, double minWavelength, double& rock, double& scree) const override;
+	int Count() const;
+
+	/// How much each raster cell resists erosion (a caldera's rim); false when there is no caldera.
+	bool Resistance(const FMacroRaster& Macro, std::vector<float>& Resist) const;
+	/// The raster cell under each caldera's middle (its floor: always a lake).
+	void LakeCells(const FMacroRaster& Macro, std::vector<int>& Cells) const;
+	void SetLakes(const FHydrology& Hydrology, double Sea);
+	/// Traces the lava flows and reads the lake levels; call once the plan's rasters and rivers are final.
+	void Finalize();
+
+	bool InCaldera(double x, double z, double& cx, double& cz) const;
+	bool LavaLake(double x, double z, double ground, double& level) const;
+	bool CraterLake(double x, double z, double ground, double& level) const;
+	struct FLava { float Molten = 0, Crust = 0, Cover = 0, DirX = 0, DirZ = 0; };
+	FLava LavaFlow(double x, double z) const;
+	/// Each volcano: middle, radius, caldera, active.
+	void Cones(const std::function<void(double, double, double, bool, bool)>& Visit) const;
+
+private:
+	struct FVolcano;
+	struct FFlow;
+	struct FBox { double X0, Z0, X1, Z1; };
+	void Place(const FMacroRaster& Macro, const FWorldManifest& Manifest, FLandformSetting Setting);
+	double Ground0(const FVolcano& v, double x, double z) const;
+	double TracedFlows(double x, double z, double& rock) const;
+	bool NearLava(double x, double z) const;
+
+	int Revision;
+	std::vector<FVolcano> Volcanoes;
+	std::vector<FBox> LavaBoxes;
+	const FMacroRaster* Macro = nullptr;
+	FMacroRaster RaiseRaster;
+	double Sea = 0;
+};
 }
