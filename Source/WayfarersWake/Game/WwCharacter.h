@@ -50,6 +50,15 @@ public:
 
 private:
 	void TryPlace();
+	/// The body (one of Tom's base bodies, rigged: Content/Characters) and which of its animations plays.
+	void LoadBody();
+	void UpdateBody(float DeltaSeconds, bool bSprinting);
+	enum class EPose : uint8 { None, Idle, Walk, Run, Swim, Attack, Crouch, Climb };
+	UPROPERTY(Transient) TArray<TObjectPtr<class UAnimSequence>> Clips;
+	EPose Pose = EPose::None;
+	int32 BodySeen = -1;
+	float AttackSeconds = 0, BodyHeight = 180;
+	bool bCrouching = false, bHasBody = false;
 	/// Keys as the game hears them: nothing while the menu is open.
 	bool KeyDown(const FKey& Key) const;
 	bool KeyPressed(const FKey& Key) const;

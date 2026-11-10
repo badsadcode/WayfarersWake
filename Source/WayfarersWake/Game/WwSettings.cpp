@@ -44,8 +44,13 @@ FWwSetting& FWwSettings::Choice(const TCHAR* Key, const TCHAR* Page, const TCHAR
 FWwSettings::FWwSettings()
 {
 	const EWwSettingKind Toggle = EWwSettingKind::Toggle, Button = EWwSettingKind::Button;
+	const TCHAR* Body = TEXT("Character");
 	const TCHAR* Test = TEXT("Test"); const TCHAR* Sound = TEXT("Sound"); const TCHAR* View = TEXT("View"); const TCHAR* World = TEXT("World");
 
+	// ------------------------------------------------------------------ Character: who you are
+	Choice(TEXT("char.body"), Body, TEXT("Body"), TEXT("Body"), { TEXT("Human man"), TEXT("Human woman"), TEXT("Orc man"), TEXT("Orc woman"), TEXT("Dwarf man"), TEXT("Dwarf woman") }, 0,
+		TEXT("Tom's base bodies, rigged and animated by Tools/RigCharacters. Changes at once."));
+	Slider(TEXT("char.camera"), Body, TEXT("Camera"), TEXT("Camera distance"), 1.5, 8, 0.1, 4.2, TEXT("m"), TEXT("How far behind you the camera sits."));
 	// ------------------------------------------------------------------ Test: everything for trying things, in one place
 	Slider(TEXT("test.hour"), Test, TEXT("Time"), TEXT("Time of day"), 0, 24, 0.05, 9.5, TEXT("h"), TEXT("The hour now. Drag it to see dawn, noon, dusk or night.")).bSaved = false;
 	Slider(TEXT("time.daylength"), Test, TEXT("Time"), TEXT("A day lasts"), 1, 1440, 1, 180, TEXT("real minutes"), TEXT("How long a game day takes. 180 is how Tom plays Thornwake; 10 lets you watch the sun move."));

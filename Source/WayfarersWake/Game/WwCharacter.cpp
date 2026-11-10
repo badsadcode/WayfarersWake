@@ -4,6 +4,9 @@
 #include "Game/WwTerrainStreamer.h"
 #include "Game/WwGame.h"
 #include "Game/WwSettings.h"
+#include "Animation/AnimSequence.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "WorldGen/WwVegetation.h"
 #include "Engine/Engine.h"
 #include "Engine/OverlapResult.h"
@@ -75,9 +78,6 @@ AWwCharacter::AWwCharacter()
 	AddPart(TEXT("Head"), FVector(0, 0, 52), FVector(34, 34, 34), Skin);
 	AddPart(TEXT("Hair"), FVector(-2, 0, 69), FVector(36, 37, 12), Hair);
 	AddPart(TEXT("Beard"), FVector(13, 0, 40), FVector(10, 30, 12), Hair);
-	AddPart(TEXT("Pack"), FVector(-23, 0, 8), FVector(22, 36, 44), Pack);
-	AddPart(TEXT("Bedroll"), FVector(-23, 0, 39), FVector(18, 46, 18), Roll);
-	AddPart(TEXT("Staff"), FVector(12, 40, -8), FVector(6, 6, 164), Wood);
 }
 
 void AWwCharacter::AddPart(const TCHAR* Name, const FVector& Centre, const FVector& Size, const FLinearColor& Colour)
@@ -103,6 +103,75 @@ void AWwCharacter::BeginPlay()
 		if (UMaterialInstanceDynamic* Mid = Parts[i]->CreateAndSetMaterialInstanceDynamic(0)) Mid->SetVectorParameterValue(TEXT("Color"), PartColours[i]);
 	FParse::Value(FCommandLine::Get(), TEXT("WwAutoFly="), AutoFlySpeed);
 	GetCharacterMovement()->SetMovementMode(MOVE_None);
+	LoadBody();
+}
+
+void AWwCharacter::LoadBody()
+{
+	// The body chosen in the menu (Character page). If its assets are missing (Tools/ImportCharacters.cmd not run), the
+	// old figure of blocks stands in.
+	static const TCHAR* Names[] = { TEXT("HumanMale"), TEXT("HumanFemale"), TEXT("OrcMale"), TEXT("OrcFemale"), TEXT("DwarfMale"), TEXT("DwarfFemale") };
+	static const float Heights[] = { 180, 170, 205, 192, 138, 130 };
+	static const TCHAR* ClipNames[] = { TEXT("Idle"), TEXT("Walk"), TEXT("Run"), TEXT("Swim"), TEXT("Attack"), TEXT("Crouch"), TEXT("Climb") };
+	const int32 Which = FMath::Clamp(FWwSettings::Get().Int(TEXT("char.body")), 0, 5);
+	const FString Name = Names[Which], Folder = FString::Printf(TEXT("/Game/Characters/%s/"), *Name);
+	USkeletalMesh* BodyMesh = LoadObject<USkeletalMesh>(nullptr, *(Folder + TEXT("SK_") + Name + TEXT(".SK_") + Name));
+	Clips.Reset();
+	for (const TCHAR* Clip : ClipNames)
+	{
+		const FString Asset = FString::Printf(TEXT("A_%s_%s"), *Name, Clip);
+		Clips.Add(LoadObject<UAnimSequence>(nullptr, *(Folder + Asset + TEXT(".") + Asset)));
+	}
+	bHasBody = BodyMesh != nullptr;
+	for (UStaticMeshComponent* Part : Parts) if (Part) Part->SetVisibility(!bHasBody);
+	USkeletalMeshComponent* Body = GetMesh();
+	Body->SetVisibility(bHasBody);
+	Pose = EPose::None;
+	if (!bHasBody) { UE_LOG(LogWayfarer, Warning, TEXT("Body %s is not in the project (run Tools/ImportCharacters.cmd): the figure of blocks stands in"), *Name); return; }
+	BodyHeight = Heights[Which];
+	Body->SetSkeletalMesh(BodyMesh);
+	Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	// (its skin: the texture Tom's body came with, as a plain matte material)
+	if (UMaterialInterface* Skin = LoadObject<UMaterialInterface>(nullptr, *(Folder + TEXT("M_") + Name + TEXT(".M_") + Name))) Body->SetMaterial(0, Skin);
+	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// Whatever units the file came in with, the body stands as tall as its race; feet at the capsule's foot; facing
+	// ahead (the bodies face -Y in Blender, which arrives as +Y here).
+	const float Tall = FMath::Max(1.f, BodyMesh->GetBounds().BoxExtent.Z * 2.f);
+	const float Half = BodyHeight * 0.5f;
+	GetCapsuleComponent()->SetCapsuleSize(FMath::Min(34.f, BodyHeight * 0.19f), Half);
+	Body->SetRelativeScale3D(FVector(BodyHeight / Tall));
+	Body->SetRelativeLocationAndRotation(FVector(0, 0, -Half), FRotator(0, -90, 0));
+	UE_LOG(LogWayfarer, Display, TEXT("Body: %s, %.0f cm tall (the file's %.0f), %d of 7 animations"), *Name, BodyHeight, Tall, Clips.FilterByPredicate([](const TObjectPtr<UAnimSequence>& A) { return A != nullptr; }).Num());
+}
+
+void AWwCharacter::UpdateBody(float DeltaSeconds, bool bSprinting)
+{
+	FWwSettings& Set = FWwSettings::Get();
+	if (Set.Changed(TEXT("char.body"), BodySeen)) LoadBody();
+	Boom->TargetArmLength = (float)Set.Num(TEXT("char.camera")) * 100.f;
+	if (!bHasBody) return;
+	// Which animation: a swing of the arm while it lasts; treading water; crouched; else by how fast the feet move.
+	AttackSeconds -= DeltaSeconds;
+	const double Speed = GetVelocity().Size2D();
+	EPose Wanted = EPose::Idle;
+	float Rate = 1.f;
+	if (AttackSeconds > 0) Wanted = EPose::Attack;
+	else if (bSwimming) { Wanted = EPose::Swim; Rate = 0.8f + (float)FMath::Clamp(Speed / 250.0, 0.0, 1.0); }
+	else if (bFly) Wanted = EPose::Idle;
+	else if (bCrouching && Speed < 30.0) Wanted = EPose::Crouch;
+	else if (Speed > 30.0)
+	{
+		// (the steps keep pace with the ground covered: the walk as keyed suits 1.5 m/s, the run 5.2 m/s)
+		Wanted = bSprinting || Speed > 650.0 ? EPose::Run : EPose::Walk;
+		Rate = (float)FMath::Clamp(Speed / (Wanted == EPose::Run ? 520.0 : 150.0), 0.5, 2.4);
+	}
+	USkeletalMeshComponent* Body = GetMesh();
+	if (Wanted != Pose)
+	{
+		Pose = Wanted;
+		if (UAnimSequence* Clip = Clips.IsValidIndex((int32)Pose - 1) ? Clips[(int32)Pose - 1].Get() : nullptr) Body->PlayAnimation(Clip, Pose != EPose::Attack);
+	}
+	Body->SetPlayRate(Pose == EPose::Attack ? 1.f : Rate);
 }
 
 void AWwCharacter::SetFly(bool bEnable)
@@ -270,6 +339,7 @@ void AWwCharacter::Tick(float DeltaSeconds)
 		return;
 	}
 
+	UpdateBody(DeltaSeconds, KeyDown(EKeys::LeftShift) && !bCrouching);
 	// Look.
 	float MouseX = 0, MouseY = 0;
 	PC->GetInputMouseDelta(MouseX, MouseY);
@@ -341,7 +411,7 @@ void AWwCharacter::Tick(float DeltaSeconds)
 	}
 	else
 	{
-		Move->MaxWalkSpeed = bShift ? SprintSpeed : WalkSpeed;
+		Move->MaxWalkSpeed = bCrouching ? 160.f : bShift ? SprintSpeed : WalkSpeed;
 		Move->MaxAcceleration = 2048;
 		AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::X), Forward);
 		AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y), Right);
@@ -461,11 +531,14 @@ void AWwCharacter::UpdateGameplay(float DeltaSeconds, APlayerController* PC, boo
 	if (!bFly) Game->Tick(Sky ? Sky->GetHoursStep() : 0.0, Sky ? Sky->Hour : 12.0, X, Z, Feet, bSwimming, bSprinting ? 1.0 : 0.0);
 	FString Said;
 	if (KeyPressed(EKeys::I)) bPackOpen = !bPackOpen;
+	if (KeyPressed(EKeys::C) && !bSwimming && !bFly) bCrouching = !bCrouching;
 	if (!bFly && KeyPressed(EKeys::E)) Said = Game->Use(X, Z, Feet);
 	if (!bFly && !bPackOpen && KeyPressed(EKeys::LeftMouseButton))
 	{
 		const FVector Look = FRotationMatrix(FRotator(0, PC->GetControlRotation().Yaw, 0)).GetUnitAxis(EAxis::X);
 		Said = Game->Strike(X, Z, Look.X, Look.Y);
+		AttackSeconds = 0.8f; Pose = EPose::None;
+		SetActorRotation(FRotator(0, PC->GetControlRotation().Yaw, 0)); // (the blow goes where the player looks)
 	}
 	if (KeyPressed(EKeys::T)) Said = Game->Eat();
 	// Test switch -WwPlayTest: the game plays itself for a moment (the axe swung all round, E, two recipes, a bite to

@@ -176,3 +176,9 @@
 * The first splashes were white blocks the size of a fist; now drop-sized and faint.
 * In rain the lake went bright teal. Not the mist, not the fog (two runs to rule them out): clouds were shading the land but not the water, an engine default.
 * The compiler stalled again on this build (two idle processes for eleven minutes); Tom noticed the wait.
+
+## 2026-11-10, session 1 (continued): bodies
+
+* Tom's direction file read: single-player hunting, survival, exploration; sailing important; simple; no multiplayer or towns. First step agreed: the human character.
+* A Blender script rigs, skins and animates his six bodies; a second script imports them. Mistakes on the way, each found by looking: thigh bones placed out by the hands (hands hang at hip height in the A-pose and were averaged into the hips); splayed feet bound to the arms; animations missing from the file (muted tracks are not exported); the skin grey in the game (the material lacked the flag for skinned meshes), then pink and blue (the exported "colour" picture was the normal map, and the texture kept normal-map settings after the fix).
+* Tom, watching: skinning way off; then the run stiff and wide-legged. Both reworked. He suggested bodies of separate rigid parts as the next thing to try.

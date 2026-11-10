@@ -18,3 +18,16 @@ docs/ConceptArt/*.blend
 docs/ConceptArt/*.blend1
 # Reference pictures from other games (not ours to publish)
 docs/ConceptArt/Water_shader*.jpg
+
+# Licensed asset packs (Fab, Synty): used by the game, never redistributed. See ASSET_MANIFEST.md.
+Content/Animals_Free/
+Content/BlueWhaleAndWhaleCalf/
+Content/Shark_Megalodon/
+Content/Synty/
+Content/Source/
+Content/__ExternalActors__/
+Content/__ExternalObjects__/
+
+# Downloaded asset packs as they came (licensed; unpacked into Content by hand)
+*.zip
+Art/Synty/
