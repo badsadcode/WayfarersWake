@@ -247,5 +247,6 @@ void AWwHUD::DrawHUD()
 		}
 	if (const FString Status = Player->GetStatus(); !Status.IsEmpty()) { Line(Status, 16, Y, 1.0f); Y += 20; }
 	Line(Player->IsFlying() ? TEXT("FLYING  WASD move, E/Q up/down, Shift fast, Ctrl very fast, F walk, F9 debug dump, Esc quit")
+		: Player->IsSwimming() ? TEXT("SWIMMING  WASD swim, Shift faster, Space up, C dive, F fly, F9 debug dump, Esc quit")
 		: TEXT("WASD walk, Shift sprint, Space jump, F fly, F9 debug dump, Esc quit"), 16, Canvas->SizeY - 30, 1.0f);
 }

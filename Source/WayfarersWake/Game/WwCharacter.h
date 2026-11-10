@@ -23,6 +23,7 @@ public:
 
 	bool IsPlaced() const { return bPlaced; }
 	bool IsFlying() const { return bFly; }
+	bool IsSwimming() const { return bSwimming; }
 	double GetSecondsPlaced() const { return SecondsPlaced; }
 	/// Metres travelled over the ground since placement (streaming tests).
 	double GetDistanceTravelled() const { return Travelled; }
@@ -32,10 +33,10 @@ public:
 	/// Saved/Dumps (as Thornwake's F9, which writes to its own folder; the two never mix).
 	void DebugDump();
 
-	UPROPERTY(EditAnywhere, Category = "Movement") float WalkSpeed = 450;
-	UPROPERTY(EditAnywhere, Category = "Movement") float SprintSpeed = 900;
-	/// Developer flight, cm/s; Shift multiplies by 8, Ctrl by 40.
-	UPROPERTY(EditAnywhere, Category = "Movement") float FlySpeed = 4000;
+	UPROPERTY(EditAnywhere, Category = "Movement") float WalkSpeed = 500;   // (Thornwake: 5 m/s)
+	UPROPERTY(EditAnywhere, Category = "Movement") float SprintSpeed = 1100; // (11 m/s)
+	/// Developer flight, cm/s (Thornwake: 45 m/s; Shift 220 m/s; Ctrl six times either).
+	UPROPERTY(EditAnywhere, Category = "Movement") float FlySpeed = 4500;
 	UPROPERTY(EditAnywhere, Category = "Movement") float MouseSensitivity = 0.12f;
 	/// Automatic straight flight (m/s) for streaming tests: -WwAutoFly=<speed>.
 	UPROPERTY(EditAnywhere, Category = "Movement") float AutoFlySpeed = 0;
@@ -50,7 +51,7 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Body") TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 	TArray<FLinearColor> PartColours;
 
-	bool bPlaced = false, bHaveSpawn = false, bFly = false;
+	bool bPlaced = false, bHaveSpawn = false, bFly = false, bSwimming = false;
 	FString Status;
 	double StatusUntil = 0;
 	double SecondsPlaced = 0, Travelled = 0;

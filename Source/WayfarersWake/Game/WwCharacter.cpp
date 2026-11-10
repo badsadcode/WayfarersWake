@@ -38,7 +38,7 @@ AWwCharacter::AWwCharacter()
 	Move->bOrientRotationToMovement = true;
 	Move->RotationRate = FRotator(0, 540, 0);
 	Move->MaxWalkSpeed = WalkSpeed;
-	Move->JumpZVelocity = 480;
+	Move->JumpZVelocity = 650; // (Thornwake: 6.5 m/s up, gravity 20 m/s2)
 	Move->AirControl = 0.35f;
 	Move->SetWalkableFloorAngle(50.f);
 	Move->MaxStepHeight = 50.f;
@@ -108,7 +108,7 @@ void AWwCharacter::SetFly(bool bEnable)
 	bFly = bEnable;
 	UCharacterMovementComponent* Move = GetCharacterMovement();
 	Move->SetMovementMode(bFly ? MOVE_Flying : MOVE_Falling);
-	Move->GravityScale = 1;
+	Move->GravityScale = 2.04f;
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 }
 
@@ -153,7 +153,7 @@ void AWwCharacter::TryPlace()
 			FString Look, Pitch, Yaw; // test switch -WwLook=pitch,yaw (degrees)
 			if (FParse::Value(FCommandLine::Get(), TEXT("WwLook="), Look, false) && Look.Split(TEXT(","), &Pitch, &Yaw)) PC->SetControlRotation(FRotator(FCString::Atod(*Pitch), FCString::Atod(*Yaw), 0)); }
 	LastPlace = GetActorLocation();
-	GetCharacterMovement()->GravityScale = 1;
+	GetCharacterMovement()->GravityScale = 2.04f;
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	if (AutoFlySpeed > 0)
 	{
@@ -213,9 +213,45 @@ void AWwCharacter::Tick(float DeltaSeconds)
 	const float Right = (PC->IsInputKeyDown(EKeys::D) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::A) ? 1.f : 0.f);
 	const bool bShift = PC->IsInputKeyDown(EKeys::LeftShift), bCtrl = PC->IsInputKeyDown(EKeys::LeftControl);
 	const FRotator Yaw(0, Control.Yaw, 0);
+	// Swimming (Thornwake's rules): in water over 1.25 m deep at the feet the player swims, head above the surface.
+	// (the surface is the still water level: waves are not ported, so there is nothing to ride yet)
+	bool bWasSwimming = bSwimming;
+	bSwimming = false;
+	double WaterLevel = 0;
+	if (!bFly)
+		if (UWwWorldSubsystem* WorldSystem = GetGameInstance()->GetSubsystem<UWwWorldSubsystem>())
+			if (std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem->GetSampler())
+			{
+				const FVector Here = GetActorLocation();
+				const ww::FTerrainSample T = Sampler->Sample(Here.X / 100.0, Here.Y / 100.0, 2);
+				const double Feet = (Here.Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) / 100.0;
+				if (T.Water != ww::EWaterKind::None && T.WaterLevel - Feet > 1.25) { bSwimming = true; WaterLevel = T.WaterLevel; }
+			}
+	if (bSwimming)
+	{
+		if (Move->MovementMode != MOVE_Flying) Move->SetMovementMode(MOVE_Flying);
+		Move->BrakingDecelerationFlying = 0; // (the swim sets the velocity itself each frame; the engine's braking cancelled it)
+		const float Speed = bShift ? 3.2f : 1.8f; // m/s
+		const FVector Flat = (FRotationMatrix(Yaw).GetUnitAxis(EAxis::X) * Forward + FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y) * Right).GetClampedToMaxSize(1.0);
+		const bool bDive = PC->IsInputKeyDown(EKeys::C) || PC->IsInputKeyDown(EKeys::Q), bUp = PC->IsInputKeyDown(EKeys::SpaceBar);
+		const double Feet = (GetActorLocation().Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) / 100.0, Target = WaterLevel - 1.3;
+		const bool bSubmerged = Feet < Target - 0.4;
+		double Vertical;
+		if (bDive) Vertical = bShift ? -3.0 : -1.8;      // C/Q: dive down to the bottom
+		else if (bUp) Vertical = bShift ? 3.0 : 1.8;     // Space: swim up
+		// Under water: swimming forward follows the view (look down to go deeper); idle, you drift up slowly.
+		else if (bSubmerged) Vertical = Forward > 0 ? FMath::Sin(FMath::DegreesToRadians(FRotator::NormalizeAxis(Control.Pitch)) + 0.32) * Speed * Forward + 0.15 : 0.5;
+		else Vertical = FMath::Clamp((Target - Feet) * 3.0, -2.0, 2.0); // buoyancy: head above the surface
+		UE_LOG(LogWayfarer, Verbose, TEXT("Swim: feet %.2f target %.2f vertical %.2f mode %d velocity before %s"), Feet, Target, Vertical, (int32)Move->MovementMode.GetValue(), *Move->Velocity.ToString());
+		Move->Velocity = FVector(Flat.X * Speed * 100.0, Flat.Y * Speed * 100.0, Vertical * 100.0);
+		return;
+	}
+	if (bWasSwimming && !bFly) Move->SetMovementMode(MOVE_Falling);
 	if (bFly)
 	{
-		Move->MaxFlySpeed = FlySpeed * (bCtrl ? 40.f : bShift ? 8.f : 1.f);
+		// (Thornwake: 45 m/s, Shift 220, Ctrl six times that)
+		Move->MaxFlySpeed = (bShift ? 22000.f : FlySpeed) * (bCtrl ? 6.f : 1.f);
+		Move->BrakingDecelerationFlying = 6000;
 		Move->MaxAcceleration = Move->MaxFlySpeed * 4;
 		const float Up = (PC->IsInputKeyDown(EKeys::E) || PC->IsInputKeyDown(EKeys::SpaceBar) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::Q) ? 1.f : 0.f);
 		AddMovementInput(Control.Vector(), Forward);
@@ -274,7 +310,7 @@ void AWwCharacter::DebugDump()
 	Out += FString::Printf(TEXT("GPU %s · window (%.0f, %.0f) · FPS %.0f\n\n"), *GRHIAdapterName, Window.X, Window.Y, 1.0 / FMath::Max(FApp::GetDeltaTime(), 1e-4));
 	Out += FString::Printf(TEXT("World: %s (type %s), seed %d, size %.0f km, sea level %.3f m, terrain revision %d\n"), UTF8_TO_TCHAR(Plan.Profile().Name.c_str()), *S.WorldType, S.Seed,
 		Plan.Profile().WorldSize / 1000.0, Sea, S.TerrainRevision);
-	Out += FString::Printf(TEXT("Player: x %.3f, z %.3f, y %.3f (%.3f m above ground/water) · %s\n"), X, Z, Feet, Above, bFly ? TEXT("fly") : TEXT("walking"));
+	Out += FString::Printf(TEXT("Player: x %.3f, z %.3f, y %.3f (%.3f m above ground/water) · %s\n"), X, Z, Feet, Above, bFly ? TEXT("fly") : bSwimming ? TEXT("swimming") : TEXT("walking"));
 	Out += FString::Printf(TEXT("Ground %.3f m · water %s"), T.Height, WaterNames[FMath::Clamp((int32)T.Water, 0, 4)]);
 	if (bWater) Out += FString::Printf(TEXT(" surface %.3f m, depth %.3f m"), T.WaterLevel, T.WaterLevel - T.Height);
 	Out += FString::Printf(TEXT(" · mountain %.3f · land %.4f · scree %.3f · lava %.3f\n"), T.Mountain, T.Land, T.Scree, T.Lava);
