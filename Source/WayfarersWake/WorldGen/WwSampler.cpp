@@ -117,6 +117,12 @@ FTerrainSampler::FTerrainSampler(std::shared_ptr<const FWorldPlan> InPlan)
 	Cirques = Plan->Cirques && Plan->Cirques->Count() > 0 ? Plan->Cirques.get() : nullptr;
 	Troughs = Plan->Troughs && Plan->Troughs->Count() > 0 ? Plan->Troughs.get() : nullptr; // (as the source: fjords alone do not count)
 	Volcanoes = Plan->Volcanoes && Plan->Volcanoes->Count() > 0 ? Plan->Volcanoes : nullptr;
+	Headlands = Plan->Headlands && Plan->Headlands->Count() > 0 ? Plan->Headlands.get() : nullptr;
+	Spits = Plan->Spits && Plan->Spits->Count() > 0 ? Plan->Spits.get() : nullptr;
+	Oxbows = Plan->Oxbows && Plan->Oxbows->Count() > 0 ? Plan->Oxbows.get() : nullptr;
+	Terraces = Plan->Terraces.get();
+	Fans = Plan->Fans && Plan->Fans->Count() > 0 ? Plan->Fans.get() : nullptr;
+	FallLips = Plan->FallLips && Plan->FallLips->Count() > 0 ? Plan->FallLips.get() : nullptr;
 	LandformSeed = SeedOf("landforms");
 	DuneAngle = Hashing::Unit(Hashing::Mix(LandformSeed)) * 6.283185307179586; // prevailing sand-moving wind of this world
 	BuildQuantiles([this](double u, double v) { return PoolNoise(u, v, 1, 0); }, PoolQuantiles, PoolStd);
@@ -144,10 +150,14 @@ double FTerrainSampler::CoastAlong(int index) const { return CoastAlongCache[ind
 FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength) const
 {
 	double lx = x - Ox, lz = z - Oz;
-	double land, macroHeight, mountainShare, rasterLand, coastDistance;
-	Coast(x, z, lx, lz, minWavelength, land, macroHeight, mountainShare, rasterLand, coastDistance);
-	if (land <= 0) return Sea(x, z, land, coastDistance);
+	double land, macroHeight, mountainShare, rasterLand, coastDistance, point, cove, coastMoved;
+	Coast(x, z, lx, lz, minWavelength, land, macroHeight, mountainShare, rasterLand, coastDistance, point, cove, coastMoved);
+	if (land <= 0) return Sea(x, z, land, coastDistance, rasterLand);
 	double baseHeight = Continent(land, rasterLand, macroHeight, coastDistance, mountainShare);
+	// Revision 36: headlands' cliffs and coves' beaches.
+	double pointRock = 0;
+	if (point > 0 || cove > 0 || coastMoved != 0)
+		baseHeight = FHeadlands::Relief(x, z, minWavelength, baseHeight, point, cove, coastDistance, pointRock, Style.Revision >= 38, coastMoved);
 	double canyon = Canyons ? Canyons->Uplift(x, z) : 0; // (revision 21: raised land a river has cut through)
 	baseHeight += canyon;
 	// Revision 26: a fjord's mountain walls, raised like a canyon's land (rivers crossing them cut gorges).
@@ -161,6 +171,8 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 	// Revision 24: glacial troughs, the ground taken down to a flat floor between steep walls.
 	double troughFlat = 0, troughRock = 0, scree = 0; bool fjord = false;
 	if (Troughs) baseHeight = Troughs->Carve(x, z, baseHeight, troughFlat, troughRock, fjord, scree);
+	// Revision 41: alluvial fans lay gravel on the plain at mountain fronts (before the rivers, which cut through).
+	if (Fans) { double gravel; baseHeight = Fans->Fill(x, z, baseHeight, gravel); scree = Mx(scree, gravel); }
 	double inland, detail, roughness;
 	Detail(lx, lz, minWavelength, land, mountainShare, inland, detail, roughness);
 	if (troughFlat > 0) detail *= 1 - .85 * troughFlat;
@@ -173,7 +185,7 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 		return sea;
 	}
 
-	double bare = 0, pointRock = 0;
+	double bare = 0;
 	if (!Plan->PlanLandforms.empty()) { double planScree; detail += PlanGround(x, z, minWavelength, bare, planScree); scree = Mx(scree, planScree); }
 	bare = Mx(Mx(bare, troughRock), pointRock);
 	scree = Mx(scree, pointRock); // (a point's bare rock draws as loose rock)
@@ -200,16 +212,44 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 	if (Cirques) detail += Cirques->Carve(x, z, baseHeight + detail, detail);
 
 	EWaterKind water = EWaterKind::None; double level = NaNValue(); int body = -1; double riverDamp = 1;
-	double height = Rivers(x, z, minWavelength, baseHeight, inland, detail, riverDamp, water, level, body, scree, FCanyons::Wall(canyon));
+	double terraced = 0;
+	double height = Rivers(x, z, minWavelength, baseHeight, inland, detail, riverDamp, water, level, body, scree, FCanyons::Wall(canyon), terraced);
 	// Revision 33: a gorge's talus is bare ground as the escarpments' debris slopes are (scree, not cliff rock).
 	bare = Mx(bare, .65 * scree);
+	// Revision 43: a rock face at each fall's lip and a plunge pool below it, filled to the foot's level.
+	double fallPool = NaNValue(); int fallReach = -1;
+	if (FallLips && FallLips->Faces())
+	{
+		double poolLevel, faceRock; int poolReach; bool onSlope;
+		height = FallLips->Pool(x, z, height, P.SeaLevel, water == EWaterKind::River ? level : NaNValue(), water == EWaterKind::River ? body : -1,
+			water == EWaterKind::None, poolLevel, poolReach, faceRock, onSlope);
+		bare = Mx(bare, faceRock);
+		// (revision 44: the river's water on a fall's slope takes the lip's level above the face, the pool's below)
+		if (!std::isnan(poolLevel) && (water == EWaterKind::None || (water == EWaterKind::River && (level > poolLevel || onSlope))))
+		{
+			water = EWaterKind::River; level = poolLevel; body = poolReach;
+			if (FallLips->Follow()) { fallPool = poolLevel; fallReach = poolReach; }
+		}
+		else if (onSlope && water == EWaterKind::River) { water = EWaterKind::None; level = NaNValue(); body = -1; } // (beside the lip: dry, a bank)
+	}
+	// Revision 42: banks of rock beside waterfall lips (dry ground only: the river's channel and water unchanged).
+	if (FallLips && water == EWaterKind::None) { double lipRock; height = FallLips->Apply(x, z, height, P.SeaLevel, lipRock); bare = Mx(bare, lipRock); }
 	double lakePlume = 0, lakeCells = Inf;
 	LakesStage(x, z, height, water, level, body, lakePlume, lakeCells);
+	// Revision 44: a fall's pool keeps its water where a lake above the lip would flood it.
+	if (!std::isnan(fallPool) && water == EWaterKind::Lake && level > fallPool + .05) { water = EWaterKind::River; level = fallPool; body = fallReach; }
 	// Revision 23: a cirque's tarn, still water of its own (drawn as a pond), where nothing else is water.
 	if (Cirques && water == EWaterKind::None)
 	{
 		double tarn;
 		if (Cirques->Tarn(x, z, height, tarn)) { water = EWaterKind::Pond; level = tarn; }
+	}
+	// Revision 39: oxbow lakes, still water of their own beside lowland rivers (drawn as ponds).
+	bool oxbowNear = false;
+	if (Oxbows && water == EWaterKind::None)
+	{
+		double oxbow;
+		if (Oxbows->Apply(x, z, height, oxbow, oxbowNear)) { water = EWaterKind::Pond; level = oxbow; }
 	}
 	// Revision 29: a caldera's lake fills all of its floor below the water.
 	if (Volcanoes && water == EWaterKind::None)
@@ -228,7 +268,9 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 
 	// Stage 6, wetland pools (revision 11): standing water in pool biomes where nothing else is water.
 	// Revision 22: none where a river has cut the ground down by over 2 m (valley sides, canyon and gorge walls).
-	if (wetland && poolCover > 0 && water == EWaterKind::None && (Style.Revision < 22 || baseHeight + detail * riverDamp - height < 2))
+	// Revision 40: the pools fade out where river terraces cut the ground.
+	if (Terraces) poolCover *= 1 - terraced;
+	if (wetland && poolCover > 0 && water == EWaterKind::None && !oxbowNear && (Style.Revision < 22 || baseHeight + detail * riverDamp - height < 2))
 	{
 		double floor = .2 * inland + .05;
 		// Pool water level: the ground without its short relief (the long waves only, flattened like the rest).
@@ -275,8 +317,9 @@ double FTerrainSampler::PlanGround(double x, double z, double minWavelength, dou
 
 /// Stage 1a, coast: the macro raster (land, eroded height, mountain share) and the sub-raster coastline wiggle.
 void FTerrainSampler::Coast(double x, double z, double lx, double lz, double minWavelength, double& land, double& macroHeight, double& mountainShare,
-	double& rasterLand, double& coastDistance) const
+	double& rasterLand, double& coastDistance, double& point, double& cove, double& coastMoved) const
 {
+	point = 0; cove = 0; coastMoved = 0;
 	Macro.Sample(x, z, FWorldPlan::LandChannel, FWorldPlan::HeightChannel, FWorldPlan::MountainChannel, land, macroHeight, mountainShare);
 	rasterLand = land;
 	coastDistance = Inf; // metres from the detailed coastline (estimate)
@@ -286,13 +329,15 @@ void FTerrainSampler::Coast(double x, double z, double lx, double lz, double min
 		Macro.SampleGradient(FWorldPlan::LandChannel, x, z, gx, gz);
 		double gradient = std::sqrt(gx * gx + gz * gz);
 		double shift = Style.CoastDetailShift * Noise::Fbm(lx, lz, Macro.Cell * 2.5, 7, minWavelength, CoastSeed, .55);
+		// Revision 36: headlands and coves move the coastline further, the same way.
+		if (Headlands) { coastMoved = Headlands->Shift(x, z, point, cove); shift += coastMoved; }
 		land += shift * gradient * DetMath::Smooth(1 - std::fabs(land) / CoastBand); // fades out: no step at the band edge
 		coastDistance = std::fabs(land) / Mx(gradient, 1e-12);
 	}
 }
 
 /// Stage 1b, the sea: the sea floor (deepening off the coast, river mouths' channels) - the walk ends here.
-FTerrainSample FTerrainSampler::Sea(double x, double z, double land, double coastDistance) const
+FTerrainSample FTerrainSampler::Sea(double x, double z, double land, double coastDistance, double rasterLand) const
 {
 	double shore = Style.ShoreSlope;
 	double depth = P.OceanDepth * DetMath::Smooth(-land / .6);
@@ -301,6 +346,14 @@ FTerrainSample FTerrainSampler::Sea(double x, double z, double land, double coas
 	// Revision 27: islands and skerries off a fjord coast.
 	double isle = Troughs && Troughs->HasCoasts() ? Troughs->Skerries(x, z, land) : 0;
 	seabed += isle;
+	// Revision 37: spits, sandbars and lagoons, placed by their distance from the plan's coastline.
+	if (Spits && rasterLand > -CoastBand)
+	{
+		double gx, gz;
+		Macro.SampleGradient(FWorldPlan::LandChannel, x, z, gx, gz);
+		double gradient = std::sqrt(gx * gx + gz * gz);
+		if (gradient > 1e-12) seabed = P.SeaLevel + Spits->Seabed(x, z, Mx(0, -rasterLand) / gradient, seabed - P.SeaLevel);
+	}
 	if (Style.MouthBlend > 0) seabed = MouthChannel(x, z, seabed, -1, plume);
 	seabed += Edits.Delta(x, z);
 	FTerrainSample out;
@@ -471,7 +524,7 @@ static double DetailDamp(const FRiverHit& r)
 
 /// Stage 4, rivers: channel, banks and slope-limited valley sides replace the terrain near a river.
 double FTerrainSampler::Rivers(double x, double z, double minWavelength, double baseHeight, double inland, double detail, double& riverDamp,
-	EWaterKind& water, double& level, int& body, double& scree, double wall) const
+	EWaterKind& water, double& level, int& body, double& scree, double wall, double& terraced) const
 {
 	double floor = .2 * inland + .05, height;
 	FRiverHit rivers[32];
@@ -547,6 +600,8 @@ double FTerrainSampler::Rivers(double x, double z, double minWavelength, double 
 		}
 		// Inside a channel, another river's raised bank never lifts the bed above this water.
 		height = wetInside > 0 ? Mn(terrain + carve, level - P.SeaLevel - .05) : terrain + carve + raise;
+		// Revision 40: river terraces cut into the valley sides of broad rivers (dry ground only).
+		if (Terraces && wetInside <= 0) height = Terraced(x, z, height, reaches, count, wall, terraced);
 	}
 	else height = Mx(baseHeight + detail, floor); // generated land never dips below the sea
 	return height;

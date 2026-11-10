@@ -800,8 +800,16 @@ FWorldPlan::FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& In
 		if (Style.Revision >= 24 && (!Style.Landform("troughs").Off() || fjords))
 			Troughs = std::make_unique<FTroughs>(*this, Style.Landform("troughs"), fjords, Style.Landform("fjords"));
 	}
+	// Headlands (revision 36) keep clear of the final rivers and lakes, fjord coasts and volcanoes.
+	if (Style.Revision >= 36 && !Style.Landform("headlands").Off()) Headlands = std::make_unique<FHeadlands>(*this, Style.Landform("headlands"));
+	if (Style.Revision >= 37 && !Style.Landform("spits").Off()) Spits = std::make_unique<FSpits>(*this, Style.Landform("spits"));
+	if (Style.Revision >= 39 && !Style.Landform("oxbows").Off()) Oxbows = std::make_unique<FOxbows>(*this, Style.Landform("oxbows"));
+	if (Style.Revision >= 40 && !Style.Landform("terraces").Off()) Terraces = std::make_unique<FTerraces>(*this, Style.Landform("terraces"));
+	if (Style.Revision >= 42) FallLips = std::make_unique<FFallLips>(*this, Style.Revision >= 43, Style.Revision >= 44);
 	if (Stage) Stage(3);
 	Climate = std::make_unique<FClimate>(*this, Style.Climate);
+	// Fans (revision 41) read the climate (more in dry country); they change no raster the climate reads.
+	if (Style.Revision >= 41 && !Style.Landform("fans").Off()) Fans = std::make_unique<FFans>(*this, *Climate, Style.Landform("fans"));
 	if (Stage) Stage(4);
 	Biomes = std::make_unique<FBiomeMap>(*this, *Climate, Style.Climate.Biomes ? InBiomes : FBiomeRegistry::ClassicOnly());
 	if (Volcanoes) Volcanoes->Finalize(); // (lava flows traced on the finished plan)

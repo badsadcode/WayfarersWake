@@ -87,7 +87,7 @@ struct FTerrainStyle
 	FClimateSettings Climate;
 	double MouthBlend = 1, ShoreSlope = 1, BankVariation = 1, MeanderStrength = 1, WanderStrength = 1, WidthVariation = 1;
 
-	static constexpr int PortedRevision = 35;
+	static constexpr int PortedRevision = 44;
 	static FTerrainStyle For(const FWorldProfile& Profile) { FTerrainStyle s; s.LowlandDetail = 20 + Profile.HillHeight * .05; return s; }
 };
 
@@ -347,6 +347,12 @@ public:
 	std::unique_ptr<class FCirques> Cirques;   // revision 23
 	std::unique_ptr<class FTroughs> Troughs;   // revisions 24-27
 	class FVolcanoes* Volcanoes = nullptr;      // revision 28 (owned by PlanLandforms)
+	std::unique_ptr<class FHeadlands> Headlands; // revision 36
+	std::unique_ptr<class FSpits> Spits;         // revision 37
+	std::unique_ptr<class FOxbows> Oxbows;       // revision 39
+	std::unique_ptr<class FTerraces> Terraces;   // revision 40
+	std::unique_ptr<class FFans> Fans;           // revision 41
+	std::unique_ptr<class FFallLips> FallLips;   // revisions 42-44
 	/// Big landform modules applied before erosion (revision 17 on).
 	std::vector<std::unique_ptr<FPlanLandform>> PlanLandforms;
 	double BuildMilliseconds = 0;
@@ -417,12 +423,12 @@ public:
 
 private:
 	void Coast(double x, double z, double lx, double lz, double minWavelength, double& land, double& macroHeight, double& mountainShare,
-		double& rasterLand, double& coastDistance) const;
-	FTerrainSample Sea(double x, double z, double land, double coastDistance) const;
+		double& rasterLand, double& coastDistance, double& point, double& cove, double& coastMoved) const;
+	FTerrainSample Sea(double x, double z, double land, double coastDistance, double rasterLand) const;
 	double Continent(double land, double rasterLand, double macroHeight, double coastDistance, double& mountainShare) const;
 	void Detail(double lx, double lz, double minWavelength, double land, double mountainShare, double& inland, double& detail, double& roughness) const;
 	double Rivers(double x, double z, double minWavelength, double baseHeight, double inland, double detail, double& riverDamp,
-		EWaterKind& water, double& level, int& body, double& scree, double wall) const;
+		EWaterKind& water, double& level, int& body, double& scree, double wall, double& terraced) const;
 	void LakesStage(double x, double z, double& height, EWaterKind& water, double& level, int& body, double& lakePlume, double& lakeCells) const;
 	double Pool(double lx, double lz, double height, double smooth, double cover, double depth, double size, double channels,
 		double minWavelength, EWaterKind& water, double& level) const;
@@ -461,6 +467,13 @@ private:
 	const class FCirques* Cirques = nullptr;
 	const class FTroughs* Troughs = nullptr;
 	const class FVolcanoes* Volcanoes = nullptr;
+	const class FHeadlands* Headlands = nullptr;
+	const class FSpits* Spits = nullptr;
+	const class FOxbows* Oxbows = nullptr;
+	const class FTerraces* Terraces = nullptr;
+	const class FFans* Fans = nullptr;
+	const class FFallLips* FallLips = nullptr;
+	double Terraced(double x, double z, double height, const FRiverHit* reaches, int count, double wall, double& terraced) const;
 	std::vector<double> CoastAlongCache; // computed up front (the source caches lazily)
 };
 }

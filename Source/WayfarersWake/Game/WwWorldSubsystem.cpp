@@ -161,7 +161,7 @@ bool UWwWorldSubsystem::RunSelfTest(FString& Report)
 	const double Started = FPlatformTime::Seconds();
 	auto Plan = std::make_shared<ww::FWorldPlan>(ww::FWorldManifest::Create(42, Profile), ww::FTerrainStyle::For(Profile), Biomes);
 	ww::FTerrainSampler S(Plan);
-	// The fingerprint of Thornwake's Tests/WorldGen/Fixtures/terrain-build114.json, case "balanced/42".
+	// The fingerprint of Thornwake's Tests/WorldGen/Fixtures/terrain-r1.json (terrain revision 44), case "balanced/42".
 	ww::FSha256 Sha;
 	std::vector<double> Buffer(33 * 33);
 	const ww::FLandFeature& F = Plan->Layout.Land[0];
@@ -174,8 +174,8 @@ bool UWwWorldSubsystem::RunSelfTest(FString& Report)
 	}
 	for (int C = 0; C < 3; C++) Sha.Append(Plan->Macro.Channel(C).data(), Plan->Macro.Channel(C).size() * sizeof(float));
 	const std::string Hash = Sha.FinishHex();
-	const bool bMatch = Hash == "84ba345a2c330fce28d9820d6587120116fe35d73735707106280ea5d57927f6";
-	Report = FString::Printf(TEXT("WorldGen self test (balanced/42, revision 16): %s  hash %s  (%.2f s)"), bMatch ? TEXT("MATCH") : TEXT("MISMATCH"),
+	const bool bMatch = Hash == "a48c43b5bdd43c84a3c37fcac986ebf932d1a20701abf040e2bdf9f753825e6b";
+	Report = FString::Printf(TEXT("WorldGen self test (balanced/42, revision 44): %s  hash %s  (%.2f s)"), bMatch ? TEXT("MATCH") : TEXT("MISMATCH"),
 		UTF8_TO_TCHAR(Hash.c_str()), FPlatformTime::Seconds() - Started);
 	return bMatch;
 }

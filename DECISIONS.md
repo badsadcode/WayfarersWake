@@ -13,6 +13,15 @@ Thornwake versions its terrain and freezes a SHA-256 fingerprint per revision. R
 * `System.Text.Json`'s number and string formatting is replicated for the profile digest, which seeds everything.
 * A few functions use the C runtime (`pow`, `log`, `exp`, `cos` in biome fitness, pools and dunes). They match .NET on Windows x64. **Other platforms are unverified** and would need deterministic replacements, as the source already has for sin, cos, atan and exp.
 
+**D10. Finding a parity mismatch: diff against a scratch copy of the C# tests.**
+When a fingerprint differs, copy Thornwake's `Game/WorldGen`, `Game/Simulation`, `Game/Gameplay`, `Game/Core`, `Content` and `Tests/WorldGen` to a scratch folder (never build in the source), add an empty `project.godot` at its root, and add a `--dump=profile,seed,revision[,gridSpacing]` option to its `Program.cs` that prints what `Tools/WorldGenTest/dump.cpp` prints: a hash per height grid and per raster, the volcanoes, the lakes, and optionally every height of one grid as raw bits. Diff the two outputs. This found the one real problem of the landform port in minutes: a single height off by one bit.
+
+**D11. The C runtime is part of the generator's contract.**
+That one-bit difference came from `pow`/`cos` in the *statically linked* C runtime, which differ in rare last bits from the system `ucrtbase.dll` that .NET uses. The parity test is therefore linked with `/MD`; Unreal modules already are. The landform modules of revisions 18+ use `pow`, `cos`, `sin`, `atan2`, `acos` and `remainder` heavily, so on another platform or runtime their terrain may differ in the last bit until those calls get deterministic replacements. Windows x64 with the system runtime is verified.
+
+**D12. Lazy state in the source is computed up front here.**
+Thornwake traces lava flows and reads crater-lake levels the first time a sample needs them, under a lock. Here `FVolcanoes::Finalize()` does it at the end of plan construction, and the river-coast distances are filled in the sampler's constructor. Same values (the fixtures prove it), and sampling touches no shared mutable state.
+
 **D4. Terrain is custom streamed procedural meshes, not Landscape or World Partition.**
 Landscape cannot be created from a seed at runtime, and World Partition streams authored cells. The world here is a pure function of position, so tiles are built on worker threads from the sampler and dropped when out of view. `UProceduralMeshComponent` was chosen for the first version (simple, async collision cooking). To revisit with measurements: `UDynamicMeshComponent` or a custom vertex factory for cheaper updates.
 

@@ -103,7 +103,10 @@ int main(int argc, char** argv)
 		{ "terrain-r20.json", 20, &current }, { "terrain-build118.json", 21, &current }, { "terrain-r22.json", 22, &current }, { "terrain-build119.json", 23, &current },
 		{ "terrain-build120.json", 24, &current }, { "terrain-r25.json", 25, &current }, { "terrain-r26.json", 26, &current }, { "terrain-build121.json", 27, &current },
 		{ "terrain-r28.json", 28, &current }, { "terrain-build122.json", 29, &current }, { "terrain-build123.json", 30, &current }, { "terrain-build125.json", 31, &current },
-		{ "terrain-build127.json", 32, &current }, { "terrain-build129.json", 33, &current }, { "terrain-build130.json", 34, &current }, { "terrain-build132.json", 35, &current } };
+		{ "terrain-build127.json", 32, &current }, { "terrain-build129.json", 33, &current }, { "terrain-build130.json", 34, &current }, { "terrain-build132.json", 35, &current },
+		{ "terrain-r36.json", 36, &current }, { "terrain-build133.json", 37, &current }, { "terrain-build137.json", 38, &current }, { "terrain-r39.json", 39, &current },
+		{ "terrain-r40.json", 40, &current }, { "terrain-build139.json", 41, &current }, { "terrain-r42.json", 42, &current }, { "terrain-build140.json", 43, &current },
+		{ "terrain-r1.json", 44, &current } };
 	for (const FFixture& fx : fixtures)
 	{
 		FJson expected;

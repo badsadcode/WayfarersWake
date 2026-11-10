@@ -1,13 +1,13 @@
 # Migration status
 
-_Last updated 2026-11-10 (session 1). Keep this current: it is where the next session starts._
+_Last updated 2026-11-10 (session 1, after the landform port). Keep this current: it is where the next session starts._
 
 ## What works (verified)
 
 | Area | State | Evidence |
 |---|---|---|
-| World generator, terrain revisions 8-16 | **Bit-identical to Thornwake** | `Tools/WorldGenTest`: 30/30 frozen fingerprints match (5 profiles x 3 seeds x revisions 15 and 16) |
-| Same generator inside the engine build | Bit-identical | `-WwSelfTest` logs `MATCH` |
+| World generator, terrain revisions 8-44 (Thornwake's current) | **Bit-identical to Thornwake** | `Tools/WorldGenTest`: 468/468 checks, every frozen fingerprint from revision 15 to 44 (31 fixture sets x 5 profiles x 3 seeds) |
+| Same generator inside the engine build | Bit-identical | `-WwSelfTest` logs `MATCH` at revision 44 |
 | World sizes 32 ... 4096 km | All nine build | `WorldGenTest --sizes` (table in BENCHMARK.md); 4096 km also launched in game |
 | UE 5.9 project | Compiles, launches | `Build.bat WayfarersWakeEditor Win64 Development` succeeds; game runs with `-game` |
 | Streamed terrain (quadtree LOD, 9 levels) | Works, no holes seen | 330 tiles around the player; 24 km flight at 400 m/s with 0-10 tiles missing |
@@ -20,8 +20,10 @@ In the brief's terms: the generator is **tested**; the project is **compiled and
 
 ## Not done / known gaps
 
-* **Terrain revisions 17-44 are not ported**: the landform modules (escarpments, waterfalls, canyons, cirques, glacial troughs, fjords, volcanoes, sea stacks, headlands, spits, oxbows, terraces, alluvial fans, fall lips), about 4,300 lines of C#. New worlds here are revision 16; Thornwake's current is 44. See SYSTEM_AUDIT.md.
-* **Template and "natural" world types are not ported** (`Landforms.cs`, `Heightmap.cs`): only the seven classic placed-continent types exist.
+* **Template and "natural" world types are not ported** (`Landforms.cs`, `Heightmap.cs`): only the seven classic placed-continent types exist. This is now the largest gap in the generator. Thornwake's fixtures cover only the five classic profiles, so these types will need new reference hashes from a scratch copy of the C# tests (see DECISIONS D10).
+* **Sea stacks and arches** (`SeaStacks.cs`, revision 35) are not ported: they are rock models placed off steep coasts, not ground, so the terrain is complete without them.
+* The landforms are in the ground and water levels, but **the game does not draw them specially yet**: no falling water at waterfalls, no lava look (`FTerrainSample::Lava`), no scree stones (`Scree`), ponds and tarns drawn like any water.
+* Landform settings (amount and size per module) exist in `FTerrainStyle::Landforms` but there is no screen to set them; every module runs as designed.
 * No world-creation menu: the world is chosen on the command line.
 * No vegetation, rocks, props, wildlife, gameplay or saves.
 * The ground look is a placeholder (vertex colours from the biome palettes). Scene exposure is too bright and pale.
@@ -52,7 +54,7 @@ rem In-engine bit-exactness check (exit code 0 = match)
 D:\EPIC\UE_5.9\Engine\Binaries\Win64\UnrealEditor-Cmd.exe H:\BIW\WayfarersWake\WayfarersWake.uproject -game -nullrhi -WwSelfTest -unattended -stdout
 ```
 
-World options: `-WwSeed=7319 -WwType=balanced -WwSizeKm=64 -WwRevision=16`.
+World options: `-WwSeed=7319 -WwType=balanced -WwSizeKm=64 -WwRevision=44` (any revision from 8 to 44; 44 is the default).
 Types: balanced, continental, archipelago, mountainous, many-continents, islands-mainland, vast-world. Sizes: 32, 64, 128, 256, 512, 768, 1024, 2048, 4096.
 
 Test options: `-WwAt=<x>,<z>` (start place in metres), `-WwAutoFly=<m/s>`, `-WwAutoShot=<seconds>` (screenshot to `Saved/Screenshots/WwAutoShot.png`, then quit), `-WwStats` (streaming stats to the log every 5 s).
@@ -61,9 +63,9 @@ Controls: WASD, mouse look, Shift sprint, Space jump, F fly (E/Q up and down, Sh
 
 ## Next concrete actions
 
-1. Play it by hand; fix what walking shows (seams, snagging, camera).
-2. Port the landform modules in revision order, each checked against its Thornwake fixture (`terrain-build115.json` is revision 17, and so on). Start with `LandformModules.cs`, the plan-module part of `Landforms.cs`, `Escarpments.cs`, then the waterfalls in `Hydrology.cs`.
-3. Port `Heightmap.cs` and the template `Landforms.cs` so the natural world types exist.
+1. Play it by hand; fix what walking shows (seams, snagging, camera). Visit the landforms: none has been looked at up close in Unreal.
+2. Port `Heightmap.cs` and the template `Landforms.cs` so the natural world types exist; record reference hashes for them from the scratch C# copy first.
+3. Draw what the generator already knows: waterfalls, lava, scree, sea stacks.
 4. World-creation screen (type, size, seed, terrain version) and a world map.
 5. Ground materials, trees and grass from the biome data; fix exposure.
 6. Long soak test for memory; benchmark scenes after `Content/WorldData/benchmarks.json`.

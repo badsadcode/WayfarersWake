@@ -22,7 +22,25 @@ Plan memory is the estimate from `FWorldPlan::MemoryBytes` (rasters and river po
 
 Tile sampling, single thread, 129 x 129 heights: 14.9 ms at 1 m spacing, 11.4 ms at 64 m (about 0.9 microseconds per sample).
 
-## In game: straight flight over the 4096 km world
+### The same at terrain revision 44 (all landform modules, same run type, same day)
+
+| World | Plan time | Plan memory | Lakes | River reaches |
+|---|---|---|---|---|
+| 32 km | 0.1 s | 5.6 MB | 6 | 0 |
+| 64 km | 0.1 s | 5.6 MB | 5 | 4 |
+| 128 km | 0.1 s | 6.0 MB | 18 | 30 |
+| 256 km | 0.2 s | 7.3 MB | 8 | 107 |
+| 512 km | 0.6 s | 22.8 MB | 8 | 681 |
+| 768 km | 1.2 s | 45.5 MB | 16 | 1,502 |
+| 1024 km | 2.2 s | 84.1 MB | 13 | 2,237 |
+| 2048 km | 6.7 s | 251.2 MB | 27 | 10,551 |
+| 4096 km | 16.9 s | 800.6 MB | 43 | 46,706 |
+
+Tile sampling at revision 44, single thread, 129 x 129 heights: 21.9 ms at 1 m spacing, 18.8 ms at 64 m (about 1.3 microseconds per sample; the landform modules cost roughly 45 % more than revision 16 at this spot). The memory column does not yet count the landform modules' own data (profile rasters of escarpments and volcanoes, one float per raster cell each).
+
+In game at revision 44 (`-WwType=mountainous -WwSizeKm=512 -WwAutoFly=250 -WwAutoShot=30`): 219-222 fps, p99 5.7-6.0 ms, worst frame 7.8 ms, 3.1-3.6 ms average tile build, 324-339 tiles.
+
+## In game: straight flight over the 4096 km world (terrain revision 16)
 
 `-WwSizeKm=4096 -WwAutoFly=400 -WwAutoShot=60 -WwStats`: 1280 x 720 window, editor binary with `-game` (Development), 400 m/s for 60 s = 24 km, about 1,050 km from the world origin.
 

@@ -19,7 +19,7 @@ struct FWwWorldSettings
 	/// Width and length in km: 32, 64, 128, 256, 512, 768, 1024, 2048 or 4096. 0 = the world type's native size.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World") float SizeKm = 64;
 	/// Terrain revision (versioned generation: a world keeps the revision it was created with).
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World") int32 TerrainRevision = 16;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World") int32 TerrainRevision = 44;
 
 	bool operator==(const FWwWorldSettings& O) const { return Seed == O.Seed && WorldType == O.WorldType && SizeKm == O.SizeKm && TerrainRevision == O.TerrainRevision; }
 	bool operator!=(const FWwWorldSettings& O) const { return !(*this == O); }

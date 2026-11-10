@@ -110,7 +110,10 @@ public:
 	double Skerries(double x, double z, double land) const;
 	double Raise(double x, double z, double coastDistance, double& share) const;
 	double Carve(double x, double z, double ground, double& flat, double& rock, bool& sea, double& scree) const;
+	/// The fjord coasts: middle and radius.
+	template <class F> void CoastProbes(F&& Visit) const { for (const FCoast& c : Coasts) Visit(c.X, c.Z, c.Radius); }
 
+	struct FCoast { double X, Z, Radius; u64 Seed; };
 	/// A fall where a river drops into a trough.
 	struct FFall { double X, Z, Height; bool bSide; };
 	std::vector<FFall> Falls;
@@ -118,7 +121,6 @@ public:
 private:
 	struct FTrough;
 	struct FBuild;
-	struct FCoast { double X, Z, Radius; u64 Seed; };
 	int Cell(double v, double min) const;
 	void PlaceFjordCoasts(FBuild& Build, FLandformSetting Setting);
 	void PlaceFjords(FBuild& Build, FLandformSetting Setting);
@@ -177,5 +179,104 @@ private:
 	const FMacroRaster* Macro = nullptr;
 	FMacroRaster RaiseRaster;
 	double Sea = 0;
+};
+
+/// Headlands and coves (landform no. 10, revision 36; rounded cliff tops in 38): the detailed coastline is moved.
+class FHeadlands
+{
+public:
+	FHeadlands(const FWorldPlan& Plan, FLandformSetting Setting);
+	int Count() const { return (int)Stretches.size(); }
+	double Shift(double x, double z, double& point, double& cove) const;
+	static double Relief(double x, double z, double minWavelength, double ground, double point, double cove, double coast, double& rock,
+		bool rounded, double moved);
+	/// Each stretch: middle and radius.
+	template <class F> void Probes(F&& Visit) const { for (const FStretch& s : Stretches) Visit(s.X, s.Z, s.Radius); }
+private:
+	struct FStretch { double X, Z, Dx, Dz, Radius, Out, In, Wave, Rise; u64 Seed; };
+	int Cell(double v, double min) const;
+	std::vector<FStretch> Stretches;
+	double MinX = 0, MinZ = 0;
+	int GridSize = 1;
+	std::vector<int> GridStart, GridItems;
+};
+
+/// Spits, sandbars and lagoons (landform no. 11, revision 37): sand laid on the sea bed off flat coasts.
+class FSpits
+{
+public:
+	FSpits(const FWorldPlan& Plan, FLandformSetting Setting);
+	int Count() const { return (int)Sites.size(); }
+	double Seabed(double x, double z, double distance, double bed) const;
+private:
+	struct FSite { int Kind; double X, Z, Tx, Tz, Length, Off, Width, Crest, Lagoon, Gap, GapWidth; u64 Seed; };
+	int Cell(double v, double min) const;
+	std::vector<FSite> Sites;
+	double MinX = 0, MinZ = 0;
+	int GridSize = 1;
+	std::vector<int> GridStart, GridItems;
+};
+
+/// Oxbow lakes (landform no. 12, revision 39): crescent ponds beside gentle lowland rivers.
+class FOxbows
+{
+public:
+	FOxbows(const FWorldPlan& Plan, FLandformSetting Setting);
+	int Count() const { return (int)Bows.size(); }
+	bool Apply(double x, double z, double& height, double& level, bool& nearRim) const;
+private:
+	struct FBow { double X, Z, Nx, Nz, Radius, Width, Open, Level, Depth; u64 Seed; };
+	int Cell(double v, double min) const;
+	std::vector<FBow> Bows;
+	double MinX = 0, MinZ = 0, Sea = 0;
+	int GridSize = 1;
+	std::vector<int> GridStart, GridItems;
+};
+
+/// River terraces (revision 40): level benches cut into the sides of broad valleys.
+class FTerraces
+{
+public:
+	FTerraces(const FWorldPlan& Plan, FLandformSetting Setting);
+	double Presence(double lx, double lz, double width) const;
+	double Step(double h, double w, double lx, double lz, double weight) const;
+private:
+	double Amount, Size;
+	u64 Seed;
+};
+
+/// Alluvial fans (landform no. 13, revision 41): gravel cones where mountain streams reach a plain.
+class FFans
+{
+public:
+	FFans(const FWorldPlan& Plan, const FClimate& Climate, FLandformSetting Setting);
+	int Count() const { return (int)Fans.size(); }
+	double Fill(double x, double z, double ground, double& gravel) const;
+private:
+	struct FFan { double X, Z, Ax, Az, Radius, Half, Height; u64 Seed; };
+	int Cell(double v, double min) const;
+	std::vector<FFan> Fans;
+	double MinX = 0, MinZ = 0;
+	int GridSize = 1;
+	std::vector<int> GridStart, GridItems;
+};
+
+/// Banks at waterfall lips (revision 42), rock faces and plunge pools (43), the river's water on a fall's slope (44).
+class FFallLips
+{
+public:
+	FFallLips(const FWorldPlan& Plan, bool bInFaces, bool bInFollow);
+	~FFallLips();
+	int Count() const;
+	bool Faces() const { return bFaces; }
+	bool Follow() const { return bFollow; }
+	double Pool(double x, double z, double height, double sea, double riverLevel, int riverBody, bool dry, double& level, int& reach,
+		double& rock, bool& ramp) const;
+	double Apply(double x, double z, double height, double sea, double& rock) const;
+private:
+	struct FLip;
+	bool bFaces, bFollow;
+	std::vector<FLip> Lips;
+	std::map<std::pair<int, int>, std::vector<int>> Grid;
 };
 }
