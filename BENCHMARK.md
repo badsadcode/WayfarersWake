@@ -99,6 +99,10 @@ RTX 3080, 1280x720, editor build run as a game, hovering, 09:00.
 
 Packaged build, in the surf beside the beach: 143 fps, sea update 3.9 ms, 1.7 GB, no errors in its log. One update of the sea on a single thread: 15 ms (headless test). Not measured: storms (the sea state is fixed), 1920x1080, a packaged build over open sea for long.
 
+## Shadows restored (2026-11-10)
+
+Every figure above from the grass round on was measured with no shadows being drawn (see D24), so they flatter the game. Tom's forest view (`-WwSizeKm=64 -WwAt=15534.067,8044.376`, 39 m up, 22,007 trees, 555,113 plants, 1280x720): 86 fps without shadows, 67 with. Tom's own run of the packaged build there, 1920x1080, without shadows: 78-80 fps.
+
 ## Not measured yet
 
 GPU and CPU frame breakdown, 1 % lows over long runs, the scene types of `Content/WorldData/benchmarks.json` (forest, lake, coast, mountain, flight), packaged (non-editor) builds.

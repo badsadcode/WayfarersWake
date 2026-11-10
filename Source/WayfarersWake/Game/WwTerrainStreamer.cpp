@@ -486,6 +486,8 @@ void AWwTerrainStreamer::Commit(const TSharedPtr<FWwTileData>& Data)
 		Slot.Water->SetVectorParameterValue(TEXT("Tile"), FLinearColor(Fold(Data->Key.X * Size), Fold(Data->Key.Y * Size), (float)Size, (float)TileCells));
 		Mesh->SetMaterial(1, Slot.Water);
 	}
+	// Only the nearer tiles cast shadows: with the big far tiles (kilometres wide) among the casters the sun's shadow maps
+	// lost all their precision and every shadow in the scene vanished.
 	Mesh->SetVisibility(false);
 	const FVector Origin(Data->Key.X * Size * 100.0, Data->Key.Y * Size * 100.0, 0.0);
 	SetPlants(Slot.Plants, PlantMesh, Data->Plants, Data->PlantData, Origin);
@@ -724,6 +726,8 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 			LeafMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Plants/SM_WwPlantFlat.SM_WwPlantFlat"));
 			if (!PlantMesh) UE_LOG(LogWayfarer, Warning, TEXT("Plant meshes missing: run Tools/ImportAssets.cmd"));
 			FParse::Value(FCommandLine::Get(), TEXT("WwGrass="), GrassAmount);
+			FParse::Value(FCommandLine::Get(), TEXT("WwLevels="), Levels);         // test switches: how many tile sizes; how far trees reach
+			FParse::Value(FCommandLine::Get(), TEXT("WwTreeLevels="), TreeLevels);
 			bPlantShadows = !FParse::Param(FCommandLine::Get(), TEXT("WwNoPlantShadows"));
 		}
 	}

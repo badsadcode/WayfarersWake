@@ -82,8 +82,10 @@ void AWwSky::Tick(float DeltaSeconds)
 	FVector ToSun(FMath::Cos(Angle), FMath::Sin(Angle) * FMath::Sin(Tilt), FMath::Sin(Angle) * FMath::Cos(Tilt));
 	Sun->SetWorldRotation((-ToSun).Rotation());
 	const float Day = (float)FMath::SmoothStep(-0.08, 0.12, ToSun.Z);
-	Sun->SetIntensity(8.f * Day);
-	Sun->SetCastShadows(Day > 0.02f);
+	static const float SunScale = [] { float V = 1; FParse::Value(FCommandLine::Get(), TEXT("WwSun="), V); return V; }(); // test switch: the sun's strength
+	Sun->SetIntensity(8.f * Day * SunScale);
+	static const bool bSunShadows = !FParse::Param(FCommandLine::Get(), TEXT("WwNoSunShadows")); // test switch
+	Sun->SetCastShadows(bSunShadows && Day > 0.02f);
 	Grade->Settings.AutoExposureMinBrightness = -FMath::Lerp(SunEv - 3.f, ShadeEv, Day);
 	Grade->Settings.AutoExposureMaxBrightness = -FMath::Lerp(SunEv - 3.f, SunEv, Day);
 

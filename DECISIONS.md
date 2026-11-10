@@ -72,3 +72,6 @@ Thornwake's sea is a Tessendorf FFT ocean computed by four compute shaders every
 
 **D23. One sea state for now.**
 Thornwake's sea follows its weather (sea state 0 to 1; Tom's setting is 0.5). Weather is not ported, so the sea state is fixed at 0.5 and the wind at 5.5 m/s from the north-west, the values in Tom's dumps. The fade between sea states is left out until something can change them.
+
+**D24. Shadow casters are found without the scene octree.**
+`r.Shadow.UseOctreeForCulling=0`. With the engine's default, every shadow in the scene vanished as soon as the far terrain tiles (1 km and more across) were shown: the octree query returned no casters. The world here is a few hundred large components (tiles, 16 km batches of trees and rocks), not thousands of small ones, so testing each is cheap. If the scene's make-up changes (many small actors), try the default again.

@@ -83,3 +83,13 @@
 * Compared with Tom's Godot dump of a rocky shore (`dump-20261108-154929`): the foam net round the rocks looks alike; my water is brighter and bluer, my cliff paler, and the sea stacks are missing.
 * Not done: underwater view, far tree cards, the middle tree model, light rays and mist, weather.
 * The packaged game had no clouds (the engine's cloud material was never packaged: every EXE so far, not noticed before) and logged a warning once from the rock meshes built in code. Both fixed; the packaged game was launched in the surf: clouds, sea, 143 fps, a clean log.
+
+## 2026-11-10, session 1 (continued): the missing shadows
+
+* Tom played the build: "there were no shadows", and later the clue that solved it: they flash for a split second right after the loading screen, then go.
+* True, and not new: the devlog pictures since the grass round have none. I never noticed. Only the first forest picture has them.
+* Not the packaging (the editor build is the same), not the time of day, not the light (its state is as set), not the shadow method. They vanish when terrain tiles of 1 km and larger arrive. Stopping those tiles, the tree batches and the rock batches from casting changed nothing; the engine's own shadow dump (`r.DumpShadows`) was identical with and without them.
+* Cause: the engine's octree culling of shadow casters. With the far tiles in the scene it finds no casters at all. `r.Shadow.UseOctreeForCulling=0` (test every component instead; there are a few hundred) brings every shadow back. Why the octree fails was not looked into further.
+* Cost: Tom's forest view, 1280x720: 86 fps without shadows, 67 with.
+* Also seen on the way: the sun's shadows are the classic cascades out to 600 m; virtual shadow maps are switched on in the config but are not what draws them. Left as it is (Godot's are cascades too).
+* Tom, same day: the Godot game's look has more to it (its environment's post-processing, perhaps ambient occlusion; tree crowns let light through, so shadows under them were not as black). Noted for the look round, after the missing features.
