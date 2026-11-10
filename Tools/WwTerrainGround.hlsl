@@ -12,6 +12,7 @@
 // rain wetness and puddles, dug soil, the lava map, the second rock look per biome pair.
 struct FWwGround
 {
+	float size;
 	float hash(float2 p)
 	{
 		p = p - 1000.0 * floor(p / 1000.0);
@@ -28,8 +29,9 @@ struct FWwGround
 	// do not repeat visibly over open ground.
 	float3 gtex(Texture2DArray T, SamplerState S, int layer, float2 p)
 	{
-		float2 u1 = p / 8.0;
-		float2 u2 = float2(0.8 * p.x + 0.6 * p.y, -0.6 * p.x + 0.8 * p.y) / 7.1 + float2(0.37, 0.71);
+		// (size: how large the textures are drawn, 1 = 8 m a tile; the menu sets it, since each set of textures suits its own)
+		float2 u1 = p / (8.0 * size);
+		float2 u2 = float2(0.8 * p.x + 0.6 * p.y, -0.6 * p.x + 0.8 * p.y) / (7.1 * size) + float2(0.37, 0.71);
 		float3 a = T.Sample(S, float3(u1, layer)).rgb;
 		float3 b = T.Sample(S, float3(u2, layer)).rgb;
 		return lerp(a, b, smoothstep(0.35, 0.65, vnoise(p * 0.045 + float2(layer * 7.3, 1.9))));
@@ -47,6 +49,7 @@ struct FWwGround
 	}
 };
 FWwGround fn;
+fn.size = Style.z > 0.01 ? Style.z : 1.0;
 static const int G_GRASS = 0, G_DIRT = 1, G_SAND = 2, G_ROCK = 3, G_RIVER_BED = 4, G_SEA_BED = 5, G_FOREST = 6, G_GRAVEL = 7;
 static const int G_MUD = 8, G_WET_MUD = 9, G_MOSS = 10, G_SCREE = 11, G_SNOW = 12, G_PEAT = 13;
 float noor = step(0.5, Style.x), ground_variety = Style.y * noor;
@@ -108,7 +111,7 @@ float3 wn = pow(abs(N), 4.0);
 wn /= wn.x + wn.y + wn.z;
 // Strata wander up and down along the face (no straight bands).
 float hs = h + (fn.vnoise(float2(p.x + p.y, 0.0) * 0.012) - 0.5) * 9.0 + (fn.vnoise(float2(p.x - p.y, 3.0) * 0.05) - 0.5) * 2.5;
-float2 ux = float2(p.y, -hs) / 10.0, uz = float2(p.x + 3.7, -hs) / 10.0, uy = p / 10.0;
+float2 ux = float2(p.y, -hs) / (10.0 * fn.size), uz = float2(p.x + 3.7, -hs) / (10.0 * fn.size), uy = p / (10.0 * fn.size);
 float3 rock_side = Texture2DSample(RockTex, RockTexSampler, ux).rgb * wn.x + Texture2DSample(RockTex, RockTexSampler, uz).rgb * wn.y
 	+ Texture2DSample(RockTex, RockTexSampler, uy).rgb * wn.z;
 rock_side /= 0.5;

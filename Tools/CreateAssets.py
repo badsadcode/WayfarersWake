@@ -118,8 +118,9 @@ def terrain(mat):
     if noor is None:
         raise RuntimeError('WwAssets: /Game/Terrain/Sets/TA_Ground_Pixel missing: run Tools/ImportTextures.cmd first')
     wire(expr(unreal.MaterialExpressionTextureObjectParameter, 1200, parameter_name='GroundSet', texture=noor, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR), '', 'NoorTex')
-    # x: ground style (0 classic colours, 1 Noor's textures: what Tom plays with), y: ground variety (bare and tint patches)
-    wire(expr(unreal.MaterialExpressionVectorParameter, 1350, parameter_name='GroundStyle', default_value=unreal.LinearColor(1, 1, 0, 0)), '', 'Style')
+    # x: ground style (0 classic colours, 1 Noor's textures: what Tom plays with), y: ground variety (bare and tint patches),
+    # z: texture size (1 = 8 m a tile)
+    wire(expr(unreal.MaterialExpressionVectorParameter, 1350, parameter_name='GroundStyle', default_value=unreal.LinearColor(1, 1, 1, 0)), '', 'Style')
 
     colour = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -150, 0)
     for key, value in (('r', True), ('g', True), ('b', True), ('a', False)):
@@ -425,9 +426,9 @@ float3 w = pow(abs(face), 6.0);
 w /= w.x + w.y + w.z;
 float look = clamp(round(Tint.a), 0.0, 5.0);
 #if BIG
-const float tile = 19.0, second_tile = 5.9, cliff_tile = 14.0;
+float tile = 19.0 * Size, second_tile = 5.9 * Size, cliff_tile = 14.0 * Size; // (Size: the menu's texture size, 1 = as designed)
 #else
-const float tile = 4.0;
+float tile = 4.0 * Size;
 #endif
 float3 tx = RockArr.Sample(RockArrSampler, float3(p.z / tile, -p.y / tile, look)).rgb;
 float3 ty = RockArr.Sample(RockArrSampler, float3(p.x / tile, p.z / tile, look)).rgb;
@@ -480,7 +481,7 @@ def rock(big):
         node.set_editor_property('description', 'WwRock')
         node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
         inputs = []
-        for name in ['Pos', 'N', 'Vc', 'Tint', 'RockArr'] + (['CliffArr'] if big else []):
+        for name in ['Pos', 'N', 'Vc', 'Tint', 'Size', 'RockArr'] + (['CliffArr'] if big else []):
             i = unreal.CustomInput()
             i.set_editor_property('input_name', name)
             inputs.append(i)
@@ -507,6 +508,7 @@ def rock(big):
         mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData, -1400, 560, data_index=3), '', data, 'B')
         mel.connect_material_expressions(data, '', tint, '')
         mel.connect_material_expressions(tint, '', node, 'Tint')
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionScalarParameter, -900, 560, parameter_name='TextureSize', default_value=1.0), '', node, 'Size')
         # (parameters: the game points them at the chosen texture set)
         for y, name, asset, parameter in ((650, 'RockArr', 'TA_Stone_Pixel', 'StoneSet'),) + (((800, 'CliffArr', 'TA_Cliff_Pixel', 'CliffSet'),) if big else ()):
             array = eal.load_asset('/Game/Terrain/Sets/' + asset)

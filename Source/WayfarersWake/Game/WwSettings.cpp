@@ -151,6 +151,7 @@ FWwSettings::FWwSettings()
 		if (Sets.Num() == 0) Sets.Add(TEXT("Pixel"));
 		Choice(TEXT("view.textures"), View, TEXT("Ground and stone"), TEXT("Texture set"), Sets, FMath::Max(0, Sets.IndexOfByKey(FString(TEXT("Painted")))), TEXT("The textures of the ground, the stones and the cliffs. Changes at once, to compare sets."));
 	}
+	Slider(TEXT("view.texsize"), View, TEXT("Ground and stone"), TEXT("Texture size"), 0.1, 3, 0.05, 1, TEXT("x"), TEXT("How large the textures are drawn. Smaller repeats them more often. Each set suits its own size."));
 	Add(TEXT("view.reflect"), View, TEXT("Water"), TEXT("Water mirrors its surroundings"), Toggle, 1, TEXT("The land, the trees and the clouds reflected in the water. Costs some speed."));
 	Add(TEXT("view.splashes"), View, TEXT("Water"), TEXT("Rain splashes"), Toggle, 1, TEXT("Small splashes where raindrops land near you, on the ground and on the water."));
 	Add(TEXT("view.stars"), View, TEXT("Light"), TEXT("Stars"), Toggle, 1, TEXT(""));

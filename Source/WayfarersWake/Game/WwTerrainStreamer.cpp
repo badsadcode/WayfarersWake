@@ -448,6 +448,7 @@ void AWwTerrainStreamer::Commit(const TSharedPtr<FWwTileData>& Data)
 		Slots[Index].Mesh = Mesh;
 		Slots[Index].Material = UMaterialInstanceDynamic::Create(TerrainMaterial, this);
 		if (GroundSet) Slots[Index].Material->SetTextureParameterValue(TEXT("GroundSet"), GroundSet);
+		Slots[Index].Material->SetVectorParameterValue(TEXT("GroundStyle"), FLinearColor(1, 1, FMath::Max(SizeShown, 0.05f), 0));
 	}
 	FWwTileSlot& Slot = Slots[Index];
 	UProceduralMeshComponent* Mesh = Slot.Mesh;
@@ -721,7 +722,7 @@ void AWwTerrainStreamer::LoadTreeMeshes()
 		RockLook = UMaterialInstanceDynamic::Create(RockMaterial, this);
 		BigRockLook = UMaterialInstanceDynamic::Create(Big, this);
 		RockMaterial = RockLook; Big = BigRockLook;
-		SetShown.Reset();
+		SetShown.Reset(); SizeShown = -1;
 		for (int32 Kind = 0; Kind < ww::FRocks::CliffRock; Kind++)
 			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Rock(Kind), RockMaterial, *FString::Printf(TEXT("WwRock%d"), Kind), Kind != ww::FRocks::Stone));
 		// Worn cliff blocks: six shapes near, the same coarse for the middle distance, the near ones again for a cliff's lip.
@@ -910,6 +911,15 @@ void AWwTerrainStreamer::StartOcean()
 
 void AWwTerrainStreamer::ApplyTextureSet()
 {
+	// How large the textures are drawn (each set suits its own size).
+	const float Size = (float)FWwSettings::Get().Num(TEXT("view.texsize"));
+	if (Size != SizeShown)
+	{
+		SizeShown = Size;
+		for (FWwTileSlot& Slot : Slots) if (Slot.Material) Slot.Material->SetVectorParameterValue(TEXT("GroundStyle"), FLinearColor(1, 1, Size, 0));
+		if (RockLook) RockLook->SetScalarParameterValue(TEXT("TextureSize"), Size);
+		if (BigRockLook) BigRockLook->SetScalarParameterValue(TEXT("TextureSize"), Size);
+	}
 	const FString Wanted = FWwSettings::Get().Option(TEXT("view.textures"));
 	if (Wanted == SetShown) return;
 	SetShown = Wanted;

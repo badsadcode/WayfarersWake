@@ -230,6 +230,7 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> RockLook;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> BigRockLook;
 	FString SetShown;
+	float SizeShown = -1;
 	FLinearColor WeatherShown = FLinearColor(0.496f, 0.868f, 0.69f, 0.5f);
 
 	TMap<FWwTileKey, FTile> Tiles;
