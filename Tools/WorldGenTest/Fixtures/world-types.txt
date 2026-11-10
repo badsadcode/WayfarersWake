@@ -1,0 +1,420 @@
+# natural-continents,7319
+type natural-continents digest b2adb4abc45e0e16d2d102e016f043edb37d32e55b32f77fa02d55a96887b96f
+grid 16000 5db93449938f6b47
+grid 1 a9e222e462ee79bb
+grid 97 0f1861880a1061fd
+grid 13 f2501732094834ef
+channel 0 5592bd616fdb2e67
+channel 1 dc7ff501d24c96d3
+channel 2 16b7da06b8c459bb
+lakes 12 reaches 1005 points 370015
+# natural-continents,42
+type natural-continents digest b2adb4abc45e0e16d2d102e016f043edb37d32e55b32f77fa02d55a96887b96f
+grid 16000 b7b24e4cd6ead3b2
+grid 1 d540ebe5756712e3
+grid 97 6ffad916c728741e
+grid 13 6db7a758279ba3ef
+channel 0 d3368f0b1245934b
+channel 1 41d71f3bde5a7d07
+channel 2 88c7475dd7297fa7
+lakes 22 reaches 682 points 258524
+# natural-mainland,7319
+type natural-mainland digest 5f89e2cc5754aa7deba8475915e41bc0e8571ef7f40424194730297269f0976b
+grid 16000 aa667fab36e19385
+grid 1 7826fc057b1ddcca
+grid 97 f35a9a90d8b8b754
+grid 13 8a0424c2e2c371b0
+channel 0 7d6d95da1b29c3c6
+channel 1 dfeda759baf6ecef
+channel 2 9f31c217758b66d3
+lakes 12 reaches 855 points 317306
+# natural-mainland,42
+type natural-mainland digest 5f89e2cc5754aa7deba8475915e41bc0e8571ef7f40424194730297269f0976b
+grid 16000 dfa966e456150169
+grid 1 d472b0a50da0404d
+grid 97 33de74bc96230a65
+grid 13 47b5f03459135be7
+channel 0 dd36652b7c32e8d9
+channel 1 503f0745448369ae
+channel 2 b418313d31ebddf9
+lakes 7 reaches 1021 points 376138
+# natural-archipelago,7319
+type natural-archipelago digest c4e46aff1a116e8df4d752b817c58009e140e9464c8736ecd7bd4d6ce49243c8
+grid 16000 5c1d121df76655a8
+grid 1 fcaa6082b532d115
+grid 97 71a9eabd7df95a1c
+grid 13 5941840fe844118d
+channel 0 3e075f86bcd34656
+channel 1 9b6ab2d1cc5ba68f
+channel 2 9af21e9ae354f526
+lakes 26 reaches 414 points 170722
+# natural-archipelago,42
+type natural-archipelago digest c4e46aff1a116e8df4d752b817c58009e140e9464c8736ecd7bd4d6ce49243c8
+grid 16000 ff48e7df2070474d
+grid 1 2885528c0a3d6265
+grid 97 fe324e27ae148f6e
+grid 13 cae40b62ceed1cde
+channel 0 7f91c077a6e74625
+channel 1 99f06a52f81f2e3e
+channel 2 c3346143797fb6c3
+lakes 51 reaches 365 points 152638
+# natural-mountains,7319
+type natural-mountains digest fb076ecff3cf120fcf30f8107095923bf54b552ffc387d381276f1b7bba6f07b
+grid 24000 7ae44a2bb956616b
+grid 1 25cc32a86378586d
+grid 97 8d8c84e30342b58c
+grid 13 905dca4ed191233e
+channel 0 c6659be145c989e7
+channel 1 751ab01a5f50d87e
+channel 2 f0c4ed0facddf34a
+lakes 16 reaches 2035 points 760428
+# natural-mountains,42
+type natural-mountains digest fb076ecff3cf120fcf30f8107095923bf54b552ffc387d381276f1b7bba6f07b
+grid 24000 7c488be8c481b3c4
+grid 1 e31e644f2945c96d
+grid 97 e89b518885e782d5
+grid 13 ec01a56ca602b62f
+channel 0 40e11d62a47e2c2a
+channel 1 64549c8caf887c20
+channel 2 70155215bb67ae85
+lakes 9 reaches 1830 points 694037
+# natural-many-continents,7319
+type natural-many-continents digest 44dd3b40571ac3fd2b036588fc1e1bb671ef866c39c7818d9e1a01a0c3fc3ea4
+grid 16000 6a079e0aeea0f17f
+grid 1 ea1cab1218347c75
+grid 97 f8b4ec4f86eb0df1
+grid 13 b1ff0cca9e60b5e5
+channel 0 cb0d916a6545e578
+channel 1 3c85930106b0675f
+channel 2 2e67a04391f92cbd
+lakes 12 reaches 1205 points 429850
+# natural-many-continents,42
+type natural-many-continents digest 44dd3b40571ac3fd2b036588fc1e1bb671ef866c39c7818d9e1a01a0c3fc3ea4
+grid 16000 a9ee519591d48803
+grid 1 6c07398bb4e84f91
+grid 97 763ce20c09271ae4
+grid 13 d7efc0dde559cb81
+channel 0 57adb8f60dcd95ef
+channel 1 7fc3673557d05497
+channel 2 f2f6acb51c0455d3
+lakes 20 reaches 853 points 319332
+# natural-islands-mainland,7319
+type natural-islands-mainland digest 8ff4d70f18bc17abf80b8f8f1a62be914cc2530c7f06c2be5f7effac18ca4751
+grid 16000 242c208e6250fe2b
+grid 1 11aaa7c01ab231dd
+grid 97 3556396228183574
+grid 13 777ddf4bd7570ee3
+channel 0 7ffb7ad11b59f36f
+channel 1 a1c223b2c21c796f
+channel 2 98e3141cc67b3c56
+lakes 9 reaches 610 points 233069
+# natural-islands-mainland,42
+type natural-islands-mainland digest 8ff4d70f18bc17abf80b8f8f1a62be914cc2530c7f06c2be5f7effac18ca4751
+grid 16000 041d1c6bc3db3496
+grid 1 0930e9551c55501d
+grid 97 4efb851fc27eceec
+grid 13 f6f7ddc220c112df
+channel 0 59750ed1f8f9364e
+channel 1 fb374bd0733b69d8
+channel 2 85d8055773af5aa6
+lakes 9 reaches 1169 points 430035
+# natural-inland-sea,7319
+type natural-inland-sea digest 83dff99b513a7af762b0b5ce1f49f6fc9e3194eeb497695ad05e9a5b3e019b0c
+grid 16000 f27899c915996695
+grid 1 d01d7887aaf0a114
+grid 97 38e0d1bba04fadf5
+grid 13 8ff80bdce910b899
+channel 0 0604a2942dd5d31e
+channel 1 a5c1eca753343db0
+channel 2 d9f3f2e772dc01e5
+lakes 25 reaches 1550 points 577853
+# natural-inland-sea,42
+type natural-inland-sea digest 83dff99b513a7af762b0b5ce1f49f6fc9e3194eeb497695ad05e9a5b3e019b0c
+grid 16000 e8f4dfe93959ed73
+grid 1 b1ff0cca9e60b5e5
+grid 97 307fcd780497ae78
+grid 13 16edf94a251b785c
+channel 0 2f7a383415349ec9
+channel 1 8a300b6f758f5412
+channel 2 225039b864158e5c
+lakes 21 reaches 1439 points 526435
+# natural-shattered,7319
+type natural-shattered digest aac7ab0b5b26a3f50ff51cc86f9e1bbbb7aba4807c7c0930e2d449b4b0c44965
+grid 16000 bde5179e620d703e
+grid 1 f002ff667f141894
+grid 97 b1ff0cca9e60b5e5
+grid 13 d499968923ef5da1
+channel 0 0d68c0e9f29024f0
+channel 1 1d4a4dbff09a0830
+channel 2 c1b70cd99308bcd2
+lakes 12 reaches 397 points 150788
+# natural-shattered,42
+type natural-shattered digest aac7ab0b5b26a3f50ff51cc86f9e1bbbb7aba4807c7c0930e2d449b4b0c44965
+grid 16000 45c73ea865924b01
+grid 1 ef0307d26595d19f
+grid 97 5e12408b7378ceac
+grid 13 b1ff0cca9e60b5e5
+channel 0 d7124b843564e2af
+channel 1 88eac202182604c0
+channel 2 714c200d0f7b6daa
+lakes 15 reaches 446 points 162649
+# natural-rift,7319
+type natural-rift digest 4a95604835b84f13e96fa7c203dfb9b9b02ba3c5ea5c0a7312af45bbfbdd1844
+grid 16000 26523c09efb651cd
+grid 1 39e0ed7d26982119
+grid 97 832221a8256c56c4
+grid 13 28874867398d3a22
+channel 0 2650dd7322d43047
+channel 1 10d67cbf6afa01e3
+channel 2 993619bbe7a027f5
+lakes 8 reaches 754 points 282287
+# natural-rift,42
+type natural-rift digest 4a95604835b84f13e96fa7c203dfb9b9b02ba3c5ea5c0a7312af45bbfbdd1844
+grid 16000 44558cf552450fd9
+grid 1 69dc2f23d6bc2028
+grid 97 9afc6b6f6470d958
+grid 13 52216bd1392838bc
+channel 0 aa78673909a5b653
+channel 1 727f3ad441ede981
+channel 2 2b13415c14dd3d1e
+lakes 16 reaches 697 points 261561
+# natural-twin-continents,7319
+type natural-twin-continents digest d60e3580c4be801551733c3bf9982e97d9aae3768bcda5edfaeb9bb04749aff3
+grid 16000 95a84c2a0c607bf3
+grid 1 b1ff0cca9e60b5e5
+grid 97 b795694559bad6d3
+grid 13 20edac358418badc
+channel 0 b90d60c461a4ff10
+channel 1 5c410dee94144c93
+channel 2 918a07ff21371a8b
+lakes 28 reaches 871 points 339657
+# natural-twin-continents,42
+type natural-twin-continents digest d60e3580c4be801551733c3bf9982e97d9aae3768bcda5edfaeb9bb04749aff3
+grid 16000 dc9fcb7b929d33ae
+grid 1 b1ff0cca9e60b5e5
+grid 97 8c1a35eadda6ca56
+grid 13 8a7c52773cf7fb6f
+channel 0 15037b1681912803
+channel 1 11ed9241fe3dcb81
+channel 2 2b6f3109172a17a5
+lakes 16 reaches 919 points 332261
+# natural-peninsula,7319
+type natural-peninsula digest 5b97e61b8b8ecd103d9b9d83cb2da61edb6dced01d189c2e60a00ed2ebddc39e
+grid 16000 08777f53a5c8beac
+grid 1 211c4ed4096be7d2
+grid 97 0b415704e70efa1b
+grid 13 b1ff0cca9e60b5e5
+channel 0 e054445cf5e5ae7a
+channel 1 e0c650acc69505eb
+channel 2 9653c4227b91c05f
+lakes 7 reaches 489 points 185248
+# natural-peninsula,42
+type natural-peninsula digest 5b97e61b8b8ecd103d9b9d83cb2da61edb6dced01d189c2e60a00ed2ebddc39e
+grid 16000 efe512b9d27c0c77
+grid 1 e85f13a29149f3c3
+grid 97 1c416267a6c04af8
+grid 13 b1ff0cca9e60b5e5
+channel 0 c9ecd68c9276dfad
+channel 1 6c85ff4700ef5fa6
+channel 2 bb69ea4af90d9ebf
+lakes 13 reaches 553 points 202824
+# inland-sea,7319
+type inland-sea digest 075f1619b16b4848c97b313673206d7f4d784915a2a2e5e84c58749e9db46c73
+grid 16000 ebcb37fa03091fac
+grid 1 eacb2c9d5c464cf9
+grid 97 8a88fbb515b6d0cb
+grid 13 4e8f712d856538bb
+channel 0 8d031e75c4dddd55
+channel 1 3211e2abd6dd0501
+channel 2 b430ca21e59cbd09
+lakes 7 reaches 928 points 388418
+# inland-sea,42
+type inland-sea digest 075f1619b16b4848c97b313673206d7f4d784915a2a2e5e84c58749e9db46c73
+grid 16000 41655d6ff433f68d
+grid 1 cd85ed62961a5b9e
+grid 97 da3651df6965962f
+grid 13 97928272a0bff785
+channel 0 50d68883a373e4b5
+channel 1 5a828151786a9f20
+channel 2 34f2e46e6a014724
+lakes 7 reaches 1318 points 514886
+# shattered,7319
+type shattered digest 5d7040ea11924aec0b4bd4d41a42e66bfae505788977fad7e8a774dae3f2a04a
+grid 16000 9074a95610c1c0af
+grid 1 42b8fb041d0aeeac
+grid 97 946b6aa783e6f7a5
+grid 13 f0ef1edbe6cf1791
+channel 0 a4b992b9d4e92da3
+channel 1 d50bdade1adb8963
+channel 2 32a4fa831cc2a8db
+lakes 4 reaches 792 points 299647
+# shattered,42
+type shattered digest 5d7040ea11924aec0b4bd4d41a42e66bfae505788977fad7e8a774dae3f2a04a
+grid 16000 2ee31cb2b8d89c85
+grid 1 de7de618d28fa06a
+grid 97 037205678f0aa88a
+grid 13 ce304a1458354799
+channel 0 35b873054dff9665
+channel 1 012b4a83f5dfbe55
+channel 2 7697f9cf83a08ace
+lakes 7 reaches 699 points 271488
+# rift,7319
+type rift digest 03836787b2d539c59541d09dca9ee3cb08bd18428ee7b9a942e2709e8cf61487
+grid 16000 0fb0c8e92d6b957b
+grid 1 52644907d50b4c2f
+grid 97 b82db352555b2f25
+grid 13 b1ff0cca9e60b5e5
+channel 0 e78bc670e277c6b3
+channel 1 859e5f1f2d456f9a
+channel 2 48b1396872596aa2
+lakes 8 reaches 500 points 194913
+# rift,42
+type rift digest 03836787b2d539c59541d09dca9ee3cb08bd18428ee7b9a942e2709e8cf61487
+grid 16000 67b37012ca1390fa
+grid 1 673f528b815ca905
+grid 97 2504933d6c4e21c2
+grid 13 00cb4a41f15a7e9d
+channel 0 e41d3a0fbe7bbefd
+channel 1 2295db0bf4865cd0
+channel 2 d451422deb44d8e0
+lakes 5 reaches 576 points 269118
+# twin-continents,7319
+type twin-continents digest f2f4537aa4300c052922e13c65caa37942d34a0a060a2cc5c678af8639f426d8
+grid 16000 2a53cbeb2f156388
+grid 1 b1ff0cca9e60b5e5
+grid 97 6ffb70c5ecaf169f
+grid 13 c9eefbd0d779802e
+channel 0 c9f0ede045e0ce39
+channel 1 75098719700c8eb3
+channel 2 b301cd0be207be4f
+lakes 6 reaches 583 points 215407
+# twin-continents,42
+type twin-continents digest f2f4537aa4300c052922e13c65caa37942d34a0a060a2cc5c678af8639f426d8
+grid 16000 5db013b884532c16
+grid 1 b1ff0cca9e60b5e5
+grid 97 7bdca7276f75737e
+grid 13 adc873bde9043ce6
+channel 0 b61677324f009ce8
+channel 1 890bf30273cf049e
+channel 2 21027d8f169dc83a
+lakes 6 reaches 426 points 170229
+# peninsula,7319
+type peninsula digest 6cf8c2e7c71e40d67e1de6ef8647e18762fc4a7f4809149bcb0fffbfbce7e153
+grid 16000 347bda3cb8727342
+grid 1 a8c1fd157218ae48
+grid 97 b1ff0cca9e60b5e5
+grid 13 b1ff0cca9e60b5e5
+channel 0 8ed6c0689adb7152
+channel 1 d94f6fc5337764a2
+channel 2 6c025d9a141c12ed
+lakes 6 reaches 407 points 148312
+# peninsula,42
+type peninsula digest 6cf8c2e7c71e40d67e1de6ef8647e18762fc4a7f4809149bcb0fffbfbce7e153
+grid 16000 6ddb7225aad58184
+grid 1 5f8b9f0dac34455c
+grid 97 b1ff0cca9e60b5e5
+grid 13 b1ff0cca9e60b5e5
+channel 0 b9f7bcdeddd2eee8
+channel 1 15f9f7809ed8109c
+channel 2 bb4efbebabd36dbb
+lakes 4 reaches 432 points 170042
+# many-continents,7319
+type many-continents digest 7ae2a78f6a46e9242c4ca2a956fb49412a5a41f2abf1fd28567935b8bb57ae3b
+grid 16000 09e6ab97d6700e9e
+grid 1 a7870be58ba79d9a
+grid 97 b1ff0cca9e60b5e5
+grid 13 b1ff0cca9e60b5e5
+channel 0 41970ab301d66f08
+channel 1 de4b7148091d977b
+channel 2 c8460f384cf27250
+lakes 31 reaches 427 points 171583
+# many-continents,42
+type many-continents digest 7ae2a78f6a46e9242c4ca2a956fb49412a5a41f2abf1fd28567935b8bb57ae3b
+grid 16000 dbea19c71a42226f
+grid 1 d944929fc4de1762
+grid 97 b1ff0cca9e60b5e5
+grid 13 4f1eb29328cd0371
+channel 0 d56adee42c7780bf
+channel 1 d5bbbe45fe083d04
+channel 2 dc916b463c4d6cdc
+lakes 54 reaches 387 points 170039
+# islands-mainland,7319
+type islands-mainland digest dfc3f163d1831f39a765da8fabfe65d00dc97551fad62944ae87de91e08bc555
+grid 16000 09cf339f0d54838c
+grid 1 01985e84dffed9e3
+grid 97 4f8fba82fc7c80e6
+grid 13 b1ff0cca9e60b5e5
+channel 0 692a556b0e652e65
+channel 1 c2b3fea6b7005dee
+channel 2 65ce5350f9ee535a
+lakes 4 reaches 361 points 139767
+# islands-mainland,42
+type islands-mainland digest dfc3f163d1831f39a765da8fabfe65d00dc97551fad62944ae87de91e08bc555
+grid 16000 70b9980f1a81a87d
+grid 1 e5e919e8c105c21e
+grid 97 4e361cd418f53c03
+grid 13 895783b5c5371deb
+channel 0 e4614f16de9344e5
+channel 1 e5e495557ecd58d1
+channel 2 968b275cc2970a8d
+lakes 10 reaches 499 points 200277
+# natural-continents,-9,64
+type natural-continents-64km digest f5f3c072dae89e106eb13516248e581a9bd38131126aef5af92ce976d6ba77a4
+grid 2000 0f3a3afd8aab93c9
+grid 1 c9a61e43b85bbc23
+grid 97 de23e83f6f71365a
+grid 13 3036b369fa530ac5
+channel 0 09ed1d97b1b32250
+channel 1 32f23a5309d5c3a2
+channel 2 d14bd23bf2ccfae5
+lakes 10 reaches 11 points 3190
+# natural-archipelago,7319,1024
+type natural-archipelago-1024km digest dbf32a0022c38b2ad17d5f2e8727294b684a0ad163cd3cfb1ce3d088215a9d68
+grid 32000 6624a485d93e0fa0
+grid 1 1cd79c9f7f0a496f
+grid 97 23dccfd192b6e9d6
+grid 13 fdd037476bdf69cf
+channel 0 433677d36a995742
+channel 1 091675a63d5e6ff8
+channel 2 6b4a122d5c837953
+lakes 38 reaches 2332 points 922885
+# rift,42,128
+type rift-128km digest fa0eec56a6ebcec0a215ad4506f81cbe01a4281b06b8be6cb3f921ff911c47b7
+grid 4000 f282f664e4970448
+grid 1 04ab0e894ac106bd
+grid 97 e7f3ab15f5e7d2eb
+grid 13 409a58f44a4c7d06
+channel 0 d2a75178108b0e7b
+channel 1 af0353371ac8d3fc
+channel 2 294155dc037fff78
+lakes 14 reaches 35 points 10815
+# balanced,7319,32
+type balanced-32km digest 766268c01bec3a837f27ff6e4d18e89b8393298ed83c25df65bdb7934b55f694
+grid 1000 34446bd3514b714c
+grid 1 2ae216c9b0e013e1
+grid 97 79eaf82c5a8dbb70
+grid 13 8c556620e928cb26
+channel 0 fa0346455ef31cdc
+channel 1 122e43261753a200
+channel 2 8affd7182d08d273
+lakes 6 reaches 0 points 0
+# natural-mountains,42,2048
+type natural-mountains-2048km digest 691efc93b12160c8703243699a8dce237994df66411a84299a3c428af1617f20
+grid 64000 ccbf6b3ba76a4bae
+grid 1 c55ab894487c230d
+grid 97 58c41cdbdcbe4861
+grid 13 81423d4ff05e7ff4
+channel 0 41403c43d1f7bc04
+channel 1 5b0480658b473b2b
+channel 2 e089bd3cbaae4566
+lakes 15 reaches 12721 points 4790510
+# mountainous,7319,256
+type mountainous-256km digest 4e1b6d4bb7c234f141707debb281d6cbb95acecd1e3edc970d81730d041ffb3f
+grid 8000 3b15261f2c3b4402
+grid 1 64a31d0afd5bd182
+grid 97 64a31d0afd5bd182
+grid 13 35a900781a74e4a2
+channel 0 f55197affbe4b436
+channel 1 758c5307d77f134a
+channel 2 40d1bfe4a515b6aa
+lakes 8 reaches 116 points 44676

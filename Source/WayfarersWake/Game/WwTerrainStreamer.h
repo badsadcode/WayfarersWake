@@ -48,7 +48,8 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
-	/// Metres across a level-0 tile and cells along its side (vertex spacing 2 m at level 0).
+	/// Metres across a level-0 tile and cells along a tile's side. As in Thornwake, the nearest level is twice as fine
+	/// (64 cells: 1 m vertices underfoot), coarser levels have 32 cells (4 m, 8 m, ...).
 	UPROPERTY(EditAnywhere, Category = "Terrain") double BaseTile = 64;
 	UPROPERTY(EditAnywhere, Category = "Terrain") int32 Cells = 32;
 	/// LOD levels: 9 = 16 km root tiles, about 24 km of view.

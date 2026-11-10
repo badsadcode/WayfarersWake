@@ -8,6 +8,7 @@ _Last updated 2026-11-10 (session 1, after the landform port). Keep this current
 |---|---|---|
 | World generator, terrain revisions 8-44 (Thornwake's current) | **Bit-identical to Thornwake** | `Tools/WorldGenTest`: 468/468 checks, every frozen fingerprint from revision 15 to 44 (31 fixture sets x 5 profiles x 3 seeds) |
 | Same generator inside the engine build | Bit-identical | `-WwSelfTest` logs `MATCH` at revision 44 |
+| All 23 world types (7 classic, 5 template, 11 natural) | **Bit-identical to Thornwake** | `WorldGenTest --types`: 42/42 checks against output recorded from the C# generator (16 new types on two seeds, six resized worlds); `Fixtures/world-types.txt` |
 | World sizes 32 ... 4096 km | All nine build | `WorldGenTest --sizes` (table in BENCHMARK.md); 4096 km also launched in game |
 | UE 5.9 project | Compiles, launches | `Build.bat WayfarersWakeEditor Win64 Development` succeeds; game runs with `-game` |
 | Streamed terrain (quadtree LOD, 9 levels) | Works, no holes seen | 330 tiles around the player; 24 km flight at 400 m/s with 0-10 tiles missing |
@@ -20,7 +21,6 @@ In the brief's terms: the generator is **tested**; the project is **compiled and
 
 ## Not done / known gaps
 
-* **Template and "natural" world types are not ported** (`Landforms.cs`, `Heightmap.cs`): only the seven classic placed-continent types exist. This is now the largest gap in the generator. Thornwake's fixtures cover only the five classic profiles, so these types will need new reference hashes from a scratch copy of the C# tests (see DECISIONS D10).
 * **Sea stacks and arches** (`SeaStacks.cs`, revision 35) are not ported: they are rock models placed off steep coasts, not ground, so the terrain is complete without them.
 * The landforms are in the ground and water levels, but **the game does not draw them specially yet**: no falling water at waterfalls, no lava look (`FTerrainSample::Lava`), no scree stones (`Scree`), ponds and tarns drawn like any water.
 * Landform settings (amount and size per module) exist in `FTerrainStyle::Landforms` but there is no screen to set them; every module runs as designed.
@@ -55,17 +55,16 @@ D:\EPIC\UE_5.9\Engine\Binaries\Win64\UnrealEditor-Cmd.exe H:\BIW\WayfarersWake\W
 ```
 
 World options: `-WwSeed=7319 -WwType=balanced -WwSizeKm=64 -WwRevision=44` (any revision from 8 to 44; 44 is the default).
-Types: balanced, continental, archipelago, mountainous, many-continents, islands-mainland, vast-world. Sizes: 32, 64, 128, 256, 512, 768, 1024, 2048, 4096.
+Types: balanced, continental, archipelago, mountainous, many-continents, islands-mainland, vast-world; inland-sea, shattered, rift, twin-continents, peninsula; and natural-continents, natural-mainland, natural-archipelago, natural-mountains, natural-many-continents, natural-islands-mainland, natural-inland-sea, natural-shattered, natural-rift, natural-twin-continents, natural-peninsula. Sizes: 32, 64, 128, 256, 512, 768, 1024, 2048, 4096.
 
-Test options: `-WwAt=<x>,<z>` (start place in metres), `-WwAutoFly=<m/s>`, `-WwAutoShot=<seconds>` (screenshot to `Saved/Screenshots/WwAutoShot.png`, then quit), `-WwStats` (streaming stats to the log every 5 s).
+Test options: `-WwAt=<x>,<z>` (start place in metres), `-WwHighland` (start in mountain country), `-WwAutoFly=<m/s>`, `-WwAutoShot=<seconds>` (screenshot to `Saved/Screenshots/WwAutoShot.png`, then quit), `-WwStats` (streaming stats to the log every 5 s).
 
 Controls: WASD, mouse look, Shift sprint, Space jump, F fly (E/Q up and down, Shift x8, Ctrl x40), Esc quit.
 
 ## Next concrete actions
 
 1. Play it by hand; fix what walking shows (seams, snagging, camera). Visit the landforms: none has been looked at up close in Unreal.
-2. Port `Heightmap.cs` and the template `Landforms.cs` so the natural world types exist; record reference hashes for them from the scratch C# copy first.
-3. Draw what the generator already knows: waterfalls, lava, scree, sea stacks.
+2. Draw what the generator already knows: waterfalls, lava, scree, sea stacks.
 4. World-creation screen (type, size, seed, terrain version) and a world map.
 5. Ground materials, trees and grass from the biome data; fix exposure.
 6. Long soak test for memory; benchmark scenes after `Content/WorldData/benchmarks.json`.

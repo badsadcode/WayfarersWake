@@ -231,7 +231,7 @@ void AWwTerrainStreamer::LaunchJobs(const TArray<FVector2D>& Viewers)
 		const FWwTileKey Key = Entry.Value;
 		Pending.Add(Key);
 		Shared->InFlight++;
-		UE::Tasks::Launch(UE_SOURCE_LOCATION, [State = Shared, World = Sampler, Key, Base = BaseTile, CellCount = Cells, Serial = WorldSerial]()
+		UE::Tasks::Launch(UE_SOURCE_LOCATION, [State = Shared, World = Sampler, Key, Base = BaseTile, CellCount = Key.Level == 0 ? Cells * 2 : Cells, Serial = WorldSerial]()
 		{
 			TSharedPtr<FWwTileData> Data = BuildTile(*World, Key, Base, CellCount);
 			Data->WorldSerial = Serial;

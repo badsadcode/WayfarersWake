@@ -4,6 +4,7 @@
 #include "Async/ParallelFor.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/CommandLine.h"
 
 static void EngineParallelFor(int Count, const std::function<void(int)>& Body)
 {
@@ -123,9 +124,14 @@ bool UWwWorldSubsystem::FindSpawn(double& OutX, double& OutZ, double& OutHeight)
 {
 	if (!Sampler) return false;
 	const ww::FWorldPlan& Plan = *Sampler->Plan;
-	const ww::FLandFeature& Land = Plan.Layout.Land[0];
-	// Walk outward from the first landmass's centre in a golden-angle spiral: dry lowland with a gentle slope.
+	// Search round the first landmass, or round the world's middle for types that grow their own land (natural and
+	// template types place no continents).
+	ww::FLandFeature Land;
+	if (!Plan.Layout.Land.empty() && !Plan.Layout.Land[0].bIsland) Land = Plan.Layout.Land[0];
+	else { Land.Center.X = Plan.Manifest.OriginX; Land.Center.Z = Plan.Manifest.OriginZ; Land.RadiusX = Plan.Profile().WorldSize * 0.42; }
+	// Walk outward in a golden-angle spiral: dry ground that can be stood on.
 	double BestScore = -1e18;
+	const bool bHighland = FParse::Param(FCommandLine::Get(), TEXT("WwHighland"));
 	bool bFound = false;
 	for (int32 i = 0; i < 4000; i++)
 	{
@@ -136,8 +142,18 @@ bool UWwWorldSubsystem::FindSpawn(double& OutX, double& OutZ, double& OutHeight)
 		double Hx = Sampler->Height(X + 4, Z) - Sampler->Height(X - 4, Z), Hz = Sampler->Height(X, Z + 4) - Sampler->Height(X, Z - 4);
 		double Slope = FMath::Sqrt(Hx * Hx + Hz * Hz) / 8.0;
 		if (Slope > 0.25) continue;
-		// Prefer low, gentle ground not far from the centre (a view of the land rather than a mountain top).
-		double Score = -Slope * 400 - FMath::Abs(S.Height - 60) * 0.5 - Radius / Land.RadiusX * 40 - S.Mountain * 200;
+		if (bHighland)
+		{
+			// (test switch -WwHighland: start in mountain country instead, to look at relief)
+			double HighScore = -FMath::Abs(S.Mountain - 0.45) * 300 - Slope * 100;
+			if (HighScore > BestScore) { BestScore = HighScore; OutX = X; OutZ = Z; OutHeight = S.Height; bFound = true; }
+			continue;
+		}
+		// Prefer hill country with something to look at: ground that can be stood on, some way up, with relief around it
+		// (the first version asked for the lowest, flattest ground it could find, and got it).
+		double Around = FMath::Abs(Sampler->Height(X + 250, Z, 16) - S.Height) + FMath::Abs(Sampler->Height(X - 250, Z, 16) - S.Height)
+			+ FMath::Abs(Sampler->Height(X, Z + 250, 16) - S.Height) + FMath::Abs(Sampler->Height(X, Z - 250, 16) - S.Height);
+		double Score = -Slope * 150 - FMath::Abs(S.Height - 140) * 0.15 - Radius / Land.RadiusX * 40 + FMath::Min(Around, 120.0) * 0.4;
 		if (Score > BestScore) { BestScore = Score; OutX = X; OutZ = Z; OutHeight = S.Height; bFound = true; }
 	}
 	return bFound;

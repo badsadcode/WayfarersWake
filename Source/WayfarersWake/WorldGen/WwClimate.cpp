@@ -1,5 +1,6 @@
 // Port of Thornwake Game/WorldGen: Climate.cs, BiomeMap.cs, BiomeRegistry.cs, WorldPlan.cs (revision 16 paths).
 #include "WwLandforms.h"
+#include "WwWorldTypes.h"
 #include <chrono>
 
 namespace ww
@@ -733,6 +734,35 @@ FWorldPlan::FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& In
 	std::vector<float>& landRaster = Macro.Channel(LandChannel);
 	std::vector<float>& heightRaster = Macro.Channel(HeightChannel);
 	std::vector<float>& mountainRaster = Macro.Channel(MountainChannel);
+	// World types whose land is not (only) placed continents: a landform template, or a heightmap ("natural" types).
+	FLandformTemplate forms(Manifest);
+	std::unique_ptr<FHeightmap> heights;
+	if (p.bHeightmap && !p.Heightmap.empty())
+		heights = std::make_unique<FHeightmap>(p.Heightmap, Hashing::FeatureSeed(Manifest.Seed, 3, Manifest.ProfileDigest, "heightmap"));
+	u64 warpSeed = Hashing::FeatureSeed(Manifest.Seed, 3, Manifest.ProfileDigest, "heightmap-warp");
+	std::function<double(double, double)> ruggedAt = [&](double lx, double lz)
+	{
+		double wx, wz;
+		Layout.MountainWarp(lx, lz, wx, wz);
+		return Layout.RuggedBroad(wx, wz);
+	};
+	auto Relief = [&](double lx, double lz, double& hills, double& mountain)
+	{
+		double hs = p.HillScale;
+		hills = (Noise::Value(lx / hs, lz / hs, Layout.ReliefNoise) * .7 +
+			Noise::Value(lx / (hs * .35), lz / (hs * .35), Layout.ReliefNoise + 1) * .3) * p.HillHeight;
+		mountain = 0;
+		double core, shoulder;
+		Layout.MountainEnvelope(lx, lz, core, shoulder);
+		if (core > 1e-6 || shoulder > 1e-6)
+		{
+			double wx, wz;
+			Layout.MountainWarp(lx, lz, wx, wz);
+			double rugged = Layout.RuggedBroad(wx, wz) * .92;
+			mountain = Mn(1, core * (.28 + .72 * rugged) + shoulder * (.08 + .24 * rugged));
+		}
+	};
+	const bool bForms = !forms.Empty();
 	ParallelFor(size, [&](int j)
 	{
 		for (int i = 0; i < size; i++)
@@ -740,20 +770,49 @@ FWorldPlan::FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& In
 			double x = Macro.CellX(i), z = Macro.CellZ(j), lx = x - ox, lz = z - oz;
 			int k = j * size + i;
 			double land = Layout.LandInfluence(x, z);
+			if (heights)
+			{
+				// Natural shapes: the heightmap (sea level 20 of 100), its grid hidden by a domain warp and a fractal
+				// wiggle at scales between the grid cell and the raster cell.
+				double cellM = world / FHeightmap::N;
+				double wx = Noise::Fbm(lx, lz, cellM * 6, 4, Macro.Cell * 2, warpSeed, .5) * cellM * 1.6;
+				double wz = Noise::Fbm(lx + 7331, lz - 4217, cellM * 6, 4, Macro.Cell * 2, warpSeed, .5) * cellM * 1.6;
+				double hm = heights->Sample((lx + wx) / world + .5, (lz + wz) / world + .5);
+				hm += Noise::Fbm(lx, lz, cellM * 4, 3, Macro.Cell * 3, warpSeed + 1, .5) * 2.5;
+				double hland = hm >= FHeightmap::SeaLevel ? (hm - FHeightmap::SeaLevel) / 22 : (hm - FHeightmap::SeaLevel) / 16;
+				land = Mx(land, hland); // placed continents/islands (if any) add to the heightmap
+				double edgeH = (world * .5 - Mx(std::fabs(lx), std::fabs(lz))) / (world * .06);
+				land = Mn(land, edgeH - .3);
+				double hh, hmnt;
+				Relief(lx, lz, hh, hmnt);
+				double extraRelief = 0, hmMountain = DetMath::Smooth((hm - 55) / 32) * (.35 + .65 * ruggedAt(lx, lz));
+				forms.Apply(lx, lz, land, extraRelief, hmMountain, ruggedAt);
+				landRaster[k] = (float)land;
+				if (land < -.3) continue;
+				double uplands = DetMath::Smooth((hm - 22) / 34) * p.HillHeight * 1.8;
+				double mountainShare = Mx(hmnt, hmMountain);
+				heightRaster[k] = (float)(hh + uplands + extraRelief + mountainShare * p.MountainHeight);
+				mountainRaster[k] = (float)mountainShare;
+				continue;
+			}
+			if (bForms)
+			{
+				double baseHills, baseMountain;
+				Relief(lx, lz, baseHills, baseMountain);
+				double extra = 0;
+				forms.Apply(lx, lz, land, extra, baseMountain, ruggedAt);
+				double edge = (world * .5 - Mx(std::fabs(lx), std::fabs(lz))) / (world * .06);
+				land = Mn(land, edge - .3);
+				landRaster[k] = (float)land;
+				if (land < -.3) continue;
+				heightRaster[k] = (float)(baseHills + extra + baseMountain * p.MountainHeight);
+				mountainRaster[k] = (float)baseMountain;
+				continue;
+			}
 			landRaster[k] = (float)land;
 			if (land < -.3) continue; // deep sea: relief is never used
-			double hs = p.HillScale;
-			double hills = (Noise::Value(lx / hs, lz / hs, Layout.ReliefNoise) * .7 +
-				Noise::Value(lx / (hs * .35), lz / (hs * .35), Layout.ReliefNoise + 1) * .3) * p.HillHeight;
-			double mountain = 0, core, shoulder;
-			Layout.MountainEnvelope(lx, lz, core, shoulder);
-			if (core > 1e-6 || shoulder > 1e-6)
-			{
-				double wx, wz;
-				Layout.MountainWarp(lx, lz, wx, wz);
-				double rugged = Layout.RuggedBroad(wx, wz) * .92;
-				mountain = Mn(1, core * (.28 + .72 * rugged) + shoulder * (.08 + .24 * rugged));
-			}
+			double hills, mountain;
+			Relief(lx, lz, hills, mountain);
 			heightRaster[k] = (float)(hills + mountain * p.MountainHeight); // relief; converted below
 			mountainRaster[k] = (float)mountain;
 		}

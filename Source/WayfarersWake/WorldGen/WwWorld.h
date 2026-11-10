@@ -30,6 +30,31 @@ struct FJson
 };
 
 // ------------------------------------------------------------------------------------------------ profile and style
+/// An optional number or range of a landform template step (absent, one fixed value, or a range the seed picks from).
+struct FOptionalRange
+{
+	bool bSet = false; std::vector<double> Values;
+	FOptionalRange() = default;
+	FOptionalRange(double A) : bSet(true), Values{ A } {}
+	FOptionalRange(double A, double B) : bSet(true), Values{ A, B } {}
+};
+struct FOptionalNumber
+{
+	bool bSet = false; double Value = 0;
+	FOptionalNumber() = default;
+	FOptionalNumber(double V) : bSet(true), Value(V) {}
+};
+
+/// One step of a world type's landform template (Thornwake Landform): positions and sizes are world fractions.
+struct FLandformStep
+{
+	std::string Step; // Hills, Raise, Lower, Basin, Range, Trough, Strait, Islands or Mask
+	FOptionalRange Count, X, Z, Size, Length, Angle;
+	FOptionalNumber Land, Relief, Mountain;
+	bool bShape = false; std::string Shape; // Mask only
+	FOptionalNumber Strength;
+};
+
 /// World-shape preset. Same schema and property order as Thornwake's WorldProfile: the digest (SHA-256 of the
 /// canonical JSON) seeds every generated feature, so it must stay identical.
 struct FWorldProfile
@@ -41,6 +66,10 @@ struct FWorldProfile
 	double LowlandHeight = 260, HillHeight = 180, HillScale = 8000;
 	int RangesPerContinent = 2;
 	double MountainHeight = 2600, MountainWidth = 9500;
+	/// Optional landform template of a world type (left out of the digest when absent).
+	bool bLandforms = false; std::vector<FLandformStep> Landforms;
+	/// Optional heightmap template ("natural" world types): replaces the placed continents.
+	bool bHeightmap = false; std::vector<std::string> Heightmap;
 
 	bool Validate(std::string& Error) const;
 	std::string CanonicalJson() const;
@@ -122,7 +151,7 @@ struct FWorldRecipe
 
 	/// Selectable world sizes in km, exactly Thornwake's: 32 … 4096.
 	static const std::vector<double>& Sizes();
-	/// The classic (placed-continent) world types. Template and "natural" heightmap types are not ported yet.
+	/// The world types: classic (placed continents), template (landform steps) and natural (heightmap steps).
 	static std::vector<FWorldRecipe> Catalog(const std::vector<FWorldProfile>& Profiles);
 };
 

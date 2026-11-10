@@ -152,7 +152,8 @@ bool FWorldProfile::Validate(std::string& Error) const
 	for (char c : Id) if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.')) IdOk = false;
 	if (!IdOk) { Error = "Invalid world profile id."; return false; }
 	if (Name.empty() || Name.size() > 160) { Error = "Invalid world profile name."; return false; }
-	if (!InRange(WorldSize, 16000, 4096000) || Continents < 1 || Continents > 16 || Islands < 0 || Islands > 400 ||
+	const bool bOwnLand = (bLandforms && !Landforms.empty()) || (bHeightmap && !Heightmap.empty());
+	if (!InRange(WorldSize, 16000, 4096000) || Continents < (bOwnLand ? 0 : 1) || Continents > 16 || Islands < 0 || Islands > 400 ||
 		!InRange(ContinentRadius, WorldSize * .035, WorldSize * .28) || !InRange(IslandRadius, WorldSize * .002, WorldSize * .025) ||
 		!InRange(CoastRoughness, 0, .3) || !InRange(SeaLevel, -1000, 1000) || !InRange(OceanDepth, 50, 8000) ||
 		!InRange(LowlandHeight, 10, 800) || !InRange(HillHeight, 0, 800) || !InRange(HillScale, 500, WorldSize * .1) ||
@@ -213,6 +214,43 @@ std::string FWorldProfile::CanonicalJson() const
 	D("ContinentRadius", ContinentRadius); D("IslandRadius", IslandRadius); D("CoastRoughness", CoastRoughness);
 	D("SeaLevel", SeaLevel); D("OceanDepth", OceanDepth); D("LowlandHeight", LowlandHeight); D("HillHeight", HillHeight);
 	D("HillScale", HillScale); N("RangesPerContinent", RangesPerContinent); D("MountainHeight", MountainHeight); D("MountainWidth", MountainWidth);
+	// Optional members are written only when present; inside a landform step every property is written (null if unset).
+	if (bLandforms)
+	{
+		J += ",\"Landforms\":[";
+		for (size_t i = 0; i < Landforms.size(); i++)
+		{
+			const FLandformStep& s = Landforms[i];
+			auto Range = [&](const char* Key, const FOptionalRange& r)
+			{
+				J += ",\""; J += Key; J += "\":";
+				if (!r.bSet) { J += "null"; return; }
+				J += "[";
+				for (size_t k = 0; k < r.Values.size(); k++) { if (k) J += ","; AppendJsonNumber(J, r.Values[k]); }
+				J += "]";
+			};
+			auto Number = [&](const char* Key, const FOptionalNumber& v)
+			{
+				J += ",\""; J += Key; J += "\":";
+				if (v.bSet) AppendJsonNumber(J, v.Value); else J += "null";
+			};
+			if (i) J += ",";
+			J += "{\"Step\":"; AppendJsonString(J, s.Step);
+			Range("Count", s.Count); Range("X", s.X); Range("Z", s.Z); Range("Size", s.Size); Range("Length", s.Length); Range("Angle", s.Angle);
+			Number("Land", s.Land); Number("Relief", s.Relief); Number("Mountain", s.Mountain);
+			J += ",\"Shape\":";
+			if (s.bShape) AppendJsonString(J, s.Shape); else J += "null";
+			Number("Strength", s.Strength);
+			J += "}";
+		}
+		J += "]";
+	}
+	if (bHeightmap)
+	{
+		J += ",\"Heightmap\":[";
+		for (size_t i = 0; i < Heightmap.size(); i++) { if (i) J += ","; AppendJsonString(J, Heightmap[i]); }
+		J += "]";
+	}
 	J += "}";
 	return J;
 }
@@ -259,6 +297,9 @@ const std::vector<double>& FWorldRecipe::Sizes()
 	return S;
 }
 
+/// The template types (landform steps) and the natural types (heightmap steps): WwWorldTypes.cpp.
+void AddTemplateWorldTypes(const std::vector<FWorldProfile>& Profiles, std::vector<FWorldRecipe>& List);
+
 std::vector<FWorldRecipe> FWorldRecipe::Catalog(const std::vector<FWorldProfile>& Profiles)
 {
 	auto P = [&](const char* Id) -> const FWorldProfile* { for (const auto& p : Profiles) if (p.Id == Id) return &p; return nullptr; };
@@ -285,6 +326,7 @@ std::vector<FWorldRecipe> FWorldRecipe::Catalog(const std::vector<FWorldProfile>
 		Isles.IslandRadius = 7000; Isles.CoastRoughness = .24; Isles.RangesPerContinent = 3; Isles.MountainWidth = 11000;
 		Add("islands-mainland", "Islands + mainland", "One large mainland surrounded by many islands and island chains.", &Isles, true);
 	}
+	AddTemplateWorldTypes(Profiles, List);
 	Add("vast-world", "Vast continents (classic)", "The original 2,048 km 'Vast world' preset.", P("vast-world"), false);
 	return List;
 }
@@ -301,7 +343,9 @@ FWorldProfile FWorldRecipe::Resolve(const FWorldChoices& c) const
 	double f = size / b.WorldSize;
 
 	int continents = c.Continents >= 0 ? c.Continents : (bMainland || b.Continents == 0 ? b.Continents : (int)std::nearbyint(b.Continents * std::pow(f, .8)));
-	continents = ClampI(continents, 1, 16);
+	// A landform or heightmap template may build all land itself (no continents).
+	int minContinents = (b.bLandforms && !b.Landforms.empty()) || (b.bHeightmap && !b.Heightmap.empty()) ? 0 : 1;
+	continents = ClampI(continents, minContinents, 16);
 	double radius = b.ContinentRadius * f * (continents > 0 && b.Continents > 0 ? std::sqrt(b.Continents / (double)continents) : 1) * c.ContinentSize;
 	radius = DetMath::Clamp(radius, size * .036, size * .279);
 	int islands = c.Islands >= 0 ? c.Islands : (int)std::nearbyint(b.Islands * std::pow(f, .8));

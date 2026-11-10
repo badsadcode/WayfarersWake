@@ -146,8 +146,15 @@
     <h3>The one bit</h3>
     <p>Every landform matched on its first run except three volcano worlds, which differed in a single height by the smallest amount a number can differ. The cause was not in the port: the test program had been built against a different copy of the system maths library, whose power and cosine functions disagree with the usual one in rare last digits. Finding it meant building a scratch copy of Thornwake's own tests and comparing the two generators value by value. The fix was one build flag, and the lesson is written down: on Windows the two generators agree exactly; on another platform those functions would need the same deterministic treatment the core already has.</p>
 
+    <h3>Later the same day: the natural worlds, and a fair question</h3>
+    <p>Watching a test flight, Tom said the land looked flat, nothing like the Godot game. He was right about what he saw. The flight had started on the lowest, gentlest ground the code could find and followed a valley floor; the nearest ground was drawn at half the original resolution; and with no textures, trees or soft shading, rolling hills barely show. The resolution now matches the original, the starting place prefers hill country, and the last missing part of the generator went in: the eleven &ldquo;natural&rdquo; world types, whose land grows cell by cell instead of being placed, and five template types. All sixteen match the original generator.</p>
+    <figure>
+      <img src="img/badlands-natural-continents.png" alt="Screenshot: the block-figure explorer stands on sandy ground in badlands; a red tiered mesa rises on the left and dark needle rocks stand on the horizon.">
+      <figcaption>Badlands in a &ldquo;Natural &middot; Balanced continents&rdquo; world: a tiered mesa and needle spires. The distance is soft in this capture; not yet looked into.</figcaption>
+    </figure>
+
     <h3>Still honest</h3>
-    <p>These landforms are in the ground and in the water levels, which is what the fingerprints test. The game does not yet <em>draw</em> them as they deserve: there is no falling water at a waterfall, lava looks like rock, and nobody has walked up to any of them. Two parts of the generator remain: the "natural" and template world types, and the sea-stack rock models.</p>
+    <p>These landforms are in the ground and in the water levels, which is what the fingerprints test. The game does not yet <em>draw</em> them as they deserve: there is no falling water at a waterfall, lava looks like rock, and nobody has walked up to any of them. One part of the generator remains: the sea-stack rock models.</p>
   </article>
 
   <article class="panel" id="day-one">
@@ -237,7 +244,7 @@
     <h2>Milestones</h2>
     <ol class="trail">
       <li class="done"><b>1 · A working Unreal game</b><span>Project, player, camera, HUD, build and test commands. Compiled and launched.</span></li>
-      <li class="now"><b>2 · Faithful terrain core</b><span>Done to terrain version 44, Thornwake's current, with exact parity, streamed with collision. Left: the "natural" and template world types, and sea stacks.</span></li>
+      <li class="now"><b>2 · Faithful terrain core</b><span>Done to terrain version 44, Thornwake's current, with exact parity, streamed with collision. All 23 world types. Left: sea stacks.</span></li>
       <li><b>3 · A believable environment</b><span>Ground materials, forests and grass by biome, rocks, real rivers and shores, weather.</span></li>
       <li><b>4 · A playable exploration build</b><span>Choose a world on a creation screen, walk it, cross every kind of country.</span></li>
       <li><b>5 · Systems and persistence</b><span>Gathering, crafting, building, hunting, digging, saving only what the player changed.</span></li>

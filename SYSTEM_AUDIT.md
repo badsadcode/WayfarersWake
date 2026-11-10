@@ -12,15 +12,15 @@ Selectable: **32, 64, 128, 256, 512, 768, 1024, 2048, 4096 km**. The profile val
 |---|---|---|---|---|
 | Hashing, DetMath, Noise, MacroRaster | 470 | working | `WwCore` | exact |
 | WorldProfile, TerrainStyle, WorldManifest | 221 | working | `WwProfile`, `WwWorld.h` | exact (digest included) |
-| WorldRecipe (sizes, scaling) | 277 | working | `WwProfile` | classic types only |
+| WorldRecipe (sizes, scaling, all world types) | 277 | working | `WwProfile`, `WwWorldTypes` | exact, resized worlds included |
 | WorldLayout (continents, islands, mountain belts) | 337 | working | `WwProfile` | exact |
 | Hydrology (flood, erosion, lakes, rivers, deltas, waterfalls, index) | 1,143 | working | `WwHydrology` | exact |
 | Climate, BiomeMap, BiomeRegistry, BiomeDefinition | 1,095 | working | `WwClimate` | exact |
-| WorldPlan | 212 | working | `WwClimate` | exact for classic types |
+| WorldPlan | 212 | working | `WwClimate` | exact |
 | TerrainSampler (+ Water), BiomeLandforms | 1,274 | working | `WwSampler`, `WwSamplerWalls` | exact, revisions 8-44 |
 | TerrainEdits | 179 | working | `WwSampler` | ported (brush, chunks); the game does not use it yet |
 | ObjectRemovals, TerrainSculpt | 175 | working | - | not ported |
-| Landforms (templates), Heightmap (natural types) | 616 | working | - | **not ported** |
+| Landforms (templates), Heightmap (natural types) | 616 | working | `WwWorldTypes` | exact (checked against recorded C# output, not Thornwake fixtures: it has none for these types) |
 | LandformModules, Escarpments (rev 18-19) | 600 | working | `WwLandforms` | exact |
 | Canyons (21-22), Cirques (23) | 357 | working | `WwCanyons` | exact |
 | Troughs, fjords, fjord coasts (24-27) | 867 | working | `WwTroughs` | exact |

@@ -16,6 +16,7 @@
 using namespace ww;
 
 int RunDump(const std::vector<FWorldProfile>& Profiles, const FBiomeRegistry& Biomes, const std::string& Arg);
+std::string DumpType(const std::vector<FWorldProfile>& Profiles, const FBiomeRegistry& Biomes, const std::string& Arg);
 
 static std::string ReadFile(const std::string& Path)
 {
@@ -58,7 +59,7 @@ int main(int argc, char** argv)
 {
 	if (argc < 2) { std::printf("usage: WorldGenTest <repo root> [--quick] [--sizes] [--bench]\n"); return 2; }
 	std::string root = argv[1];
-	bool quick = false, sizes = false, bench = false; std::string point, dump; int only = 0;
+	bool quick = false, sizes = false, bench = false; std::string point, dump, dumpType; int only = 0; bool typesOnly = false;
 	for (int i = 2; i < argc; i++)
 	{
 		std::string a = argv[i];
@@ -66,6 +67,8 @@ int main(int argc, char** argv)
 		else if (a.rfind("--point=", 0) == 0) point = a.substr(8);
 		else if (a.rfind("--rev=", 0) == 0) only = std::stoi(a.substr(6));
 		else if (a.rfind("--dump=", 0) == 0) dump = a.substr(7);
+		else if (a == "--types") typesOnly = true;
+		else if (a.rfind("--dump-type=", 0) == 0) dumpType = a.substr(12);
 	}
 	ParallelForHook() = &ThreadedFor;
 
@@ -78,6 +81,7 @@ int main(int argc, char** argv)
 	std::printf("%d profiles, %d biomes in the pool\n", (int)profiles.size(), (int)current.Pool.size());
 
 	if (!dump.empty()) return RunDump(profiles, current, dump);
+	if (!dumpType.empty()) { std::printf("%s", DumpType(profiles, current, dumpType).c_str()); return 0; }
 	int failures = 0, checks = 0;
 	auto Check = [&](bool ok, const std::string& what) { checks++; if (!ok) { failures++; std::printf("  FAIL %s\n", what.c_str()); } };
 
@@ -112,6 +116,7 @@ int main(int argc, char** argv)
 		FJson expected;
 		if (!FJson::Parse(ReadFile(root + "/Tools/WorldGenTest/Fixtures/" + fx.File), expected, error)) { std::printf("fixture: %s\n", error.c_str()); return 2; }
 		if (only > 0 && fx.Revision != only) continue;
+		if (typesOnly) continue;
 		std::printf("Fingerprints %s (terrain revision %d)\n", fx.File, fx.Revision);
 		for (const FWorldProfile& profile : profiles)
 		{
@@ -133,6 +138,30 @@ int main(int argc, char** argv)
 			}
 		}
 		if (quick && only == 0) break;
+	}
+
+	// ---- world types beyond the five fixture profiles (template and natural types, and resized worlds): compared with
+	// output recorded from Thornwake's generator (Fixtures/world-types.txt; "# args" then the block --dump-type prints).
+	if (only == 0 && !quick)
+	{
+		std::printf("World types (Fixtures/world-types.txt)\n");
+		std::stringstream recorded(ReadFile(root + "/Tools/WorldGenTest/Fixtures/world-types.txt"));
+		std::string line, args, want;
+		auto Compare = [&]()
+		{
+			if (args.empty()) return;
+			std::string got = DumpType(profiles, current, args);
+			bool ok = got == want;
+			std::printf("  %-34s %s\n", args.c_str(), ok ? "match" : "MISMATCH");
+			Check(ok, "world type " + args);
+		};
+		while (std::getline(recorded, line))
+		{
+			if (!line.empty() && line.back() == 13) line.pop_back();
+			if (line.rfind("# ", 0) == 0) { Compare(); args = line.substr(2); want.clear(); }
+			else if (!line.empty()) want += line + "\n";
+		}
+		Compare();
 	}
 
 	// ---- every selectable world size: plan builds, is deterministic, memory stays bounded, far corners sample finite
