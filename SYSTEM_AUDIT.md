@@ -31,20 +31,34 @@ Selectable: **32, 64, 128, 256, 512, 768, 1024, 2048, 4096 km**. The profile val
 | OceanWaves, SpectrumWaves | 387 | working / experimental | - | not ported (rendering side) |
 | Sites | 9 | planned (empty) | - | - |
 
-## Game (`Game/Rewrite`, 26,197 lines): not ported yet
+## Game (`Game/Rewrite`, 26,197 lines)
 
-| Thornwake | State there | Here |
-|---|---|---|
-| WorldStreamer, TileBuilder (LOD rings, time-budgeted commits, origin rebasing) | working | `AWwTerrainStreamer`: a new implementation of the same idea, without rebasing |
-| Character | working | `AWwCharacter`: new, block figure |
-| Atmosphere 2.0, Weather, Lightning, clouds, light profiles | working, large | `AWwSky`: engine sky only |
-| Water (shore, FFT ocean, waterfalls, foam, wakes, local water) | working, mid-rework | flat surfaces only |
-| Vegetation, TreeField, impostors, GroundCover, rocks | working | - |
-| Gameplay (inventory, crafting, building, felling, hunting, fishing) | working | - |
-| Net (host and join, bots, lag simulation) | working | settings replication only |
-| Saves, settings, world map, benchmarks | working | stats logging only |
+Drawing the world (state on 2026-11-10; details in `MIGRATION_STATUS.md`):
 
-`Game/Simulation` (663 lines) and the gameplay data in `Content/` have not been audited in detail.
+| Thornwake | Here |
+|---|---|
+| WorldStreamer, TileBuilder (LOD rings, time-budgeted commits, origin rebasing) | `AWwTerrainStreamer`: a new implementation of the same idea, without rebasing |
+| Ground look, Noor's textures | ported (`M_WwTerrain`) |
+| Vegetation, GroundCover, rocks, rock kit, props, wind on plants | ported (`WwVegetation`, `WwFlora`, `WwRocks`) |
+| TreeField, impostors, far cards | 3D trees to 1.5 km and far cards ported; impostors and fades set aside (D25) |
+| Water: sheet, rivers, waterfalls, spray, FFT sea, shore waves, foam net, underwater view | ported; wakes, caustics from above, local water simulation not |
+| Atmosphere 2.0, Weather, Lightning, clouds, light profiles, mist, light rays | `AWwSky`: engine sky, fixed weather and wind; not ported (look round, D25) |
+| Character | `AWwCharacter`: block figure, Thornwake's speeds, swimming, flight |
+| SeaStacks, lava look, local water (pouring, springs) | not ported |
+
+Gameplay: nothing ported yet. Thornwake's parts, in the order planned here (each depends on the ones before):
+
+| Step | Thornwake | Lines | What it is |
+|---|---|---|---|
+| 1 | `WorldLab.Gameplay.cs`, `GameplayModels.cs`, `Toolbox.cs`, `WorldLab.ActionBar.cs`, `GameClock.cs` | about 1,300 | Inventory, tools, needs (food, warmth, stamina), gathering (stones, sticks, berries), the action bar |
+| 2 | `WorldLab.Felling.cs`, `ObjectRemovals` | about 700 | Chopping and felling trees, logs, removed objects staying removed |
+| 3 | `WorldLab.Building.cs`, `WorldLab.BuildMenu.cs`, `Core/Construction.cs`, `Core/RoofGeometry.cs`, `PieceIcons.cs` | about 1,500 | Crafting and building pieces, snapping, roofs |
+| 4 | `AmbientLife*.cs`, `AnimalView.cs`, `WorldLab.Hunting.cs`, `WorldLab.Tracking.cs` | about 1,500 | Animals, hunting with spear and bow, tracks |
+| 5 | `WorldLab.Fishing.cs` | 270 | Fishing |
+| 6 | `WorldLab.Save.cs`, settings, `WorldMap.cs`, `WorldPreview.cs`, world-creation options | about 1,500 | Saves, the world map, the new-world screen |
+| 7 | `TerrainEdits` in the game, `TerrainSculpt`, `Core/Earthworks.cs`, `Toolbox` terraform tools | about 700 | Shovel, pickaxe, hoe, terraforming |
+| 8 | `Net/`, `WorldLab.Net.cs` | about 1,500 | Host and join, replication of all the above |
+| 9 | `Torch.cs`, `WorldLab.Sites.cs`, `Landmarks.cs`, weather as it affects play (rain, cold, wetness) | - | The rest |
 
 ## How to extend parity
 
