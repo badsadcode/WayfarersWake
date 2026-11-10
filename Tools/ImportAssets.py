@@ -64,11 +64,59 @@ mel = unreal.MaterialEditingLibrary
 TEXTURE = 'BaseColorTexture'
 
 
-def tree_parent(name, masked):
+def wind_offset(mat, plant, layer=None):
+    """Adds the wind (Tools/WwWind.hlsl) to a material as its world position offset."""
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'WwWind.hlsl'), 'r') as f:
+        code = f.read().replace('#if PLANT', '#if %d' % (1 if plant else 0))
+    wind = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 900)
+    wind.set_editor_property('description', 'WwWind')
+    wind.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    inputs = []
+    for name in ['Origin', 'T'] + (['Local', 'Layer'] if plant else ['Rel']):
+        i = unreal.CustomInput()
+        i.set_editor_property('input_name', name)
+        inputs.append(i)
+    wind.set_editor_property('inputs', inputs)
+    wind.set_editor_property('code', code)
+
+    def expr(kind, x, y, **props):
+        e = mel.create_material_expression(mat, kind, x, y)
+        for key, value in props.items():
+            e.set_editor_property(key, value)
+        return e
+
+    # The instance's own place in the world: its local origin carried to the world, wrapped every 4,096 m so that it
+    # keeps its precision far from the world's origin.
+    zero = expr(unreal.MaterialExpressionConstant3Vector, -1500, 900, constant=unreal.LinearColor(0, 0, 0, 0))
+    place = expr(unreal.MaterialExpressionTransformPosition, -1300, 900, transform_source_type=unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_LOCAL,
+                 transform_type=unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_WORLD)
+    mel.connect_material_expressions(zero, '', place, '')
+    wrap = expr(unreal.MaterialExpressionFmod, -1000, 900)
+    mel.connect_material_expressions(place, '', wrap, 'A')
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionConstant, -1300, 1050, r=409600.0), '', wrap, 'B')
+    mel.connect_material_expressions(wrap, '', wind, 'Origin')
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionTime, -1000, 1100), '', wind, 'T')
+    if plant:
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionPreSkinnedPosition, -1000, 1200), '', wind, 'Local')
+        # (read again here: the wind runs in the vertex stage, the value carried to the pixels cannot be used in it)
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData, -1000, 1350, data_index=0), '', wind, 'Layer')
+    else:
+        rel = expr(unreal.MaterialExpressionSubtract, -1000, 1200)
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionWorldPosition, -1300, 1200,
+                                              world_position_shader_offset=unreal.WorldPositionIncludedOffsets.WPT_EXCLUDE_ALL_SHADER_OFFSETS), '', rel, 'A')
+        mel.connect_material_expressions(place, '', rel, 'B')
+        mel.connect_material_expressions(rel, '', wind, 'Rel')
+    mel.connect_material_property(wind, '', unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+
+
+def tree_parent(name, masked, sways=False):
     full = '/Game/Trees/' + name
-    if eal.does_asset_exist(full):
-        eal.delete_asset(full)
-    mat = tools.create_asset(name, '/Game/Trees', unreal.Material, unreal.MaterialFactoryNew())
+    # (updated in place: deleting a parent that tree materials point at leaves them without one)
+    mat = eal.load_asset(full) if eal.does_asset_exist(full) else None
+    if mat is None:
+        mat = tools.create_asset(name, '/Game/Trees', unreal.Material, unreal.MaterialFactoryNew())
+    else:
+        mel.delete_all_material_expressions(mat)
     sample = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, -400, 0)
     sample.set_editor_property('parameter_name', TEXTURE)
     mel.connect_material_property(sample, 'RGB', unreal.MaterialProperty.MP_BASE_COLOR)
@@ -82,14 +130,18 @@ def tree_parent(name, masked):
         mat.set_editor_property('blend_mode', unreal.BlendMode.BLEND_MASKED)
         mat.set_editor_property('two_sided', True)
         mel.connect_material_property(sample, 'A', unreal.MaterialProperty.MP_OPACITY_MASK)
+    if sways:
+        wind_offset(mat, False)
     mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
     mel.recompile_material(mat)
     eal.save_loaded_asset(mat)
     return mat
 
 
+# Bark stands still; crowns (foliage, and the leaf cards with their cut-out) sway in the wind.
 opaque = tree_parent('M_WwTreeOpaque', False)
-masked = tree_parent('M_WwTreeMasked', True)
+foliage = tree_parent('M_WwTreeFoliage', False, True)
+masked = tree_parent('M_WwTreeMasked', True, True)
 count = 0
 for path in eal.list_assets('/Game/Trees', recursive=True, include_folder=False):
     asset = eal.load_asset(path)
@@ -97,16 +149,20 @@ for path in eal.list_assets('/Game/Trees', recursive=True, include_folder=False)
         continue
     parent = asset.get_editor_property('parent')
     parent_name = parent.get_name() if parent else ''
-    if parent_name.startswith('M_WwTree'):
-        continue  # (already moved by an earlier run)
     texture = None
     for name in mel.get_texture_parameter_names(asset):
         if str(name) == TEXTURE:
             texture = mel.get_material_instance_texture_parameter_value(asset, name)
     if texture is None:
+        # (an instance that lost its parent still holds its own texture)
+        for value in asset.get_editor_property('texture_parameter_values'):
+            if str(value.get_editor_property('parameter_info').get_editor_property('name')) == TEXTURE:
+                texture = value.get_editor_property('parameter_value')
+    if texture is None:
         unreal.log_warning('WwAssets: %s has no %s (parameters: %s)' % (path, TEXTURE, [str(n) for n in mel.get_texture_parameter_names(asset)]))
         continue
-    mel.set_material_instance_parent(asset, masked if 'Mask' in parent_name or 'Blend' in parent_name else opaque)
+    cut_out = 'Mask' in parent_name or 'Blend' in parent_name or 'Card' in asset.get_name()
+    mel.set_material_instance_parent(asset, masked if cut_out else opaque if 'Bark' in asset.get_name() else foliage)
     mel.set_material_instance_texture_parameter_value(asset, TEXTURE, texture)
     mel.update_material_instance(asset)
     eal.save_loaded_asset(asset)
@@ -149,7 +205,7 @@ unreal.log('WwAssets: ground array with %d layers' % len(array.get_editor_proper
 
 # Grass and small plants (Thornwake Assets/Flora): 28 pixel-art sprites as one texture array, the two sprite meshes
 # of Flora.cs, and the material after Flora.gdshader (cut-out, two-sided, a quarter desaturated, darkened to the
-# ground's level; per plant the sprite layer and a colour). Not ported yet: wind, the underwater sway, leaf translucency.
+# ground's level; per plant the sprite layer and a colour; wind, the underwater sway). Not ported yet: leaf translucency.
 PLANTS = os.path.join(unreal.Paths.project_saved_dir(), 'WwAssets', 'Plants')
 sprites = sorted(f for f in os.listdir(PLANTS) if f.endswith('.png')) if os.path.isdir(PLANTS) else []
 if len(sprites) != 28:
@@ -214,6 +270,7 @@ facing = node(unreal.MaterialExpressionMultiply, 150, 550)
 mel.connect_material_expressions(node(unreal.MaterialExpressionConstant3Vector, -100, 550, constant=unreal.LinearColor(0, 0, 1, 0)), '', facing, 'A')
 mel.connect_material_expressions(node(unreal.MaterialExpressionTwoSidedSign, -100, 700), '', facing, 'B')
 mel.connect_material_property(facing, '', unreal.MaterialProperty.MP_NORMAL)
+wind_offset(mat, True, layer)
 mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
 mel.recompile_material(mat)
 eal.save_loaded_asset(mat)
