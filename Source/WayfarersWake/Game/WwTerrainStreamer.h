@@ -109,6 +109,8 @@ public:
 	/// Trees: full models on the finest levels, the distant models on the next ones, none beyond.
 	UPROPERTY(EditAnywhere, Category = "Trees") int32 NearTreeLevels = 2;
 	UPROPERTY(EditAnywhere, Category = "Trees") int32 TreeLevels = 4;
+	/// Beyond the trees, forests are drawn as tree cards up to this tile level (6: about 12 km; Thornwake as Tom plays it: 7).
+	UPROPERTY(EditAnywhere, Category = "Trees") int32 FarTreeLevels = 6;
 	/// Grass density as Thornwake's setting (1 = its default; Tom plays with 3; 0 = no plants). Test switch -WwGrass=.
 	UPROPERTY(EditAnywhere, Category = "Plants") double GrassAmount = 3;
 
@@ -131,7 +133,7 @@ public:
 	void ResetStats() { MaxCommitMs = 0; }
 
 	static TSharedPtr<FWwTileData> BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass,
-		const ww::FFallSet* Falls = nullptr, bool bRocks = false);
+		const ww::FFallSet* Falls = nullptr, bool bRocks = false, bool bCards = false);
 	int32 GetRockCount() const { return RocksShown; }
 	int32 GetFallCount() const { return FallsShown.Num(); }
 	int32 GetPuffCount() const { return PuffsShown; }
@@ -179,6 +181,7 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> FallMaterial;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> RockMaterial;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> PropMaterial;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> FarTreeMaterial;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> FallFoamMaterial;
 	/// Falling water of the waterfalls within a few kilometres (by index into the fall set).
 	UPROPERTY(Transient) TMap<int32, TObjectPtr<UProceduralMeshComponent>> FallsShown;
@@ -201,7 +204,7 @@ private:
 	/// Rock and prop meshes (built in code) follow the tree meshes in TreeMeshes.
 	int32 RockMeshFirst = -1, PropMeshFirst = -1;
 	/// An unseen cylinder for tree trunks (collision only), after the rock and prop meshes.
-	int32 TrunkMesh = -1;
+	int32 TrunkMesh = -1, CardMesh = -1;
 	std::shared_ptr<ww::FFallSet> Falls;
 	TFuture<std::shared_ptr<ww::FOceanFrame>> OceanTask;
 	double OceanMs = 0;

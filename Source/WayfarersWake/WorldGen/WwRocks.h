@@ -19,6 +19,10 @@ struct FRockInstance
 	float R = 1, G = 1, B = 1, Look = 0;
 };
 
+/// A distant tree, drawn as a card: its foot (tile-local metres, y up), height, crown colour (linear) and whether it is
+/// a conifer.
+struct FFarTree { float X = 0, Y = 0, Z = 0, Height = 0, R = 0, G = 0, B = 0; bool bConifer = false; };
+
 /// What the rock and prop rules read beyond the plant rules' grid (per vertex).
 struct FRockGrid
 {
@@ -43,6 +47,10 @@ public:
 	static float RockyShore(double worldX, double worldZ, double aboveWater);
 	/// Rocks of a tile (levels 0..2; fewer kinds on coarser levels). `amount` is the world's rock amount.
 	static void Scatter(const FRockGrid& Grid, int Level, double size, double sea, u64 seed, double amount, std::vector<FRockInstance>& Out);
+	/// Distant tree cards of a tile (Thornwake GroundCover.FarTrees): beyond the full trees, sparser but larger with
+	/// distance, so cards cover the ground about as much as the trees they stand for. Reads the grid's heights, slopes,
+	/// forest cover and water.
+	static void FarTrees(const FFloraGrid& Grid, int Level, double size, double sea, u64 seed, double density, std::vector<FFarTree>& Out);
 	/// Bushes, stumps and logs of a tile (levels 0..1).
 	static void Props(const FRockGrid& Grid, double size, double sea, u64 seed, double amount, std::vector<FRockInstance>& Out);
 };
@@ -65,6 +73,9 @@ public:
 	static FSoup CliffBlock(int Shape, bool bCoarse);
 	/// A rock kit formation (metres): kind 0 columns, 1 slab stack, 2 tiered pile, 3 tor; four variants each.
 	static FSoup Formation(int Kind, int Variant);
+	/// A distant tree card's shape: two upright quads crossed and a level one at crown height (seen from above a forest is a
+	/// carpet of crowns). One unit tall and wide; the colour carries the picture's place (r, g) and "from above" (b).
+	static FSoup Card();
 	/// A prop's mesh: bush, berry bush, stump, log.
 	static FSoup Prop(int Kind);
 };

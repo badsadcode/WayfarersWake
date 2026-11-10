@@ -66,7 +66,7 @@ static FColor Bytes(double R, double G, double B, double A)
 	return FColor(Q(R), Q(G), Q(B), Q(A));
 }
 
-TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass, const ww::FFallSet* Falls, bool bRocks)
+TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass, const ww::FFallSet* Falls, bool bRocks, bool bCards)
 {
 	const double Started = FPlatformTime::Seconds();
 	TSharedPtr<FWwTileData> Data = MakeShared<FWwTileData>();
@@ -92,7 +92,7 @@ TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler&
 	// What the plant rules read (nearest-level tiles only), at full precision as in Thornwake.
 	const bool bFlora = Key.Level == 0 && Grass > 0;
 	// (rocks reach two levels further out; they read the same grid and a little more)
-	const bool bScatter = bRocks && Key.Level <= 2, bCover = bFlora || bScatter;
+	const bool bScatter = bRocks && Key.Level <= 2, bCover = bFlora || bScatter || bCards;
 	TArray<float> FloraHeight, FloraUp, FloraShore, FloraPlants, FloraWetness, FloraGrass, CoverNormal, CoverRock, CoverPropRocks, CoverPropLogs, CoverLook, CoverCold;
 	TArray<double> FloraForest;
 	TArray<ww::FTerrainSample> FloraSamples;
@@ -211,6 +211,16 @@ TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler&
 		};
 		for (const ww::FRockInstance& R : Rocks) Add(R, R.Kind);
 		for (const ww::FRockInstance& R : Props) Add(R, 100 + R.Kind);
+	}
+	if (bCards)
+	{
+		// Distant forests as tree cards (Thornwake GroundCover.FarTrees). Kind 200 = the card; the data are the crown's
+		// colour and whether it is a conifer.
+		std::vector<ww::FFarTree> Cards;
+		ww::FRocks::FarTrees(FloraGrid, Key.Level, Size, Sea, ww::FFlora::CoverSeed(Sampler), Plan.Style.ForestDensity, Cards);
+		Data->Scatter.Reserve(Data->Scatter.Num() + (int32)Cards.size());
+		for (const ww::FFarTree& T : Cards)
+			Data->Scatter.Add({ 200, FTransform(FQuat::Identity, FVector((X0 + T.X) * 100.0, (Z0 + T.Z) * 100.0, T.Y * 100.0), FVector(T.Height)), FLinearColor(T.R, T.G, T.B, T.bConifer ? 1.f : 0.f) });
 	}
 	if (bFlora)
 	{
@@ -408,9 +418,9 @@ void AWwTerrainStreamer::LaunchJobs(const TArray<FVector2D>& Viewers)
 		Pending.Add(Key);
 		Shared->InFlight++;
 		UE::Tasks::Launch(UE_SOURCE_LOCATION, [State = Shared, World = Sampler, Key, Base = BaseTile, CellCount = Key.Level == 0 ? Cells * 2 : Cells, Serial = WorldSerial,
-			bTrees = Key.Level < TreeLevels && TreeModels.Num() > 0, Grass = PlantMesh ? GrassAmount : 0.0, FallSet = Falls, bRocks = RockMeshFirst >= 0]()
+			bTrees = Key.Level < TreeLevels && TreeModels.Num() > 0, Grass = PlantMesh ? GrassAmount : 0.0, FallSet = Falls, bRocks = RockMeshFirst >= 0, bCards = CardMesh >= 0 && Key.Level >= TreeLevels && Key.Level <= FarTreeLevels]()
 		{
-			TSharedPtr<FWwTileData> Data = BuildTile(*World, Key, Base, CellCount, bTrees, Grass, FallSet.get(), bRocks);
+			TSharedPtr<FWwTileData> Data = BuildTile(*World, Key, Base, CellCount, bTrees, Grass, FallSet.get(), bRocks, bCards);
 			Data->WorldSerial = Serial;
 			State->Done.Enqueue(Data);
 			State->InFlight--;
@@ -542,7 +552,7 @@ void AWwTerrainStreamer::ShowTile(const FWwTileKey& Key, FTile& Tile)
 	TMap<FTreeKey, TArray<float>> GroupData;
 	for (const FWwTileData::FScatter& S : Tile.Scatter)
 	{
-		const int32 Mesh = S.Mesh >= 100 ? PropMeshFirst + S.Mesh - 100 : RockMeshFirst + S.Mesh;
+		const int32 Mesh = S.Mesh == 200 ? CardMesh : S.Mesh >= 100 ? PropMeshFirst + S.Mesh - 100 : RockMeshFirst + S.Mesh;
 		if (RockMeshFirst < 0 || !TreeMeshes.IsValidIndex(Mesh)) continue;
 		const FVector At = S.Transform.GetLocation();
 		const int64 Rx = (int64)FMath::FloorToDouble(At.X / Region), Ry = (int64)FMath::FloorToDouble(At.Y / Region);
@@ -584,6 +594,7 @@ void AWwTerrainStreamer::ShowTile(const FWwTileKey& Key, FTile& Tile)
 			if (Group.Key.bSolid) { Component->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics); Component->SetCollisionProfileName(TEXT("BlockAll")); }
 			else Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			if (Group.Key.Mesh == TrunkMesh) { Component->SetVisibility(false); Component->SetCastShadow(false); }
+			if (Group.Key.Mesh == CardMesh) Component->SetCastShadow(false);
 			Component->SetCanEverAffectNavigation(false);
 			if (RockMeshFirst >= 0 && Group.Key.Mesh >= RockMeshFirst && Group.Key.Mesh != TrunkMesh) Component->SetNumCustomDataFloats(4); // (rock colour and look)
 			Component->SetupAttachment(RootComponent);
@@ -668,6 +679,9 @@ void AWwTerrainStreamer::LoadTreeMeshes()
 	}
 	else UE_LOG(LogWayfarer, Warning, TEXT("M_WwRock or M_WwProp missing: run Tools/CreateAssets.cmd"));
 	if (UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"))) TrunkMesh = TreeMeshes.Add(Cylinder);
+	// The distant tree card (after the rocks: it carries four numbers an instance, as they do).
+	if (!FarTreeMaterial) FarTreeMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwFarTree.M_WwFarTree"));
+	if (FarTreeMaterial && RockMeshFirst >= 0) CardMesh = TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Card(), FarTreeMaterial, TEXT("WwTreeCard")));
 	UE_LOG(LogWayfarer, Display, TEXT("Trees: %d mesh parts for %d species"), TreeMeshes.Num(), (int32)ww::FVegetation::SpeciesWithArt);
 }
 
@@ -728,6 +742,7 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 			FParse::Value(FCommandLine::Get(), TEXT("WwGrass="), GrassAmount);
 			FParse::Value(FCommandLine::Get(), TEXT("WwLevels="), Levels);         // test switches: how many tile sizes; how far trees reach
 			FParse::Value(FCommandLine::Get(), TEXT("WwTreeLevels="), TreeLevels);
+			FParse::Value(FCommandLine::Get(), TEXT("WwFarTreeLevels="), FarTreeLevels);
 			bPlantShadows = !FParse::Param(FCommandLine::Get(), TEXT("WwNoPlantShadows"));
 		}
 	}

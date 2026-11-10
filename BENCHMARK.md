@@ -107,6 +107,10 @@ Every figure above from the grass round on was measured with no shadows being dr
 
 1280x720, editor build as a game: 3 m under the sea looking level 132 fps, looking up 189 fps; on a river bed among trees 55 fps (54 from just above the water at the same place: the underwater pass is not what costs there).
 
+## Distant tree cards (2026-11-10)
+
+Tom's forest place seen from 120 m up, looking across the valley, 1280x720, editor build as a game, shadows on: 113 fps without cards, 107 with (about 116,000 cards out to 12 km), 160 MB more memory.
+
 ## Not measured yet
 
 GPU and CPU frame breakdown, 1 % lows over long runs, the scene types of `Content/WorldData/benchmarks.json` (forest, lake, coast, mountain, flight), packaged (non-editor) builds.

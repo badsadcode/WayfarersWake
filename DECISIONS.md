@@ -75,3 +75,6 @@ Thornwake's sea follows its weather (sea state 0 to 1; Tom's setting is 0.5). We
 
 **D24. Shadow casters are found without the scene octree.**
 `r.Shadow.UseOctreeForCulling=0`. With the engine's default, every shadow in the scene vanished as soon as the far terrain tiles (1 km and more across) were shown: the octree query returned no casters. The world here is a few hundred large components (tiles, 16 km batches of trees and rocks), not thousands of small ones, so testing each is cheap. If the scene's make-up changes (many small actors), try the default again.
+
+**D25. Features before looks; visuals in the plainest form that shows the feature.**
+Tom, 2026-11-10: the two renderers differ too much to match picture for picture, and the aim in the end is Unreal's own strengths. So the port follows what Thornwake does (rules, systems, things the player can do) and gives each visual feature a reasonable first form, noting the difference, instead of rebuilding Godot-specific rendering machinery. First case: distant forests are Thornwake's tree cards (crossed quads with its drawn silhouettes), not its baked impostors and dithered hand-overs. The Unreal-native look comes after the port, possibly on its own branch (Tom's idea; nothing branched yet).

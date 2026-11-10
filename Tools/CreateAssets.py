@@ -2,6 +2,7 @@
 #   M_WwTerrain       - the ground: a port of Thornwake's classic ground shader (Tools/WwTerrainGround.hlsl)
 #   M_WwWater         - the water: a port of Thornwake's water shader (Tools/WwWater.hlsl, WwSeaVertex.hlsl, WwSea.hlsl)
 #   M_WwUnderwater    - the underwater view, a post-process material (Tools/WwUnderwater.hlsl)
+#   M_WwFarTree       - distant tree cards (the drawn silhouettes of Thornwake's FarTree.gdshader)
 #   T_WwTileDefault   - a small linear texture: the default of the per-tile ground-colour texture
 # Run Tools/ImportAssets.cmd first (the ground uses the rock texture it imports).
 import os
@@ -508,6 +509,108 @@ def prop(mat):
     mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
 
 
+FAR_TREE = r"""
+// A distant tree card (port of the drawing in Thornwake's Game/Rewrite/FarTree.gdshader): a simple pixel-stepped
+// silhouette in the tree's crown colour, a stepped cone for conifers, a lumpy round crown on a trunk otherwise, a lumpy
+// disc on the level card seen from above. Thornwake turns one card to the camera; here two upright cards are crossed and
+// a level one sits at crown height (WwRocks FRocks::Card), which needs no per-vertex work.
+// Inputs: Vc (the picture's place in r, g; b = 1 on the level card), Tree (crown colour, linear; a = 1 for conifers),
+// Seed (a random number per tree). Returns the colour; alpha = inside the silhouette.
+struct F { float hash(float2 p) { float3 p3 = frac(float3(p.x, p.y, p.x) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return frac((p3.x + p3.y) * p3.z); } };
+F fn;
+float2 uvr = Vc.rg;
+float top = Vc.b, conifer = Tree.a, seed = Seed;
+float2 uv = floor(uvr * 24.0) / 24.0; // (pixel-stepped: the low-res look of the pixel-textured trees)
+float x = abs(uv.x - 0.5) * 2.0, y = 1.0 - uv.y; // y: 0 at the ground, 1 at the top
+float inside;
+float trunk = step(x, 0.09) * step(y, 0.22);
+if (top > 0.5)
+{
+	float2 c = float2(uv.x - 0.5, uv.y - 0.5) * 2.0;
+	float lump = 0.86 + 0.12 * fn.hash(floor(uv * 6.0) + seed * 7.0);
+	inside = step(length(c), lump) * (conifer > 0.5 ? step(length(c), 0.7) : 1.0);
+	trunk = 0.0;
+	y = 0.3 - length(c) * 0.25; // darker at the rim: crowns shade each other
+}
+else if (conifer > 0.5)
+{
+	float tiers = frac(y * 4.0 + seed);
+	float edge = (1.0 - y) * (0.9 + 0.25 * tiers) * 0.68; // (conifers are 0.42 of their height wide, the card 0.62)
+	inside = step(x, edge) * step(0.12, y);
+}
+else
+{
+	float2 c = float2(x, (y - 0.6) * 1.35);
+	float lump = 0.42 + 0.06 * fn.hash(floor(uv * 6.0) + seed * 7.0);
+	inside = step(length(c), lump);
+}
+float speckle = fn.hash(floor(uvr * 24.0) + seed * 13.0);
+// Darker and less saturated than the crown colour, like foliage seen through distance haze.
+float3 colour = Tree.rgb * (0.42 + 0.3 * y + 0.15 * speckle);
+colour = lerp(colour, dot(colour, float3(0.33, 0.33, 0.33)), 0.25);
+colour *= lerp(1.0, 0.72, top);
+if (inside < 0.5) colour = float3(0.18, 0.13, 0.08);
+return float4(colour, max(inside, trunk));
+"""
+
+
+def far_tree(mat):
+    """Distant tree cards: the drawn silhouettes of Thornwake's FarTree.gdshader."""
+    mat.set_editor_property('blend_mode', unreal.BlendMode.BLEND_MASKED)
+    mat.set_editor_property('two_sided', True)
+    mat.set_editor_property('tangent_space_normal', False)
+    node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
+    node.set_editor_property('description', 'WwFarTree')
+    node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT4)
+    inputs = []
+    for name in ['Vc', 'Tree', 'Seed']:
+        i = unreal.CustomInput()
+        i.set_editor_property('input_name', name)
+        inputs.append(i)
+    node.set_editor_property('inputs', inputs)
+    node.set_editor_property('code', FAR_TREE)
+
+    def expr(kind, x, y, **props):
+        e = mel.create_material_expression(mat, kind, x, y)
+        for key, value in props.items():
+            e.set_editor_property(key, value)
+        return e
+
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionVertexColor, -900, 0), '', node, 'Vc')
+    tree = expr(unreal.MaterialExpressionVertexInterpolator, -900, 200)
+    data = expr(unreal.MaterialExpressionAppendVector, -1100, 200)
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData3Vector, -1400, 170, data_index=0,
+                                          const_default_value=unreal.LinearColor(0.16, 0.25, 0.09, 1)), '', data, 'A')
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData, -1400, 310, data_index=3), '', data, 'B')
+    mel.connect_material_expressions(data, '', tree, '')
+    mel.connect_material_expressions(tree, '', node, 'Tree')
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceRandom, -900, 400), '', node, 'Seed')
+
+    def part(r, g, b, a, y):
+        mask = expr(unreal.MaterialExpressionComponentMask, -150, y)
+        for key, value in (('r', r), ('g', g), ('b', b), ('a', a)):
+            mask.set_editor_property(key, value)
+        mel.connect_material_expressions(node, '', mask, '')
+        return mask
+
+    mel.connect_material_property(part(True, True, True, False, 0), '', unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(part(False, False, False, True, 150), '', unreal.MaterialProperty.MP_OPACITY_MASK)
+    # Lit as a rounded crown: the normal points mostly up, a little toward the camera.
+    up = expr(unreal.MaterialExpressionConstant3Vector, -700, 550, constant=unreal.LinearColor(0, 0, 1, 0))
+    lean = expr(unreal.MaterialExpressionMultiply, -700, 700, const_b=0.6)
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionCameraVectorWS, -950, 700), '', lean, 'A')
+    add = expr(unreal.MaterialExpressionAdd, -450, 600)
+    mel.connect_material_expressions(up, '', add, 'A')
+    mel.connect_material_expressions(lean, '', add, 'B')
+    normal = expr(unreal.MaterialExpressionNormalize, -250, 600)
+    mel.connect_material_expressions(add, '', normal, 'VectorInput')
+    mel.connect_material_property(normal, '', unreal.MaterialProperty.MP_NORMAL)
+    mel.connect_material_property(constant(mat, 0.95, -150, 300), '', unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(constant(mat, 0.0, -150, 400), '', unreal.MaterialProperty.MP_SPECULAR)
+    mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
+
+
+make('M_WwFarTree', far_tree)
 make('M_WwRock', rock(False))
 make('M_WwRockBig', rock(True))
 make('M_WwProp', prop)

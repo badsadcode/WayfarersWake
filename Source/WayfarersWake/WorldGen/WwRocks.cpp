@@ -96,6 +96,55 @@ void Emit(std::vector<FRockInstance>& out, int kind, const FBasis& b, float x, f
 }
 }
 
+void FRocks::FarTrees(const FFloraGrid& g, int level, double size, double sea, u64 seed, double density, std::vector<FFarTree>& out)
+{
+	static const float Crown[17][3] = {
+		{ .10f, .17f, .09f }, { .11f, .18f, .09f }, { .10f, .16f, .08f }, { .08f, .14f, .08f }, { .09f, .15f, .08f }, // pines, spruces
+		{ .16f, .25f, .09f }, { .15f, .24f, .08f }, { .17f, .26f, .09f },                                             // oaks
+		{ .24f, .34f, .12f }, { .23f, .33f, .11f }, { .25f, .35f, .12f },                                             // green birches
+		{ .42f, .14f, .06f }, { .18f, .28f, .10f }, { .22f, .32f, .12f }, { .17f, .23f, .10f },                       // maple, poplar, willow, sparse
+		{ .50f, .36f, .09f }, { .48f, .33f, .08f } };                                                                 // autumn birches
+	static const bool Conifer[17] = { true, true, true, true, true, false, false, false, false, false, false, false, false, false, true, false, false };
+	static const float HeightOf[17] = { 16, 15, 17, 19, 18, 13, 14, 12, 14, 13, 15, 12, 18, 11, 9, 13, 13 };
+	static const int Low[] = { 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 0, 1 }, Mid[] = { 0, 1, 2, 3, 4, 8, 9, 5, 6, 15 }, High[] = { 0, 1, 2, 3, 4, 3, 4, 14 };
+	// Cell and size per level so cards cover the ground about as much as the full trees they replace (one per ~6.4 m cell).
+	double cell = level <= 2 ? 7 : level == 3 ? 8 : level == 4 ? 13 : level == 5 ? 21 : 34;
+	float grow = level <= 2 ? 1.05f : level == 3 ? 1.2f : level == 4 ? 1.6f : level == 5 ? 2.2f : 3.f;
+	float keep = (float)Mn(1.15, density);
+	RkCells(g.X0, g.Z0, size, cell, seed ^ 0xFA77EEULL, [&](double x, double z, u64 h)
+	{
+		float height, up, forest; bool wet;
+		if (!RkAt(g, x, z, height, up, forest, wet) || wet || up < .65f) return;
+		if (RkUnit(h, 1) > forest * .92f * keep) return;
+		double elevation = height - sea;
+		int species = elevation < 550 ? Low[Hashing::Mix(h + 99) % 12] : elevation < 1250 ? Mid[Hashing::Mix(h + 99) % 10] : High[Hashing::Mix(h + 99) % 8];
+		float scale = (.8f + .45f * RkUnit(h, 2)) * grow;
+		out.push_back({ (float)x, height - .3f, (float)z, HeightOf[species] * scale, Crown[species][0], Crown[species][1], Crown[species][2], Conifer[species] });
+	});
+}
+
+FSoup FPropShapes::Card()
+{
+	FSoup s;
+	auto Vertex = [&](float x, float y, float z, float u, float v, float top)
+	{
+		s.Position.insert(s.Position.end(), { x, y, z });
+		s.Normal.insert(s.Normal.end(), { 0.f, 1.f, 0.f });
+		s.Colour.insert(s.Colour.end(), { u, v, top });
+	};
+	auto Quad = [&](const float a[3], const float b[3], const float c[3], const float d[3], float top)
+	{
+		// a, b along the bottom (u 0..1, v 1), d, c along the top (v 0)
+		Vertex(a[0], a[1], a[2], 0, 1, top); Vertex(b[0], b[1], b[2], 1, 1, top); Vertex(c[0], c[1], c[2], 1, 0, top);
+		Vertex(a[0], a[1], a[2], 0, 1, top); Vertex(c[0], c[1], c[2], 1, 0, top); Vertex(d[0], d[1], d[2], 0, 0, top);
+	};
+	const float w = .31f; // (half width: broadleaf crowns are 0.62 of the height wide; conifers are drawn narrower)
+	{ const float a[3] = { -w, 0, 0 }, b[3] = { w, 0, 0 }, c[3] = { w, 1, 0 }, d[3] = { -w, 1, 0 }; Quad(a, b, c, d, 0); }
+	{ const float a[3] = { 0, 0, -w }, b[3] = { 0, 0, w }, c[3] = { 0, 1, w }, d[3] = { 0, 1, -w }; Quad(a, b, c, d, 0); }
+	{ const float a[3] = { -w, .6f, w }, b[3] = { w, .6f, w }, c[3] = { w, .6f, -w }, d[3] = { -w, .6f, -w }; Quad(a, b, c, d, 1); }
+	return s;
+}
+
 float FRocks::RockyShore(double worldX, double worldZ, double aboveWater)
 {
 	if (aboveWater < -1.2 || aboveWater > 3) return 0;

@@ -99,3 +99,10 @@
 * Thornwake's full-screen underwater pass as a post-process material (before the bloom), switched on by the sky actor when the camera is under a water surface; the sea's light pattern reads the simulated sea's slope textures.
 * It worked on the first run. The exposure lifted the dim uniform water into a bright fog; its shade limit is now held near the sunlit one while submerged. Still bright.
 * Seen: sea at 3 m down, level and looking up (shafts fanning from the surface); a river from its bed (green, murky, waterweed with the net of light on it). 132-190 fps in the sea views, 55 in the river scene (54 just above the water there, with shadows now on).
+
+## 2026-11-10, session 1 (continued): distant forests, and a change of course
+
+* Tom on the water: Godot has depth transparency and depth colour. Both are ported with Thornwake's numbers; sampled beside his rocky-shore picture mine is a more saturated teal (10, 73, 66 against 58, 95, 77). Left for the look round.
+* Tom, before a walk with the dog: the renderers differ too much; port the mechanics and features without digging deep into graphics; if it is not the same it does not matter much; the Unreal-native version could later be a branch or fork; first finish the port. Recorded as D25.
+* So distant forests went in the short way: Thornwake's card placement and drawn silhouettes on crossed quads, riding the rock batches. Its impostor bake and fades were read and set aside.
+* The build hung again, this time with the accelerator already off: two compiler processes idle for ten minutes. Killing them fails the build; running it again works.
