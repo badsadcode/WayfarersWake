@@ -1,6 +1,7 @@
 #pragma once
 
 #include "WorldGen/WwOcean.h"
+#include "Rules/WrRules.h"
 #include "Async/Future.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -52,7 +53,7 @@ struct FWwTileData
 	TArray<FColor> Ground;
 	int32 GroundSide = 0;
 	/// Trees standing on this tile (levels near enough to show them).
-	struct FTree { int32 Species; FVector Position; float Scale, Yaw; };
+	struct FTree { int32 Species; FVector Position; float Scale, Yaw; int64 Cx = 0, Cz = 0; };
 	TArray<FTree> Trees;
 	/// Grass and small plants of a nearest-level tile, ready for instancing: tile-local transforms and, per plant,
 	/// four numbers for the material (sprite layer, colour). Upright plants (crossed sprites) and floating leaves (flat).
@@ -128,6 +129,10 @@ public:
 	double GetMaxCommitMs() const { return MaxCommitMs; }
 	/// How long one update of the simulated sea takes on the worker threads (recent longest, ms).
 	double GetOceanMs() const { return OceanMs; }
+	/// A tree was felled (its lattice cell): it leaves the picture, and its trunk stops being solid.
+	void FellTree(int64 Cx, int64 Cz);
+	/// Draws the objects lying in the world (a fallen trunk, piles of logs and branches, a dropped pack) as plain shapes.
+	void SyncObjects(const std::map<long long, wr::FPlacedObject>& Objects);
 	/// The sea's wave textures: per cascade its displacement (0, 2, 4) and slopes (1, 3, 5); null before they are made.
 	UTexture2D* GetOceanTexture(int32 Index) const { return OceanTextures.IsValidIndex(Index) ? OceanTextures[Index].Get() : nullptr; }
 	void ResetStats() { MaxCommitMs = 0; }
@@ -194,6 +199,7 @@ private:
 	/// Per cascade: displacement, slopes (three cascades: six textures).
 	UPROPERTY(Transient) TArray<TObjectPtr<UTexture2D>> OceanTextures;
 	UPROPERTY(Transient) TObjectPtr<UTexture2D> FoamNet;
+	UPROPERTY(Transient) TMap<int64, TObjectPtr<UStaticMeshComponent>> ObjectViews;
 	UPROPERTY(Transient) TArray<TObjectPtr<UInstancedStaticMeshComponent>> TreeComponents;
 	TArray<int32> Free;
 	/// Per species and model (near, distant): first index into TreeMeshes and how many parts (bark, foliage, cards).
@@ -208,6 +214,7 @@ private:
 	std::shared_ptr<ww::FFallSet> Falls;
 	TFuture<std::shared_ptr<ww::FOceanFrame>> OceanTask;
 	double OceanMs = 0;
+	TSet<TPair<int64, int64>> FelledTrees;
 	/// Spray and mist of the falls shown (by fall index), drawn as one set of camera-facing instances.
 	TMap<int32, FWwFallSpray> FallSpray;
 	int32 PuffsShown = 0;

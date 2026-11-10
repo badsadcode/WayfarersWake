@@ -1,4 +1,5 @@
 #include "Game/WwGame.h"
+#include "Game/WwGameplay.h"
 #include "Game/WwWorldSubsystem.h"
 #include "Engine/Texture2D.h"
 #include "EngineUtils.h"
@@ -316,5 +317,20 @@ void AWwHUD::DrawHUD()
 	if (const FString Status = Player->GetStatus(); !Status.IsEmpty()) { Line(Status, 16, Y, 1.0f); Y += 20; }
 	Line(Player->IsFlying() ? TEXT("FLYING  WASD move, E/Q up/down, Shift fast, Ctrl very fast, F walk, F9 debug dump, Esc quit")
 		: Player->IsSwimming() ? TEXT("SWIMMING  WASD swim, Shift faster, Space up, C dive, F fly, F9 debug dump, Esc quit")
-		: TEXT("WASD walk, Shift sprint, Space jump, F fly, F9 debug dump, Esc quit"), 16, Canvas->SizeY - 30, 1.0f);
+		: TEXT("WASD walk, Shift sprint, Space jump, I pack, E gather, left mouse axe, T eat, F fly, F9 dump, Esc quit"), 16, Canvas->SizeY - 30, 1.0f);
+	// The placeholder mechanics: needs, the last thing that happened, and the pack with what can be made.
+	if (FWwGameplay* Game = WorldSystem->GetGameplay())
+	{
+		Line(Game->NeedsLine(), Canvas->SizeX - 430, Canvas->SizeY - 30, 1.0f);
+		if (!Player->GetNotice().IsEmpty()) Line(Player->GetNotice(), 16, Canvas->SizeY - 60, 1.1f);
+		if (Player->IsPackOpen())
+		{
+			const FVector At = Player->GetActorLocation();
+			const TArray<FString> Lines = Game->PackLines(At.X / 100.0, At.Y / 100.0);
+			DrawRect(Shade, Canvas->SizeX - 640, 90, 624, 34 + 20 * Lines.Num());
+			float PackY = 100;
+			for (const FString& Text : Lines) { Line(Text, Canvas->SizeX - 626, PackY, 1.0f); PackY += 20; }
+			Line(TEXT("I closes the pack. T eats. E picks up or pulls grass. Left mouse: the axe."), Canvas->SizeX - 626, PackY + 4, 0.9f);
+		}
+	}
 }

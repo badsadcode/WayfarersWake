@@ -7,6 +7,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/Texture2D.h"
 #include "TextureResource.h"
 #include "Misc/PackageName.h"
@@ -247,7 +248,7 @@ TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler&
 		Data->Trees.Reserve((int32)Trees.size());
 		for (const ww::FLatticeTree& T : Trees)
 			if (T.Species < ww::FVegetation::SpeciesWithArt) // (the placeholder plants of Thornwake have no models yet)
-				Data->Trees.Add({ T.Species, FVector(T.X * 100.0, T.Z * 100.0, T.Y * 100.0), T.Scale, T.Yaw });
+				Data->Trees.Add({ T.Species, FVector(T.X * 100.0, T.Z * 100.0, T.Y * 100.0), T.Scale, T.Yaw, T.Cx, T.Cz });
 	}
 
 	Data->Triangles.Reserve(Cells * Cells * 6 + Cells * 4 * 12);
@@ -569,6 +570,7 @@ void AWwTerrainStreamer::ShowTile(const FWwTileKey& Key, FTile& Tile)
 	for (const FWwTileData::FTree& T : Tile.Trees)
 	{
 		if (TreeModels.Num() == 0) break;
+		if (FelledTrees.Contains(TPair<int64, int64>(T.Cx, T.Cz))) continue; // (felled: gone, and not solid)
 		const FTreeModel& Parts = TreeModels[T.Species * 2 + Model];
 		if (Parts.Count == 0) continue;
 		const int64 Rx = (int64)FMath::FloorToDouble(T.Position.X / Region), Ry = (int64)FMath::FloorToDouble(T.Position.Y / Region);
@@ -607,6 +609,59 @@ void AWwTerrainStreamer::ShowTile(const FWwTileKey& Key, FTile& Tile)
 		Batch.Ids = TreeComponents[*Found]->AddInstancesById(Group.Value, false, false);
 		if (const TArray<float>* Numbers = GroupData.Find(Group.Key)) if (Numbers->Num() == Batch.Ids.Num() * 4) TreeComponents[*Found]->SetCustomDataById(Batch.Ids, *Numbers);
 		Tile.Batches.Add(MoveTemp(Batch));
+	}
+}
+
+void AWwTerrainStreamer::FellTree(int64 Cx, int64 Cz)
+{
+	FelledTrees.Add(TPair<int64, int64>(Cx, Cz));
+	// The tiles that show this tree put their trees and rocks up again without it.
+	for (TPair<FWwTileKey, FTile>& Pair : Tiles)
+	{
+		FTile& Tile = Pair.Value;
+		if (!Tile.bVisible || !Tile.Trees.ContainsByPredicate([&](const FWwTileData::FTree& T) { return T.Cx == Cx && T.Cz == Cz; })) continue;
+		for (const FTreeBatch& Batch : Tile.Batches) TreeComponents[Batch.Component]->RemoveInstancesById(Batch.Ids, false);
+		if (Tile.Batches.Num() > 0) { TreesShown -= Tile.Trees.Num(); RocksShown -= Tile.Scatter.Num(); }
+		Tile.Batches.Empty();
+		PlantsShown -= Tile.Plants;
+		ShowTile(Pair.Key, Tile);
+	}
+}
+
+void AWwTerrainStreamer::SyncObjects(const std::map<long long, wr::FPlacedObject>& Objects)
+{
+	static UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	static UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	for (auto It = ObjectViews.CreateIterator(); It; ++It)
+		if (!Objects.count(It.Key())) { if (It.Value()) It.Value()->DestroyComponent(); It.RemoveCurrent(); }
+	for (const auto& Entry : Objects)
+	{
+		const wr::FPlacedObject& O = Entry.second;
+		TObjectPtr<UStaticMeshComponent>& View = ObjectViews.FindOrAdd(O.Id);
+		const bool bTrunk = O.Kind == "trunk";
+		if (!View)
+		{
+			View = NewObject<UStaticMeshComponent>(this);
+			View->SetStaticMesh(bTrunk ? Cylinder : Cube);
+			View->SetMobility(EComponentMobility::Movable);
+			View->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			View->SetupAttachment(RootComponent);
+			View->RegisterComponent();
+		}
+		// (the engine's shapes are 1 m across; the rules' axes are x, up, z)
+		const FVector At(O.X * 100.0, O.Z * 100.0, O.Y * 100.0);
+		if (bTrunk)
+		{
+			// Lying along its fall: the rules keep the direction as a turn about the vertical (atan2(dx, dz)).
+			const FVector Along(FMath::Sin(O.Yaw), FMath::Cos(O.Yaw), 0);
+			const double Radius = wr::FGameRules::TrunkRadius(O.Size), Length = wr::FGameRules::TrunkLength(O.Size);
+			View->SetWorldTransform(FTransform(FRotationMatrix::MakeFromZ(Along).ToQuat(), At, FVector(Radius * 2, Radius * 2, Length)));
+		}
+		else
+		{
+			const FVector Size = O.Kind == "log_pile" ? FVector(1.8, 1.0, 0.6) : O.Kind == "branch_pile" ? FVector(1.4, 1.4, 0.35) : FVector(0.5, 0.4, 0.5);
+			View->SetWorldTransform(FTransform(FRotator(0, FMath::RadiansToDegrees(O.Yaw), 0), At + FVector(0, 0, Size.Z * 50.0), Size));
+		}
 	}
 }
 

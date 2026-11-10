@@ -215,3 +215,14 @@ double UWwWorldSubsystem::SeaSurface(double X, double Z, double Depth, double Ti
 	auto Fold = [](double V) { return (double)(float)(V - 65536.0 * FMath::FloorToDouble(V / 65536.0)); };
 	return ww::FShore::Surface(*GetOcean(), X, Z, Fold(X), Fold(Z), Time, Depth, Exposure, Gx, Gz);
 }
+
+FWwGameplay* UWwWorldSubsystem::GetGameplay()
+{
+	if (!Sampler) return nullptr;
+	if (GameplayWorld != Sampler) // (a new world: its own rules, pack and removals)
+	{
+		GameplayWorld = Sampler;
+		Gameplay = std::make_unique<FWwGameplay>(Sampler, FPaths::ProjectContentDir() / TEXT("Gameplay"));
+	}
+	return Gameplay && Gameplay->IsValid() ? Gameplay.get() : nullptr;
+}

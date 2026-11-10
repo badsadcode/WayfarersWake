@@ -113,3 +113,9 @@
 * Thornwake keeps its rules in a small engine-free layer (`Game/Gameplay`, about 2,200 lines) that its game talks to as host and client, alone or networked, and it has tests for them. So the port starts there: step 1's rules as engine-free C++ beside the generator, and Thornwake's tests for them ported as checks. 84 pass.
 * The engine builds without exceptions, so the catalogue reports a damaged content file through an error text instead of throwing.
 * Not done: any of it in the game. Next: the game's side (who is host, the pack and needs on screen, E to gather, the axe), which also needs the gatherable stones and berry bushes of the ground cover and the removals to reach the tile builder.
+
+## 2026-11-10, session 1 (continued): something to do
+
+* Tom explained where Thornwake is going: atmosphere first, the present crafting and building only placeholders for multiplayer tests, multiplayer last. He asked for the light placeholder mechanics all the same, so there is something to do while walking (D26).
+* `FWwGameplay` runs the ported rules for the player: needs, the pack, E, the axe, eating, dying. The streamer takes felled trees out of its batches and draws trunks and piles as plain shapes.
+* A scripted run (`-WwPlayTest`) walks to the nearest tree and plays: fells it in 8 hits, cuts the trunk in 12, picks up 7 logs. The first run stood out of reach of any tree and proved only the grass and the eating.

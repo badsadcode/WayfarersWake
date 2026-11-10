@@ -24,6 +24,9 @@ public:
 	bool IsPlaced() const { return bPlaced; }
 	bool IsFlying() const { return bFly; }
 	bool IsSwimming() const { return bSwimming; }
+	/// The placeholder mechanics on screen: the last thing that happened (for a few seconds) and whether the pack is open.
+	const FString& GetNotice() const { return Notice; }
+	bool IsPackOpen() const { return bPackOpen; }
 	double GetSecondsPlaced() const { return SecondsPlaced; }
 	/// Metres travelled over the ground since placement (streaming tests).
 	double GetDistanceTravelled() const { return Travelled; }
@@ -51,7 +54,10 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Body") TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 	TArray<FLinearColor> PartColours;
 
-	bool bPlaced = false, bHaveSpawn = false, bFly = false, bSwimming = false;
+	bool bPlaced = false, bHaveSpawn = false, bFly = false, bSwimming = false, bPackOpen = false;
+	void UpdateGameplay(float DeltaSeconds, class APlayerController* PC, bool bSprinting);
+	FString Notice;
+	float NoticeSeconds = 0;
 	FString Status;
 	double StatusUntil = 0;
 	double SecondsPlaced = 0, Travelled = 0;

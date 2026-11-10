@@ -1,4 +1,5 @@
 #include "Game/WwCharacter.h"
+#include "Game/WwGameplay.h"
 #include "Game/WwWorldSubsystem.h"
 #include "Game/WwTerrainStreamer.h"
 #include "Game/WwGame.h"
@@ -227,6 +228,7 @@ void AWwCharacter::Tick(float DeltaSeconds)
 
 	if (PC->WasInputKeyJustPressed(EKeys::F)) SetFly(!bFly);
 	if (PC->WasInputKeyJustPressed(EKeys::F9)) DebugDump();
+	UpdateGameplay(DeltaSeconds, PC, PC->IsInputKeyDown(EKeys::LeftShift) && (PC->IsInputKeyDown(EKeys::W) || PC->IsInputKeyDown(EKeys::S) || PC->IsInputKeyDown(EKeys::A) || PC->IsInputKeyDown(EKeys::D)));
 	if (PC->WasInputKeyJustPressed(EKeys::Escape)) PC->ConsoleCommand(TEXT("quit"));
 
 	const float Forward = (PC->IsInputKeyDown(EKeys::W) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::S) ? 1.f : 0.f);
@@ -353,6 +355,12 @@ void AWwCharacter::DebugDump()
 	Out += FString::Printf(TEXT("Camera: pitch %.2f, yaw %.2f (degrees; yaw 0 looks east, 90 south) · field of view %.0f · at (%.2f, %.2f, %.2f) m\n"), Pitch, Yaw, Camera->FieldOfView,
 		CameraAt.X / 100, CameraAt.Y / 100, CameraAt.Z / 100);
 	if (Sky) Out += Sky->DebugInfo() + TEXT("\n");
+	if (FWwGameplay* Game = GetGameInstance()->GetSubsystem<UWwWorldSubsystem>()->GetGameplay())
+	{
+		Out += FString::Printf(TEXT("Needs: %s (game time %.2f h)") LINE_TERMINATOR, *Game->NeedsLine(), Game->GetHours());
+		for (const FString& Text : Game->PackLines(X, Z)) Out += TEXT("  ") + Text + LINE_TERMINATOR;
+		Out += FString::Printf(TEXT("Objects lying in the world: %d") LINE_TERMINATOR, (int32)Game->Objects().size());
+	}
 	if (Sky && Sky->GetCameraDepth() > .02f) Out += FString::Printf(TEXT("Camera under water: %.3f m below the surface\n"), Sky->GetCameraDepth());
 	if (Streamer)
 		Out += FString::Printf(TEXT("Terrain: %d tiles (%d wanted, %d missing, %d building), %d trees, %d plants, %d waterfalls and %d spray puffs shown, tile build %.2f ms average\n"), Streamer->GetTileCount(), Streamer->GetDesiredCount(),
@@ -378,4 +386,85 @@ void AWwCharacter::DebugDump()
 	Status = FString::Printf(TEXT("Debug dump saved: %s (send me the .txt and .png)"), *Path);
 	StatusUntil = GetWorld()->GetTimeSeconds() + 12.0;
 	UE_LOG(LogWayfarer, Display, TEXT("DUMPED %s"), *Path);
+}
+
+// ---------------------------------------------------------------------------------------------------- placeholder mechanics
+void AWwCharacter::UpdateGameplay(float DeltaSeconds, APlayerController* PC, bool bSprinting)
+{
+	UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+	FWwGameplay* Game = WorldSystem ? WorldSystem->GetGameplay() : nullptr;
+	if (!Game || !bPlaced) return;
+	AWwSky* Sky = nullptr;
+	for (TActorIterator<AWwSky> It(GetWorld()); It; ++It) { Sky = *It; break; }
+	AWwTerrainStreamer* Streamer = nullptr;
+	for (TActorIterator<AWwTerrainStreamer> It(GetWorld()); It; ++It) { Streamer = *It; break; }
+	const FVector Here = GetActorLocation();
+	const double X = Here.X / 100.0, Z = Here.Y / 100.0, Feet = (Here.Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) / 100.0;
+	// (developer flight is outside the game: no hunger or cold up there)
+	if (!bFly) Game->Tick(Sky ? Sky->HoursPerMinute * DeltaSeconds / 60.0 : 0.0, Sky ? Sky->Hour : 12.0, X, Z, Feet, bSwimming, bSprinting ? 1.0 : 0.0);
+	FString Said;
+	if (PC->WasInputKeyJustPressed(EKeys::I)) bPackOpen = !bPackOpen;
+	if (!bFly && PC->WasInputKeyJustPressed(EKeys::E)) Said = Game->Use(X, Z, Feet);
+	if (!bFly && !bPackOpen && PC->WasInputKeyJustPressed(EKeys::LeftMouseButton))
+	{
+		const FVector Look = FRotationMatrix(FRotator(0, PC->GetControlRotation().Yaw, 0)).GetUnitAxis(EAxis::X);
+		Said = Game->Strike(X, Z, Look.X, Look.Y);
+	}
+	if (PC->WasInputKeyJustPressed(EKeys::T)) Said = Game->Eat();
+	// Test switch -WwPlayTest: the game plays itself for a moment (the axe swung all round, E, two recipes, a bite to
+	// eat), so a scripted run can check the mechanics end to end; the log and the F9 dump show what came of it.
+	static const bool bPlayTest = FParse::Param(FCommandLine::Get(), TEXT("WwPlayTest"));
+	if (bPlayTest && !bFly)
+	{
+		static float Clock = 0; static int32 Step = 0;
+		if ((Clock += DeltaSeconds) > 0.15f)
+		{
+			Clock = 0; Step++;
+			if (Step == 1)
+			{
+				// Stand two metres from the nearest tree.
+				const ww::FTerrainSampler& Sampler = *WorldSystem->GetSampler();
+				const double Cell = ww::FVegetation::LatticeCell(Sampler);
+				double Best = 1e9; ww::FLatticeTree Nearest;
+				for (int64 cz = (int64)FMath::FloorToDouble((Z - 60) / Cell); cz <= (int64)FMath::FloorToDouble((Z + 60) / Cell); cz++)
+					for (int64 cx = (int64)FMath::FloorToDouble((X - 60) / Cell); cx <= (int64)FMath::FloorToDouble((X + 60) / Cell); cx++)
+					{
+						ww::FLatticeTree T;
+						if (!ww::FVegetation::TreeAt(Sampler, cx, cz, T)) continue;
+						const double D = FMath::Square(T.X - X) + FMath::Square(T.Z - Z);
+						if (D < Best) { Best = D; Nearest = T; }
+					}
+				if (Best < 1e9)
+				{
+					UE_LOG(LogWayfarer, Display, TEXT("Game: play test walks to the tree at %.1f, %.1f (size %.2f)"), Nearest.X, Nearest.Z, Nearest.Scale);
+					SetActorLocation(FVector((Nearest.X + 2.0) * 100.0, Nearest.Z * 100.0, (Nearest.Y + 3.0) * 100.0), false, nullptr, ETeleportType::TeleportPhysics);
+				}
+				return;
+			}
+			const double Angle = Step * 0.7;
+			if (Step % 3 == 0) Said = Game->Use(X, Z, Feet);
+			else if (Step == 200) Said = Game->Eat();
+			else if (Step == 205) Said = Game->Make(0, X, Z);
+			else if (Step == 208) Said = Game->Make(5, X, Z);
+			else Said = Game->Strike(X, Z, FMath::Cos(Angle), FMath::Sin(Angle));
+		}
+	}
+	if (bPackOpen)
+	{
+		static const FKey Numbers[10] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine, EKeys::Zero };
+		for (int32 i = 0; i < 10; i++) if (PC->WasInputKeyJustPressed(Numbers[i])) Said = Game->Make(i, X, Z);
+	}
+	if (Streamer)
+	{
+		for (const TPair<int64, int64>& Cell : Game->TakeFelled()) Streamer->FellTree(Cell.Key, Cell.Value);
+		if (Game->TakeObjectsChanged()) Streamer->SyncObjects(Game->Objects());
+	}
+	if (Game->TakeDied())
+	{
+		Said = TEXT("You died. Everything you carried lies where you fell.");
+		SetActorLocation(SpawnPoint + FVector(0, 0, 300), false, nullptr, ETeleportType::TeleportPhysics);
+		bPlaced = false; // (stand on the ground at the start place again)
+	}
+	if (!Said.IsEmpty()) { Notice = Said; NoticeSeconds = 5.f; UE_LOG(LogWayfarer, Display, TEXT("Game: %s"), *Said); }
+	else if ((NoticeSeconds -= DeltaSeconds) <= 0) Notice.Reset();
 }

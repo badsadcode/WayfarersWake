@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "WorldGen/WwWorld.h"
 #include "WorldGen/WwOcean.h"
+#include "Game/WwGameplay.h"
 #include <atomic>
 #include "WwWorldSubsystem.generated.h"
 
@@ -54,6 +55,8 @@ public:
 	/// The sea's waves: one simulated sea for the whole game (the sea state and the wind are fixed until the weather is
 	/// ported: Thornwake's defaults, sea state 0.5, wind from the north-west).
 	std::shared_ptr<ww::FOcean> GetOcean();
+	/// The placeholder mechanics of this world (null until the world is ready, or if the content files are damaged).
+	FWwGameplay* GetGameplay();
 	/// The sea's surface above its still level (m) at a world position (m) where the still water is Depth deep, at the
 	/// game's clock: what the water shader shows, for swimming.
 	double SeaSurface(double X, double Z, double Depth, double Time);
@@ -80,6 +83,8 @@ private:
 	EWwWorldState State = EWwWorldState::Idle;
 	std::shared_ptr<ww::FTerrainSampler> Sampler;
 	std::shared_ptr<ww::FOcean> Ocean;
+	std::unique_ptr<FWwGameplay> Gameplay;
+	std::shared_ptr<ww::FTerrainSampler> GameplayWorld; // the world the gameplay object was made for
 	TSharedPtr<std::atomic<int32>, ESPMode::ThreadSafe> Stage;
 	FString Failure;
 	double BuildSeconds = 0;
