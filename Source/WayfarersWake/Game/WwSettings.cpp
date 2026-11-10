@@ -108,6 +108,7 @@ FWwSettings::FWwSettings()
 	Slider(TEXT("view.mist"), View, TEXT("Air"), TEXT("Mist"), 0, 2, 0.05, 1, TEXT("x"), TEXT("Low mist on calm mornings, in the evening and in rain. 0 turns it off."));
 	Slider(TEXT("view.bloom"), View, TEXT("Air"), TEXT("Glow of bright things"), 0, 2, 0.05, 1, TEXT("x"), TEXT(""));
 	Add(TEXT("view.reflect"), View, TEXT("Water"), TEXT("Water mirrors its surroundings"), Toggle, 1, TEXT("The land, the trees and the clouds reflected in the water. Costs some speed."));
+	Add(TEXT("view.splashes"), View, TEXT("Water"), TEXT("Rain splashes"), Toggle, 1, TEXT("Small splashes where raindrops land near you, on the ground and on the water."));
 	Add(TEXT("view.stars"), View, TEXT("Light"), TEXT("Stars"), Toggle, 1, TEXT(""));
 	Add(TEXT("view.moon"), View, TEXT("Light"), TEXT("Moon"), Toggle, 1, TEXT(""));
 	Choice(TEXT("map.style"), View, TEXT("Map (M)"), TEXT("Map drawn as"), { TEXT("A plain map"), TEXT("An old chart on parchment") }, 0, TEXT("P on the map changes it too."));

@@ -167,7 +167,7 @@ def water(mat):
         n.set_editor_property('inputs', inputs)
         return n
 
-    node = custom('WwWater', ['TileUv', 'Col', 'ColA', 'Flow', 'Shore', 'Shore2', 'Rel', 'RestRel', 'Tile', 'Cells', 'FftX', 'FftZ', 'Debug', 'T', 'Behind', 'Weather',
+    node = custom('WwWater', ['TileUv', 'Col', 'ColA', 'Flow', 'Shore', 'Shore2', 'Rel', 'RestRel', 'Tile', 'Cells', 'FftX', 'FftZ', 'Debug', 'T', 'Behind', 'Weather', 'Touch',
                               'SunDir', 'SunLight', 'Patches', 'Streaks', 'Net'] + cascades, -500, 0)
     # The vertex stage: the waves move the sheet.
     vertex = custom('WwSeaVertex', ['TileUv', 'Col', 'Shore', 'Shore2', 'Rel', 'Tile', 'FftX', 'FftZ', 'T', 'Weather'] + cascades, -500, 900)
@@ -215,6 +215,8 @@ def water(mat):
     wire(expr(unreal.MaterialExpressionVectorParameter, 500, parameter_name='FftZ', default_value=unreal.LinearColor(0, 0, 0, 0)), '', 'FftZ', True)
     wire(expr(unreal.MaterialExpressionTime, 550), '', 'T', True)
     # (the wind's heading, its strength as a share of 8 m/s, the sea state: set by the game from its weather)
+    # (how hard it rains; where someone is moving in the water, and how strongly)
+    wire(expr(unreal.MaterialExpressionVectorParameter, 575, parameter_name='Touch', default_value=unreal.LinearColor(0, 0, 0, 0)), 'RGBA', 'Touch')
     wire(expr(unreal.MaterialExpressionVectorParameter, 560, parameter_name='Weather', default_value=unreal.LinearColor(0.496, 0.868, 0.69, 0.5)), 'RGBA', 'Weather', True)
     wire(expr(unreal.MaterialExpressionScalarParameter, 530, parameter_name='Debug', default_value=0.0), '', 'Debug')
     wire(expr(unreal.MaterialExpressionSkyAtmosphereLightDirection, 580), '', 'SunDir')

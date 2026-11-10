@@ -243,6 +243,19 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 			Rain->SetUsingAbsoluteLocation(true); Rain->SetUsingAbsoluteRotation(true);
 			Rain->SetupAttachment(RootComponent);
 			Rain->RegisterComponent();
+			// Splashes: where drops land on the ground and the water round the camera, a small crown jumps up and is gone.
+			Splashes = NewObject<UInstancedStaticMeshComponent>(this);
+			Splashes->SetStaticMesh(Cube);
+			// (their own, fainter copy of the rain's material: a splash is spray, not a white thing)
+			UMaterialInstanceDynamic* SplashMaterial = UMaterialInstanceDynamic::Create(RainBase, this);
+			SplashMaterial->SetVectorParameterValue(TEXT("Colour"), FLinearColor(0.09f, 0.095f, 0.1f, 0.2f));
+			Splashes->SetMaterial(0, SplashMaterial);
+			Splashes->SetMobility(EComponentMobility::Movable);
+			Splashes->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Splashes->SetCastShadow(false);
+			Splashes->SetUsingAbsoluteLocation(true); Splashes->SetUsingAbsoluteRotation(true);
+			Splashes->SetupAttachment(RootComponent);
+			Splashes->RegisterComponent();
 		}
 		UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 		UMaterialInterface* StarBase = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwStars.M_WwStars"));
@@ -314,6 +327,7 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 		Sea = Sea < 0 || bByHand ? Wanted : FMath::FInterpConstantTo(Sea, Wanted, DeltaSeconds, 0.012f);
 		if (!Set.On(TEXT("test.seaset"))) Set.Show(TEXT("test.sea"), Sea);
 		if (WorldSystem) WorldSystem->SetSea(Sea, Wind.DirX, Wind.DirZ, Wind.SteadySpeed);
+		if (WorldSystem) WorldSystem->SetRain(Weather.bSnow ? 0.f : Weather.Precipitation);
 	}
 	// Light in the air, and mist. Mist lies low on calm mornings (from first light until the sun is well up), more
 	// thinly in the evening, and hangs about in rain; wind clears it.
@@ -449,6 +463,7 @@ void AWwSky::UpdateRain(float DeltaSeconds, const FVector& View)
 		if (RainMaterial) RainMaterial->SetVectorParameterValue(TEXT("Colour"), bSnow ? FLinearColor(0.2f, 0.21f, 0.22f, 0.8f) : FLinearColor(0.07f, 0.075f, 0.08f, 0.32f));
 	}
 	Rain->SetVisibility(Wanted > 0);
+	UpdateSplashes(DeltaSeconds, View);
 	if (Wanted == 0) return;
 	// Falling with the wind: rain about 9 m/s, snow drifting down at 1.4.
 	const FVector Fall(Wind.DirX * Wind.Speed * (bSnow ? 60.0 : 35.0), Wind.DirZ * Wind.Speed * (bSnow ? 60.0 : 35.0), bSnow ? -140.0 : -900.0);
@@ -469,6 +484,51 @@ void AWwSky::UpdateRain(float DeltaSeconds, const FVector& View)
 		Now[i] = FTransform(Lean, View + Drop, Drop.SizeSquared2D() < 150.0 * 150.0 ? FVector::ZeroVector : Size);
 	}
 	Rain->BatchUpdateInstancesTransforms(0, Now, true, true, false);
+}
+
+void AWwSky::UpdateSplashes(float DeltaSeconds, const FVector& View)
+{
+	if (!Splashes) return;
+	UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+	const std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem ? WorldSystem->GetSampler() : nullptr;
+	// More of them the harder it rains; none in snow, under water or with the setting off.
+	const bool bOn = Sampler && !Weather.bSnow && CameraDepth <= .02f && FWwSettings::Get().On(TEXT("view.splashes"));
+	const int32 Wanted = bOn ? FMath::RoundToInt(FMath::Clamp(Weather.Precipitation, 0.f, 1.f) * 420.f) : 0;
+	if (SplashAt.Num() != Wanted)
+	{
+		SplashAt.Init(FVector::ZeroVector, Wanted);
+		SplashAge.SetNum(Wanted);
+		for (float& Age : SplashAge) Age = 1.f + FMath::FRand(); // (each lands in its own time)
+		Splashes->ClearInstances();
+		TArray<FTransform> Start;
+		Start.Init(FTransform::Identity, Wanted);
+		if (Wanted > 0) Splashes->AddInstances(Start, false, true, false);
+	}
+	Splashes->SetVisibility(Wanted > 0);
+	if (Wanted == 0) return;
+	TArray<FTransform> Now;
+	Now.SetNumUninitialized(Wanted);
+	for (int32 i = 0; i < Wanted; i++)
+	{
+		SplashAge[i] += DeltaSeconds / 0.16f;
+		if (SplashAge[i] >= 1.f)
+		{
+			// A new drop lands: somewhere within 16 m of the camera, more of them near; on the ground or on the water.
+			SplashAge[i] -= FMath::FloorToFloat(SplashAge[i]);
+			const double Reach = 100.0 + 1500.0 * FMath::Square(FMath::FRand()), Angle = FMath::FRand() * UE_DOUBLE_TWO_PI;
+			const double X = View.X + FMath::Cos(Angle) * Reach, Y = View.Y + FMath::Sin(Angle) * Reach;
+			const ww::FTerrainSample T = Sampler->Sample(X / 100.0, Y / 100.0, 2);
+			double Top = T.Height;
+			if (T.Water != ww::EWaterKind::None && T.WaterLevel > T.Height)
+				Top = T.WaterLevel + (T.Water == ww::EWaterKind::Ocean ? WorldSystem->SeaSurface(X / 100.0, Y / 100.0, T.WaterLevel - T.Height, GetWorld()->GetTimeSeconds()) : 0.0);
+			SplashAt[i] = FVector(X, Y, Top * 100.0);
+		}
+		// A crown: it jumps up and widens, then falls back.
+		const float Age = SplashAge[i], Up = FMath::Sin(Age * UE_PI);
+		const float Wide = (0.006f + 0.028f * Age) * (0.7f + 0.6f * Weather.Precipitation), High = 0.004f + 0.035f * Up;
+		Now[i] = FTransform(FQuat::Identity, SplashAt[i] + FVector(0, 0, High * 50.0 + 1.0), FVector(Wide, Wide, High));
+	}
+	Splashes->BatchUpdateInstancesTransforms(0, Now, true, true, false);
 }
 
 FString AWwSky::WeatherLine() const

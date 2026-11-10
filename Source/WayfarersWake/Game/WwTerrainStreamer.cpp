@@ -911,6 +911,7 @@ void AWwTerrainStreamer::ApplyOcean(UMaterialInstanceDynamic* Water, double Corn
 	static const TCHAR* Names[6] = { TEXT("Disp0"), TEXT("Slope0"), TEXT("Disp1"), TEXT("Slope1"), TEXT("Disp2"), TEXT("Slope2") };
 	for (int32 i = 0; i < 6; i++) Water->SetTextureParameterValue(Names[i], OceanTextures[i]);
 	Water->SetVectorParameterValue(TEXT("Weather"), WeatherShown);
+	Water->SetVectorParameterValue(TEXT("Touch"), TouchShown);
 	Water->SetTextureParameterValue(TEXT("FoamNet"), FoamNet);
 	Water->SetScalarParameterValue(TEXT("Debug"), (float)FWwSettings::Get().Num(TEXT("test.waterview"))); // (a test view: see WwWater.hlsl)
 }
@@ -945,6 +946,13 @@ void AWwTerrainStreamer::UpdateOcean(float DeltaSeconds)
 	const std::shared_ptr<ww::FOcean> Ocean = WorldSystem->GetOcean();
 	const double Time = GetWorld()->GetTimeSeconds() + DeltaSeconds;
 	const double DriftX = WorldSystem->GetSeaToX() * WorldSystem->GetSeaSpeed() * .03, DriftZ = WorldSystem->GetSeaToZ() * WorldSystem->GetSeaSpeed() * .03;
+	// ... and of the rain and of anyone moving in it.
+	const FLinearColor TouchNow = WorldSystem->GetWaterTouch();
+	if (!TouchNow.Equals(TouchShown, 0.001f))
+	{
+		TouchShown = TouchNow;
+		for (FWwTileSlot& Slot : Slots) if (Slot.Water) Slot.Water->SetVectorParameterValue(TEXT("Touch"), TouchNow);
+	}
 	// The water's material hears of the wind and the sea state.
 	const FLinearColor WeatherNow((float)WorldSystem->GetSeaToX(), (float)WorldSystem->GetSeaToZ(), (float)(WorldSystem->GetSeaSpeed() / 8.0), (float)WorldSystem->GetSeaState());
 	if (!WeatherNow.Equals(WeatherShown, 0.002f))

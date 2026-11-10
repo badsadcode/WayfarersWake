@@ -9,7 +9,8 @@
 //   water where waves meet it), the bed seen through the water with per-colour absorption and the water's own scatter
 //   colour, stirred-up water, contact foam, rapids and streak foam through Tom's foam textures, sun-independent
 //   composition (albedo / emission split, fresnel, opacity film and edge fade), rough water reflecting less.
-// Not ported: standing waves, rocks in the current, wakes, caustics, rain rings, the shader's own sky and screen-space
+// New here: rain rings on the water and rings from someone moving in it (Touch). Not ported: standing waves, rocks in
+//   the current, wakes, caustics, the shader's own sky and screen-space
 //   reflections (the engine's reflections are used, so are its sun glints), biome water tints. The wind and the sea state
 //   come from the game's weather (Weather).
 // Inputs: TileUv, Col (depth / 20 m, kind code, river share), ColA (edge fade), Flow (current, m/s), Shore (the bed's
@@ -290,6 +291,40 @@ else
 		slope += fn.flow_gnoise(p * 0.6 + 2.0, current * 0.2, T, 4.0) * 0.6 * 0.09 * mouth_meet * (0.5 + sea_state) * (1.0 - smoothstep(1.0, 4.0, footprint));
 	}
 }
+// Rain on the water: a ring spreads from every drop and dies away (Touch.x: how hard it rains). Three sizes of cell,
+// each with a drop now and then; more of them at once the harder it rains. Near the camera only: farther off the rings
+// are finer than a pixel and the rain shows as a duller surface.
+float rain = Touch.x;
+float rain_near = rain * (1.0 - smoothstep(20.0, 55.0, dist));
+if (rain_near > 0.01)
+{
+	float2 rings = float2(0.0, 0.0);
+	for (int layer = 0; layer < 3; layer++)
+	{
+		float cell = 0.5 + 0.3 * layer; // metres
+		float2 q = p / cell + layer * 17.3;
+		float2 ci = floor(q), cf = frac(q) - 0.5;
+		float h0 = fn.hash(ci + layer * 7.1);
+		float beat = T * (1.1 + 0.6 * h0) + h0 * 7.0;
+		float life = frac(beat);                                             // 0 the drop lands .. 1 its ring is gone
+		float turn = floor(beat);
+		float falls = step(fn.hash(ci * 1.7 + turn * 0.37 + 3.1), rain * 1.2);  // does a drop fall in this cell this time
+		float2 centre = (float2(fn.hash(ci + turn + 1.3), fn.hash(ci + turn + 2.7)) - 0.5) * 0.5;
+		float2 d = (cf - centre) * cell;
+		float r = length(d) + 1e-4, radius = life * 0.42;
+		float ring = sin((r - radius) * 46.0) * exp(-pow((r - radius) * 11.0, 2.0)) * (1.0 - life) * (1.0 - life);
+		rings += d / r * ring * falls;
+	}
+	slope += rings * 0.55 * rain_near / max(rain, 0.05) * (1.0 - smoothstep(0.02, 0.12, footprint));
+}
+// Someone moving in the water: rings spread from them (Touch.yz: where, in the same folded metres as p; Touch.w: how
+// strongly, by how fast they move).
+{
+	float2 pd = p - Touch.yz;
+	float pr = length(pd) + 1e-3;
+	if (Touch.w > 0.01 && pr < 14.0)
+		slope += pd / pr * sin(pr * 6.5 - T * 8.0) * exp(-pr * 0.42) * smoothstep(0.2, 0.7, pr) * Touch.w * 0.3;
+}
 float3 n_world = normalize(float3(-slope.x, -slope.y, 1.0));
 float3 to_eye = -view_dir;
 // Reflection strength from a softened normal (ripple facets turned toward the horizon mirrored the sky as white streaks).
@@ -437,7 +472,8 @@ float3 scatter_m = scatter * (0.1 + 0.5 * pond) + float3(0.55, 0.75, 0.74) * (st
 Absorb = absorb_m * 0.01;
 Scatter = scatter_m * 0.01;
 float specular = 0.255 * (1.0 - fo) * lerp(1.0, 0.6, storm_r) * lerp(1.0, 0.7, face_r * sea);
-Surface = float3(cover, lerp(lerp(0.02, 0.1, sea_state), 0.7, fo), specular);
+// (rain dulls the mirror)
+Surface = float3(cover, lerp(lerp(0.02, 0.1, sea_state) + 0.1 * rain, 0.7, fo), specular);
 // Test views (-WwWaterDebug=): 1 = foam amount, foam shown, breaking; 2 = bed slope x 5, exposure, depth / 20 m;
 // 3 = shore-wave phase, the simulated foam field, the fold.
 if (Debug > 0.5)

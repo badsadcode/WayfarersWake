@@ -168,3 +168,11 @@
 * Switching on reflections for the old translucent water changed nothing. Rebuilt the surface on the engine's single layer water, keeping the ported waves and foam. First result an opaque teal; with the scattering cut to a third, clear water, a visible lake bed and a mirrored cliff.
 * The sea now follows the wind, from glassy to storm, in the shader and in the simulated waves alike.
 * Two test pictures were taken from under the water by mistake (my camera sat 4 m above the sea bed and the bigger waves covered it), and one "sunset" was after dark.
+
+## 2026-11-10, session 1 (continued): rain on the water
+
+* Tom: the game will be much simpler than Thornwake, which stays a separate project; a directions file is in `docs/new_direction_draft.md`; humans first, orcs and dwarves if possible, no gremlin or hobbit. But first finish what was started.
+* Rain rings in the water shader, rings round whoever is in the water, small splashes where drops land.
+* The first splashes were white blocks the size of a fist; now drop-sized and faint.
+* In rain the lake went bright teal. Not the mist, not the fog (two runs to rule them out): clouds were shading the land but not the water, an engine default.
+* The compiler stalled again on this build (two idle processes for eleven minutes); Tom noticed the wait.

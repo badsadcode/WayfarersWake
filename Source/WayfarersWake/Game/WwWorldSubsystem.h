@@ -62,6 +62,14 @@ public:
 	/// to, m/s). The simulated sea follows at the next safe moment (ApplySea).
 	void SetSea(double InState, double ToX, double ToZ, double Speed) { SeaWanted = FMath::Clamp(InState, 0.0, 1.0); SeaToX = ToX; SeaToZ = ToZ; SeaSpeed = Speed; }
 	double GetSeaState() const { return SeaWanted; }
+	/// What touches the water now: how hard it rains (0..1), and where someone moves in it (metres) and how strongly (0..1).
+	void SetRain(float Rain) { WaterRain = Rain; }
+	void SetRipple(double X, double Z, float Strength) { RippleX = X; RippleZ = Z; RippleStrength = Strength; }
+	FLinearColor GetWaterTouch() const
+	{
+		auto Fold = [](double V) { return (float)(V - 65536.0 * FMath::FloorToDouble(V / 65536.0)); }; // (as the water's own position)
+		return FLinearColor(WaterRain, Fold(RippleX), Fold(RippleZ), RippleStrength);
+	}
 	double GetSeaToX() const { return SeaToX; }
 	double GetSeaToZ() const { return SeaToZ; }
 	double GetSeaSpeed() const { return SeaSpeed; }
@@ -95,6 +103,8 @@ private:
 	EWwWorldState State = EWwWorldState::Idle;
 	std::shared_ptr<ww::FTerrainSampler> Sampler;
 	std::shared_ptr<ww::FOcean> Ocean;
+	double RippleX = 0, RippleZ = 0;
+	float WaterRain = 0, RippleStrength = 0;
 	double SeaWanted = 0.5, SeaToX = WindX, SeaToZ = WindZ, SeaSpeed = WindSpeed, SeaSet = -1, SeaAngleSet = 0;
 	std::unique_ptr<FWwGameplay> Gameplay;
 	std::shared_ptr<ww::FTerrainSampler> GameplayWorld; // the world the gameplay object was made for

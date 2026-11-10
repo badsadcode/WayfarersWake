@@ -303,6 +303,10 @@ void AWwCharacter::Tick(float DeltaSeconds)
 				double Level = T.WaterLevel;
 				if (T.Water == ww::EWaterKind::Ocean) Level += WorldSystem->SeaSurface(Here.X / 100.0, Here.Y / 100.0, T.WaterLevel - T.Height, GetWorld()->GetTimeSeconds());
 				if (T.Water != ww::EWaterKind::None && Level - Feet > 1.25) { bSwimming = true; WaterLevel = Level; }
+				// Wading or swimming stirs the water: rings spread from the player, stronger the faster they move.
+				const bool bInWater = T.Water != ww::EWaterKind::None && Level - Feet > 0.08;
+				const float Moving = (float)FMath::Clamp(GetVelocity().Size() / 300.0, 0.0, 1.0);
+				WorldSystem->SetRipple(Here.X / 100.0, Here.Y / 100.0, bInWater ? 0.12f + 0.88f * Moving : 0.f);
 			}
 	if (bSwimming)
 	{

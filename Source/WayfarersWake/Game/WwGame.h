@@ -75,6 +75,11 @@ private:
 	UPROPERTY(Transient) TObjectPtr<class UMaterialInstanceDynamic> StarMaterial;
 	void UpdateWeather(float DeltaSeconds, const FVector& View, float Day);
 	void UpdateRain(float DeltaSeconds, const FVector& View);
+	/// The small crowns where raindrops land (WwGame.cpp).
+	void UpdateSplashes(float DeltaSeconds, const FVector& View);
+	UPROPERTY(Transient) TObjectPtr<class UInstancedStaticMeshComponent> Splashes;
+	TArray<FVector> SplashAt;
+	TArray<float> SplashAge;
 	/// The sound of the weather and the world (WwSound), synthesised and queued a third of a second ahead.
 	void UpdateSound(float DeltaSeconds, const FVector& View);
 	UPROPERTY(Transient) TObjectPtr<class USoundWaveProcedural> SoundWave;
