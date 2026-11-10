@@ -268,5 +268,71 @@ def waterfall(foam_disc):
 
 make('M_WwWaterfall', waterfall(False))
 make('M_WwWaterfallFoam', waterfall(True))
+SPRAY = """
+// A soft, billowing puff (port of Thornwake Game/Rewrite/Spray.gdshader, the drawn billow): a cauliflower edge that
+// churns as it ages. Data = (age 0..1, seed, density). Returns the opacity.
+struct FWwSpray
+{
+	float hash(float2 p) { return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
+	float noise(float2 p)
+	{
+		float2 i = floor(p), f = frac(p);
+		float2 w = f * f * (3.0 - 2.0 * f);
+		return lerp(lerp(hash(i), hash(i + float2(1.0, 0.0)), w.x), lerp(hash(i + float2(0.0, 1.0)), hash(i + float2(1.0, 1.0)), w.x), w.y);
+	}
+	float fbm(float2 p) { return 0.5 * noise(p) + 0.3 * noise(p * 2.07 + 5.3) + 0.2 * noise(p * 4.13 + 11.7); }
+};
+FWwSpray fn;
+float age = Data.x, seed = Data.y;
+float2 q = Uv * 2.0 - 1.0;
+float r = length(q);
+float ang = atan2(q.y, q.x);
+float lumps = fn.fbm(float2(ang * 1.6 + seed * 40.0, age * 1.8 + seed * 9.0)) - 0.5;
+float inner = fn.fbm(q * 2.2 + float2(seed * 31.0, age * 1.3)) - 0.5;
+float edge = 0.78 + 0.35 * lumps + 0.12 * inner;
+float body = 1.0 - smoothstep(edge - 0.32, edge, r);
+body *= 0.7 + 0.6 * (fn.fbm(q * 3.5 + seed * 17.0 + age * 0.9) - 0.2);
+return saturate(body) * Data.z;
+"""
+
+
+def spray(mat):
+    """Spray and mist puffs: lit softly from every side, never grey in shade, fading into what lies behind them."""
+    mat.set_editor_property('blend_mode', unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property('translucency_lighting_mode', unreal.TranslucencyLightingMode.TLM_VOLUMETRIC_NON_DIRECTIONAL)
+    mat.set_editor_property('two_sided', True)
+    node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
+    node.set_editor_property('description', 'WwSpray')
+    node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT1)
+    inputs = []
+    for name in ['Uv', 'Data']:
+        i = unreal.CustomInput()
+        i.set_editor_property('input_name', name)
+        inputs.append(i)
+    node.set_editor_property('inputs', inputs)
+    node.set_editor_property('code', SPRAY)
+    uv = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1000, 0)
+    mel.connect_material_expressions(uv, '', node, 'Uv')
+    data = mel.create_material_expression(mat, unreal.MaterialExpressionVertexInterpolator, -800, 200)
+    custom = mel.create_material_expression(mat, unreal.MaterialExpressionPerInstanceCustomData3Vector, -1100, 200)
+    custom.set_editor_property('data_index', 0)
+    mel.connect_material_expressions(custom, '', data, '')
+    mel.connect_material_expressions(data, '', node, 'Data')
+    fade = mel.create_material_expression(mat, unreal.MaterialExpressionDepthFade, -250, 0)
+    fade.set_editor_property('fade_distance_default', 150.0)  # (1.5 m, as Thornwake's soft_distance)
+    if not (mel.connect_material_expressions(node, '', fade, 'Opacity') or mel.connect_material_expressions(node, '', fade, 'InOpacity')):
+        raise RuntimeError('WwAssets: cannot connect the spray opacity')
+    mel.connect_material_property(fade, '', unreal.MaterialProperty.MP_OPACITY)
+    tint = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -250, 200)
+    tint.set_editor_property('constant', unreal.LinearColor(0.9, 0.95, 0.96, 1))
+    mel.connect_material_property(tint, '', unreal.MaterialProperty.MP_BASE_COLOR)
+    glow = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -250, 350)
+    glow.set_editor_property('const_b', 0.16)
+    mel.connect_material_expressions(tint, '', glow, 'A')
+    mel.connect_material_property(glow, '', unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
+
+
+make('M_WwSpray', spray)
 make('M_WwTerrain', terrain)
 make('M_WwWater', water)

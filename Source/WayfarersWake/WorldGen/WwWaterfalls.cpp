@@ -240,6 +240,11 @@ FFallModel FFallModel::Build(const FTerrainSampler& terrain, const FFall& f, boo
 		if (v[(size_t)r * cols + cols / 2].Y <= bottom + .05) { footV = &v[(size_t)r * cols + cols / 2]; break; }
 	float footX = footV->X, footY = (float)(bottom + .04), footZ = footV->Z;
 	double spread = DetMath::Clamp(width * .45 + (lipLevel - bottom) * .15, 4, 35);
+	m.FootX = footX; m.FootY = footY; m.FootZ = footZ;
+	// Half-way down the falling water, its centre (the face's spray).
+	m.FaceX = footX; m.FaceY = footY; m.FaceZ = footZ;
+	for (int r = 0; r < rows; r++)
+		if (v[(size_t)r * cols + cols / 2].Y <= (lipLevel + bottom) * .5) { const FVertex& c = v[(size_t)r * cols + cols / 2]; m.FaceX = c.X; m.FaceY = c.Y; m.FaceZ = c.Z; break; }
 	// The foam disc: rings round the foot, a little longer downstream.
 	const int rings = 8, spokes = 28;
 	FVertex centreV = {}; centreV.X = footX; centreV.Y = footY; centreV.Z = footZ; centreV.Edge = 1;

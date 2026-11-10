@@ -2,7 +2,7 @@
 // mesh of WaterfallView). Every stretch of river between two of its points that drops at least 3 m, steeper than
 // 1 in 5. The river's sheet leaves a fall's face out; a curtain of falling water is drawn there instead (falling freely
 // from the lip, sliding down the rock wherever the rock lies higher), with white water spreading on the pool at its foot.
-// Engine-free and thread-safe. Not ported: spray and mist (Spray.cs).
+// Engine-free and thread-safe. (Spray and mist: Game/WwSpray.)
 #pragma once
 
 #include "WwWorld.h"
@@ -43,6 +43,8 @@ struct FFallModel
 	std::vector<FVertex> Foam;      // U, V = metres from the foot (downstream, across); Edge = 1 at the foot, 0 at the rim
 	std::vector<int> FoamIndices;
 	float LipLevel = 0, Left = 0, Right = 0;
+	/// Where the centre line meets the pool, and its point half-way down (metres from the lip; y absolute): for the spray.
+	float FootX = 0, FootY = 0, FootZ = 0, FaceX = 0, FaceY = 0, FaceZ = 0;
 	static FFallModel Build(const FTerrainSampler& Terrain, const FFall& f, bool bBody = true);
 };
 }

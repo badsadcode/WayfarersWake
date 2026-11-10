@@ -5,6 +5,7 @@
 #include "Containers/Queue.h"
 #include "WorldGen/WwWorld.h"
 #include "WorldGen/WwWaterfalls.h"
+#include "Game/WwSpray.h"
 #include "InstanceDataTypes.h"
 #include <atomic>
 #include "WwTerrainStreamer.generated.h"
@@ -121,6 +122,7 @@ public:
 	static TSharedPtr<FWwTileData> BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass,
 		const ww::FFallSet* Falls = nullptr);
 	int32 GetFallCount() const { return FallsShown.Num(); }
+	int32 GetPuffCount() const { return PuffsShown; }
 
 private:
 	struct FTreeBatch { int32 Component; TArray<FPrimitiveInstanceId> Ids; };
@@ -150,6 +152,7 @@ private:
 	void ShowTile(const FWwTileKey& Key, FTile& Tile);
 	void LoadTreeMeshes();
 	void UpdateWaterfalls(const TArray<FVector2D>& Viewers, bool bMoved);
+	void UpdateSpray(const TArray<FVector2D>& Viewers, float DeltaSeconds);
 	void SetPlants(TObjectPtr<UInstancedStaticMeshComponent>& Component, UStaticMesh* Mesh, const TArray<FTransform>& Transforms, const TArray<float>& Data, const FVector& Origin);
 	double TileSize(int32 Level) const { return BaseTile * (double)((int64)1 << Level); }
 
@@ -163,6 +166,8 @@ private:
 	UPROPERTY(Transient) TArray<TObjectPtr<UStaticMesh>> TreeMeshes;
 	UPROPERTY(Transient) TObjectPtr<UStaticMesh> PlantMesh;
 	UPROPERTY(Transient) TObjectPtr<UStaticMesh> LeafMesh;
+	UPROPERTY(Transient) TObjectPtr<UInstancedStaticMeshComponent> SprayMesh;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> SprayMaterial;
 	UPROPERTY(Transient) TArray<TObjectPtr<UInstancedStaticMeshComponent>> TreeComponents;
 	TArray<int32> Free;
 	/// Per species and model (near, distant): first index into TreeMeshes and how many parts (bark, foliage, cards).
@@ -171,6 +176,9 @@ private:
 	TMap<FTreeKey, int32> TreeLookup;
 	int32 TreesShown = 0, PlantsShown = 0;
 	std::shared_ptr<ww::FFallSet> Falls;
+	/// Spray and mist of the falls shown (by fall index), drawn as one set of camera-facing instances.
+	TMap<int32, FWwFallSpray> FallSpray;
+	int32 PuffsShown = 0;
 	TSet<int32> FallsBuilding;
 	bool bPlantShadows = true;
 

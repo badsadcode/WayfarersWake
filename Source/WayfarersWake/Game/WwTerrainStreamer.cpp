@@ -43,7 +43,8 @@ void AWwTerrainStreamer::ClearAll()
 	}
 	PlantsShown = 0;
 	for (auto& Shown : FallsShown) if (Shown.Value) Shown.Value->DestroyComponent();
-	FallsShown.Empty(); FallsBuilding.Empty();
+	FallsShown.Empty(); FallsBuilding.Empty(); FallSpray.Empty();
+	if (SprayMesh) SprayMesh->ClearInstances();
 	for (UInstancedStaticMeshComponent* Component : TreeComponents) if (Component) Component->DestroyComponent();
 	Tiles.Empty(); Pending.Empty(); Desired.Empty(); Slots.Empty(); Free.Empty(); TreeComponents.Empty(); TreeLookup.Empty();
 	TreesShown = 0;
@@ -574,6 +575,7 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 		if (!WaterMaterial) WaterMaterial = TerrainMaterial;
 		LoadTreeMeshes();
 		if (!FallMaterial) FallMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwWaterfall.M_WwWaterfall"));
+		if (!SprayMaterial) SprayMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwSpray.M_WwSpray"));
 		if (!FallFoamMaterial) FallFoamMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwWaterfallFoam.M_WwWaterfallFoam"));
 		if (!PlantMesh)
 		{
@@ -612,6 +614,7 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 	if (bChanged || bMoved) ResolveVisibility();
 	LaunchJobs(Viewers);
 	UpdateWaterfalls(Viewers, bMoved || bChanged);
+	UpdateSpray(Viewers, DeltaSeconds);
 }
 
 bool AWwTerrainStreamer::IsGroundReady(const FVector& Location) const
@@ -635,7 +638,7 @@ void AWwTerrainStreamer::UpdateWaterfalls(const TArray<FVector2D>& Viewers, bool
 	if (bMoved || FallsBuilding.Num() > 0)
 	{
 		for (auto It = FallsShown.CreateIterator(); It; ++It)
-			if (!Near(All[It.Key()], DrawRange * 1.1)) { if (It.Value()) It.Value()->DestroyComponent(); It.RemoveCurrent(); }
+			if (!Near(All[It.Key()], DrawRange * 1.1)) { if (It.Value()) It.Value()->DestroyComponent(); FallSpray.Remove(It.Key()); It.RemoveCurrent(); }
 		// Built on worker threads, at most four at a time.
 		for (int32 Index = 0; Index < (int32)All.size() && FallsBuilding.Num() < 4; Index++)
 		{
@@ -695,4 +698,66 @@ void AWwTerrainStreamer::UpdateWaterfalls(const TArray<FVector2D>& Viewers, bool
 	Section(0, Done.Value->Curtain, Done.Value->CurtainIndices, FallMaterial);
 	Section(1, Done.Value->Foam, Done.Value->FoamIndices, FallFoamMaterial ? FallFoamMaterial.Get() : FallMaterial.Get());
 	FallsShown.Add(Done.Key, Mesh);
+	const ww::FFallModel& M = *Done.Value;
+	FallSpray.Add(Done.Key).Build(Fall.LipX, Fall.LipZ, Fall.Dx, Fall.Dz, (float)Fall.Height(), (float)Fall.Width, FVector(M.FootX, M.FootY, M.FootZ), FVector(M.FaceX, M.FaceY, M.FaceZ),
+		M.LipLevel, M.Left, M.Right, Done.Key);
+}
+
+// ---------------------------------------------------------------------------------------------------- spray and mist
+void AWwTerrainStreamer::UpdateSpray(const TArray<FVector2D>& Viewers, float DeltaSeconds)
+{
+	PuffsShown = 0;
+	if (!Falls || !LeafMesh || !SprayMaterial || Viewers.Num() == 0) return;
+	const double MistRange = 1500; // (Thornwake's)
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (!PC) return;
+	FVector View; FRotator ViewRotation;
+	PC->GetPlayerViewPoint(View, ViewRotation);
+	if (!SprayMesh)
+	{
+		SprayMesh = NewObject<UInstancedStaticMeshComponent>(this);
+		SprayMesh->SetStaticMesh(LeafMesh); // (a flat 1 m square)
+		SprayMesh->SetMaterial(0, SprayMaterial);
+		SprayMesh->SetMobility(EComponentMobility::Movable);
+		SprayMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		SprayMesh->SetCanEverAffectNavigation(false);
+		SprayMesh->SetCastShadow(false);
+		SprayMesh->SetNumCustomDataFloats(3);
+		SprayMesh->SetTranslucentSortPriority(3); // (after the water and the falling water: they are see-through too)
+		SprayMesh->SetupAttachment(RootComponent);
+		SprayMesh->RegisterComponent();
+	}
+	const FVector Anchor(FMath::GridSnap(View.X, 100000.0), FMath::GridSnap(View.Y, 100000.0), 0.0);
+	TArray<FTransform> Transforms; TArray<float> Data;
+	// Each puff faces the camera (its square's normal toward it), turned by its own spin.
+	const FQuat Facing = FRotationMatrix::MakeFromZX(-ViewRotation.Vector(), FRotationMatrix(ViewRotation).GetUnitAxis(EAxis::Y)).ToQuat();
+	const std::vector<ww::FFall>& All = Falls->All();
+	for (auto& Pair : FallSpray)
+	{
+		const ww::FFall& F = All[Pair.Key];
+		bool bNear = false;
+		for (const FVector2D& V : Viewers) bNear |= FMath::Abs(F.LipX - V.X) + FMath::Abs(F.LipZ - V.Y) < MistRange;
+		if (!bNear) continue;
+		for (FWwSprayEmitter& E : Pair.Value.Emitters)
+		{
+			E.Tick(DeltaSeconds);
+			for (const FWwSprayEmitter::FPuff& P : E.Puffs)
+			{
+				const float Density = E.DensityOf(P);
+				if (Density <= 0.002f) continue;
+				Transforms.Add(FTransform(Facing * FQuat(FVector::UpVector, FMath::DegreesToRadians(P.Angle)), P.Position - Anchor, FVector(E.SizeOf(P))));
+				Data.Append({ P.Age / E.Lifetime, P.Seed, Density });
+			}
+		}
+	}
+	SprayMesh->ClearInstances();
+	PuffsShown = Transforms.Num();
+	if (Transforms.Num() == 0) return;
+	SprayMesh->SetWorldLocation(Anchor);
+	SprayMesh->AddInstances(Transforms, false, false, false);
+	if (SprayMesh->PerInstanceSMCustomData.Num() == Data.Num())
+	{
+		FMemory::Memcpy(SprayMesh->PerInstanceSMCustomData.GetData(), Data.GetData(), Data.Num() * sizeof(float));
+		SprayMesh->MarkRenderStateDirty();
+	}
 }
