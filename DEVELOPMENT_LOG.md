@@ -190,3 +190,9 @@
 * He named two faults: textures stretched on some sides of stones, and a flat ground with no normal map. Stones now choose their projection from the true face direction (screen derivatives) instead of the mesh's smoothed normals; the ground gets relief from its own light and shade. Both compile and run; the relief is subtle with 128 px textures and no stone was in my test pictures, so neither is confirmed by eye.
 * Gave him a list of the 28 textures the world uses (16 ground, 6 stone, 6 cliff) and asked for 2048 px, seamless, evenly lit, with normal maps: his other AI friend will make stylised ones.
 * Packaging had grown to 20 minutes and 1.1 GB: the packs' demo maps were being cooked. Only the game's own map is cooked now (not yet confirmed by a package run).
+
+## 2026-11-10, session 1 (continued): packs checked, a debug page
+
+* All four packs in `Content` load in 5.9 (no failures). Animals: seven with idle, walk, run. Whale 15 m with 36 animations; megalodon 1.5 m as shipped. Synty Sidekick: 157 parts on one skeleton, good human faces, only a knight and a sci-fi outfit, no animations, every file twice on disk.
+* Tom: the whale and the megalodon are to be mystical and gigantic. He will model a raft; meanwhile he wants a debug mode to spawn things.
+* Debug page: items, needs, creatures. The first megalodon hung in the air over a shallow bay (the sea bed pushed a 35 m shark up through 5 m of water); sea creatures now lie just under the surface whatever the depth.

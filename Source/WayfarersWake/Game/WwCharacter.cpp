@@ -5,6 +5,7 @@
 #include "Game/WwGame.h"
 #include "Game/WwSettings.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/SkeletalMeshActor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "WorldGen/WwVegetation.h"
@@ -142,6 +143,87 @@ void AWwCharacter::LoadBody()
 	Body->SetRelativeScale3D(FVector(BodyHeight / Tall));
 	Body->SetRelativeLocationAndRotation(FVector(0, 0, -Half), FRotator(0, -90, 0));
 	UE_LOG(LogWayfarer, Display, TEXT("Body: %s, %.0f cm tall (the file's %.0f), %d of 7 animations"), *Name, BodyHeight, Tall, Clips.FilterByPredicate([](const TObjectPtr<UAnimSequence>& A) { return A != nullptr; }).Num());
+}
+
+FString AWwCharacter::UpdateDebug(FWwGameplay* Game)
+{
+	FWwSettings& Set = FWwSettings::Get();
+	FString Said;
+	Game->SetNeedsRun(Set.On(TEXT("debug.needs")));
+	if (Set.Changed(TEXT("debug.give"), GiveSeen)) Said = Game->Give(Set.Option(TEXT("debug.item")), Set.Int(TEXT("debug.amount")));
+	if (Set.Changed(TEXT("debug.giveall"), GiveAllSeen)) Said = Game->GiveAll();
+	if (Set.Changed(TEXT("debug.heal"), HealSeen)) { Game->Restore(); Said = TEXT("Fed, warm, dry and well (debug)."); }
+	if (Set.Changed(TEXT("debug.spawn"), SpawnSeen)) SpawnCreature(Set.Int(TEXT("debug.creature")), (float)Set.Num(TEXT("debug.size")));
+	if (Set.Changed(TEXT("debug.clear"), ClearSeen))
+	{
+		for (AActor* Creature : Spawned) if (Creature) Creature->Destroy();
+		Said = FString::Printf(TEXT("Took %d creatures away (debug)."), Spawned.Num());
+		Spawned.Reset();
+	}
+	return Said;
+}
+
+void AWwCharacter::SpawnCreature(int32 Which, float Size)
+{
+	// The creatures of the asset packs (Animals_Free, the blue whale, the megalodon): mesh, the animation it is shown
+	// with, how many times its own size it is at "size 1" (the whale and the shark are mystical giants: Tom, 2026-11-10),
+	// and whether it lives in water.
+	struct FCreature { const TCHAR* Name; const TCHAR* Mesh; const TCHAR* Clip; float Scale; bool bSea; };
+	static const FCreature Creatures[] = {
+		{ TEXT("Deer"), TEXT("/Game/Animals_Free/Animals/Meshes/SKM_Deer_001"), TEXT("/Game/Animals_Free/Animals/Animations/ANIM_Deer_001_Anim_Deer_001_idle"), 1, false },
+		{ TEXT("Dog"), TEXT("/Game/Animals_Free/Animals/Meshes/SKM_Dog_001"), TEXT("/Game/Animals_Free/Animals/Animations/ANIM_Dog_001_Anim_Dog_001_idle"), 1, false },
+		{ TEXT("Horse"), TEXT("/Game/Animals_Free/Animals/Meshes/SKM_Horse_001"), TEXT("/Game/Animals_Free/Animals/Animations/ANIM_Horse_001_Anim_Horse_001_idle"), 1, false },
+		{ TEXT("Chicken"), TEXT("/Game/Animals_Free/Animals/Meshes/SKM_Chicken_001"), TEXT("/Game/Animals_Free/Animals/Animations/ANIM_Chicken_001_Anim_Chicken_001_idle"), 1, false },
+		{ TEXT("Cat"), TEXT("/Game/Animals_Free/Animals/Meshes/SKM_Kitty_001"), TEXT("/Game/Animals_Free/Animals/Animations/ANIM_Kitty_001_Anim_Kitty_001_idle"), 1, false },
+		{ TEXT("Penguin"), TEXT("/Game/Animals_Free/Animals/Meshes/SKM_Pinguin_001"), TEXT("/Game/Animals_Free/Animals/Animations/ANIM_Pinguin_001_Anim_Pinguin_001_idle"), 1, false },
+		{ TEXT("Tiger"), TEXT("/Game/Animals_Free/Animals/Meshes/SKM_Tiger_001"), TEXT("/Game/Animals_Free/Animals/Animations/ANIM_Tiger_001_Anim_Tiger_001_idle"), 1, false },
+		{ TEXT("Blue whale"), TEXT("/Game/BlueWhaleAndWhaleCalf/BaseMesh/BlueWhale/SK_blue_whale"), TEXT("/Game/BlueWhaleAndWhaleCalf/Animations/Whale/AS_While_swimming_03"), 6, true },
+		{ TEXT("Whale calf"), TEXT("/Game/BlueWhaleAndWhaleCalf/BaseMesh/BlueWhaleCalf/SK_blue_whale_calf"), TEXT("/Game/BlueWhaleAndWhaleCalf/Animations/WhaleCalf/AS_WhileCalf_swimming_03"), 4, true },
+		{ TEXT("Megalodon"), TEXT("/Game/Shark_Megalodon/Base_mesh/SK_Shark_Megalodon"), TEXT("/Game/Shark_Megalodon/Animations/Anim_Shark_Megalodon_Swim_03_WithoutMoving"), 23, true },
+	};
+	const FCreature& C = Creatures[FMath::Clamp(Which, 0, (int32)UE_ARRAY_COUNT(Creatures) - 1)];
+	auto Path = [](const TCHAR* Package) { const FString P(Package); return P + TEXT(".") + FPaths::GetBaseFilename(P); };
+	USkeletalMesh* CreatureMesh = LoadObject<USkeletalMesh>(nullptr, *Path(C.Mesh));
+	UAnimSequence* Clip = LoadObject<UAnimSequence>(nullptr, *Path(C.Clip));
+	UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+	const std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem ? WorldSystem->GetSampler() : nullptr;
+	if (!CreatureMesh || !Sampler) { Notice = FString::Printf(TEXT("%s is not in the project (its asset pack is missing)."), C.Name); NoticeSeconds = 5.f; return; }
+	const float Scale = C.Scale * FMath::Max(Size, 0.05f);
+	const FBoxSphereBounds Bounds = CreatureMesh->GetBounds();
+	const double Long = FMath::Max3(Bounds.BoxExtent.X, Bounds.BoxExtent.Y, Bounds.BoxExtent.Z) * 2.0 * Scale;
+	// In front of where the player looks, far enough that it does not stand on them; on the ground, or under the
+	// water's surface for the sea's creatures.
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	const FRotator Facing(0, PC ? PC->GetControlRotation().Yaw : GetActorRotation().Yaw, 0);
+	const FVector At = GetActorLocation() + Facing.Vector() * (400.0 + Long * 0.7);
+	const ww::FTerrainSample T = Sampler->Sample(At.X / 100.0, At.Y / 100.0, 2);
+	const bool bWater = T.Water != ww::EWaterKind::None && T.WaterLevel > T.Height;
+	double Z = T.Height * 100.0;
+	// (a sea creature's back lies just under the surface, wherever its mesh keeps its origin; in water too shallow for
+	// it the bed does not lift it out: it is a test, and a giant in a puddle is the tester's affair)
+	if (bWater && C.bSea) Z = T.WaterLevel * 100.0 - (Bounds.Origin.Z + Bounds.BoxExtent.Z * 1.25) * Scale;
+	else if (bWater) Z = T.WaterLevel * 100.0;
+	FActorSpawnParameters Params;
+	Params.ObjectFlags |= RF_Transient;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ASkeletalMeshActor* Creature = GetWorld()->SpawnActor<ASkeletalMeshActor>(FVector(At.X, At.Y, Z), FRotator(0, Facing.Yaw + 90.f, 0), Params);
+	if (!Creature) return;
+	USkeletalMeshComponent* Shown = Creature->GetSkeletalMeshComponent();
+	Shown->SetMobility(EComponentMobility::Movable);
+	Shown->SetSkeletalMesh(CreatureMesh);
+	Shown->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Creature->SetActorScale3D(FVector(Scale));
+	if (Clip)
+	{
+		Shown->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+		Shown->PlayAnimation(Clip, true);
+		// (a giant moves slowly: the time of a movement grows with the root of the size)
+		Shown->SetPlayRate(1.f / FMath::Sqrt(FMath::Max(Scale, 1.f)));
+	}
+	Spawned.Add(Creature);
+	Notice = FString::Printf(TEXT("%s, %.1f m long, put %s (debug)."), C.Name, Long / 100.0, bWater ? TEXT("in the water ahead") : TEXT("on the ground ahead"));
+	NoticeSeconds = 5.f;
+	UE_LOG(LogWayfarer, Display, TEXT("Debug: %s"), *Notice);
 }
 
 void AWwCharacter::UpdateBody(float DeltaSeconds, bool bSprinting)
@@ -530,6 +612,7 @@ void AWwCharacter::UpdateGameplay(float DeltaSeconds, APlayerController* PC, boo
 	if (Sky) Game->SetWeather(Sky->GetWind().DirX, Sky->GetWind().DirZ, Sky->GetWind().Speed, Sky->GetWeather().Precipitation, Sky->GetClock().Season, Sky->GetLatitude());
 	if (!bFly) Game->Tick(Sky ? Sky->GetHoursStep() : 0.0, Sky ? Sky->Hour : 12.0, X, Z, Feet, bSwimming, bSprinting ? 1.0 : 0.0);
 	FString Said;
+	if (const FString Debugged = UpdateDebug(Game); !Debugged.IsEmpty()) Said = Debugged;
 	if (KeyPressed(EKeys::I)) bPackOpen = !bPackOpen;
 	if (KeyPressed(EKeys::C) && !bSwimming && !bFly) bCrouching = !bCrouching;
 	if (!bFly && KeyPressed(EKeys::E)) Said = Game->Use(X, Z, Feet);

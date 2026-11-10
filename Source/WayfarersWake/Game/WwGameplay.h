@@ -38,6 +38,11 @@ public:
 	FString Eat();
 
 	FString NeedsLine() const;
+	/// Debug (the menu's Debug page): items straight into the pack; needs held still; needs put right.
+	FString Give(const FString& Item, int32 Count);
+	FString GiveAll();
+	void SetNeedsRun(bool bRun) { bNeedsRun = bRun; }
+	void Restore() { Needs = wr::FNeeds(); }
 	/// The pack and the recipes, as lines for the screen.
 	TArray<FString> PackLines(double X, double Z);
 	/// Trees felled since the last call (lattice cells): the streamer takes them out of the picture.
@@ -70,6 +75,6 @@ private:
 	double WindX = 0.496, WindZ = 0.868, WindSpeed = 5.5, Rain = 0, Latitude = 45;
 	int Season = 0;
 	TArray<TPair<int64, int64>> Felled;
-	bool bDied = false;
+	bool bDied = false, bNeedsRun = true;
 	FString Error;
 };

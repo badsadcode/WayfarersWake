@@ -7,6 +7,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
+#include "Internationalization/Regex.h"
 
 FWwSettings& FWwSettings::Get()
 {
@@ -87,6 +88,30 @@ FWwSettings::FWwSettings()
 	Add(TEXT("view.hud"), Test, TEXT("Views"), TEXT("Text on screen"), Toggle, 1, TEXT("The lines of text over the picture. Off for clean screenshots."));
 	Add(TEXT("test.dump"), Test, TEXT("Views"), TEXT("Write a debug dump (F9)"), Button, 0, TEXT("A text file of where you are and what the game is doing, with a screenshot, in Saved/Dumps."));
 
+	// ------------------------------------------------------------------ Debug: what the code can do, in the player's hands
+	{
+		const TCHAR* Debug = TEXT("Debug");
+		// (the items the game knows: read from its content file, so a new item appears here by itself)
+		TArray<FString> Items;
+		FString Json;
+		if (FFileHelper::LoadFileToString(Json, *(FPaths::ProjectContentDir() / TEXT("Gameplay/gameplay_items.json"))))
+		{
+			FRegexMatcher Ids(FRegexPattern(TEXT("\"id\"\\s*:\\s*\"([^\"]+)\"")), Json);
+			while (Ids.FindNext()) Items.AddUnique(Ids.GetCaptureGroup(1));
+		}
+		if (Items.Num() == 0) Items.Add(TEXT("stone_axe"));
+		Choice(TEXT("debug.item"), Debug, TEXT("Items"), TEXT("Item"), Items, 0, TEXT("Any item the game knows.")).bSaved = false;
+		Slider(TEXT("debug.amount"), Debug, TEXT("Items"), TEXT("How many"), 1, 50, 1, 5, TEXT(""), TEXT("")).bSaved = false;
+		Add(TEXT("debug.give"), Debug, TEXT("Items"), TEXT("Put them in my pack"), Button, 0, TEXT("No crafting needed."));
+		Add(TEXT("debug.giveall"), Debug, TEXT("Items"), TEXT("One of everything"), Button, 0, TEXT("One of each item into the pack."));
+		Add(TEXT("debug.needs"), Debug, TEXT("Body"), TEXT("Hunger, cold and wet"), Toggle, 1, TEXT("Off: food, warmth, wetness and health stand still while you test.")).bSaved = false;
+		Add(TEXT("debug.heal"), Debug, TEXT("Body"), TEXT("Fed, warm, dry and well"), Button, 0, TEXT("Sets every need to its best."));
+		Choice(TEXT("debug.creature"), Debug, TEXT("Creatures"), TEXT("Creature"), { TEXT("Deer"), TEXT("Dog"), TEXT("Horse"), TEXT("Chicken"), TEXT("Cat"), TEXT("Penguin"), TEXT("Tiger"),
+			TEXT("Blue whale (mystical: 90 m)"), TEXT("Whale calf (30 m)"), TEXT("Megalodon (mystical: 35 m)") }, 0, TEXT("From the asset packs. They stand or swim in place for now: no minds yet.")).bSaved = false;
+		Slider(TEXT("debug.size"), Debug, TEXT("Creatures"), TEXT("Size"), 0.1, 5, 0.1, 1, TEXT("x"), TEXT("Times the size given above. The sea creatures are already giants at 1.")).bSaved = false;
+		Add(TEXT("debug.spawn"), Debug, TEXT("Creatures"), TEXT("Put one in front of me"), Button, 0, TEXT("On the ground, or in the water if that is where you look. Sea creatures want deep water."));
+		Add(TEXT("debug.clear"), Debug, TEXT("Creatures"), TEXT("Take them all away"), Button, 0, TEXT(""));
+	}
 	// ------------------------------------------------------------------ Sound (defaults: Tom's Thornwake settings)
 	Add(TEXT("sound.on"), Sound, TEXT("Volume"), TEXT("Sound"), Toggle, 1, TEXT("All sound on or off."));
 	Slider(TEXT("sound.master"), Sound, TEXT("Volume"), TEXT("Everything"), 0, 2, 0.05, 1.2, TEXT(""), TEXT("The overall volume.")).Needs = TEXT("sound.on");

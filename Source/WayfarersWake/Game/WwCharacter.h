@@ -52,6 +52,11 @@ private:
 	void TryPlace();
 	/// The body (one of Tom's base bodies, rigged: Content/Characters) and which of its animations plays.
 	void LoadBody();
+	/// The menu's Debug page: items, needs, creatures.
+	FString UpdateDebug(class FWwGameplay* Game);
+	void SpawnCreature(int32 Which, float Size);
+	UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Spawned;
+	int32 GiveSeen = -1, GiveAllSeen = -1, HealSeen = -1, SpawnSeen = -1, ClearSeen = -1;
 	void UpdateBody(float DeltaSeconds, bool bSprinting);
 	enum class EPose : uint8 { None, Idle, Walk, Run, Swim, Attack, Crouch, Climb };
 	UPROPERTY(Transient) TArray<TObjectPtr<class UAnimSequence>> Clips;

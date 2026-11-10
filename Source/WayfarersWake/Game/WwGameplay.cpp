@@ -85,7 +85,7 @@ void FWwGameplay::Tick(double GameHours, double HourOfDay, double X, double Z, d
 	Body.bSwimming = bSwimming;
 	Body.Fire = wr::FGameRules::FireWarmth(*Catalog, Rules->Objects, X, Z);
 	Body.Effort = Effort;
-	Needs.Step(GameHours, Body);
+	if (bNeedsRun) Needs.Step(GameHours, Body);
 	if (Needs.Health <= 0)
 	{
 		Rules->Die(Player, X, Z);
@@ -169,6 +169,23 @@ FString FWwGameplay::Eat()
 }
 
 bool FWwGameplay::TakeObjectsChanged() { return IsValid() && !Rules->Objects.TakeChanged().empty(); }
+
+FString FWwGameplay::Give(const FString& Item, int32 Count)
+{
+	if (!IsValid()) return FString();
+	const std::string Id = TCHAR_TO_UTF8(*Item);
+	const auto Found = Catalog->Items.find(Id);
+	if (Found == Catalog->Items.end()) return FString::Printf(TEXT("There is no item called %s."), *Item);
+	Rules->Inventory(Player).Add(Id, Count);
+	return FString::Printf(TEXT("Picked up %d x %s (debug)."), Count, *WwText(Found->second.Name));
+}
+
+FString FWwGameplay::GiveAll()
+{
+	if (!IsValid()) return FString();
+	for (const auto& Entry : Catalog->Items) Rules->Inventory(Player).Add(Entry.first, 1);
+	return FString::Printf(TEXT("Picked up one of each of %d items (debug)."), (int32)Catalog->Items.size());
+}
 
 FString FWwGameplay::NeedsLine() const { return IsValid() ? WwText(Needs.Describe()) : FString(); }
 
