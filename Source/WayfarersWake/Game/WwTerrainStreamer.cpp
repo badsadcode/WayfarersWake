@@ -42,6 +42,8 @@ void AWwTerrainStreamer::ClearAll()
 		if (Slot.Leaves) Slot.Leaves->DestroyComponent();
 	}
 	PlantsShown = 0;
+	for (auto& Shown : FallsShown) if (Shown.Value) Shown.Value->DestroyComponent();
+	FallsShown.Empty(); FallsBuilding.Empty();
 	for (UInstancedStaticMeshComponent* Component : TreeComponents) if (Component) Component->DestroyComponent();
 	Tiles.Empty(); Pending.Empty(); Desired.Empty(); Slots.Empty(); Free.Empty(); TreeComponents.Empty(); TreeLookup.Empty();
 	TreesShown = 0;
@@ -57,7 +59,7 @@ static FColor Bytes(double R, double G, double B, double A)
 	return FColor(Q(R), Q(G), Q(B), Q(A));
 }
 
-TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass)
+TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass, const ww::FFallSet* Falls)
 {
 	const double Started = FPlatformTime::Seconds();
 	TSharedPtr<FWwTileData> Data = MakeShared<FWwTileData>();
@@ -228,7 +230,7 @@ TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler&
 		for (int32 j = 0; j < Side; j++)
 			for (int32 i = 0; i < Side; i++) { SheetSamples[j * Side + i] = At(i, j); Heights[j * Side + i] = At(i, j).Height; }
 		ww::FWaterSheet Sheet;
-		Sheet.Build(SheetSamples.GetData(), Heights.GetData(), Side, Spacing, Sea, *Plan.Hydrology, X0, Z0);
+		Sheet.Build(SheetSamples.GetData(), Heights.GetData(), Side, Spacing, Sea, *Plan.Hydrology, X0, Z0, Falls);
 		if (Sheet.bAny && !Sheet.Indices.empty())
 		{
 			Data->WaterVertices.Reserve(VertexCount); Data->WaterNormals.Reserve(VertexCount); Data->WaterColors.Reserve(VertexCount);
@@ -323,9 +325,9 @@ void AWwTerrainStreamer::LaunchJobs(const TArray<FVector2D>& Viewers)
 		Pending.Add(Key);
 		Shared->InFlight++;
 		UE::Tasks::Launch(UE_SOURCE_LOCATION, [State = Shared, World = Sampler, Key, Base = BaseTile, CellCount = Key.Level == 0 ? Cells * 2 : Cells, Serial = WorldSerial,
-			bTrees = Key.Level < TreeLevels && TreeModels.Num() > 0, Grass = PlantMesh ? GrassAmount : 0.0]()
+			bTrees = Key.Level < TreeLevels && TreeModels.Num() > 0, Grass = PlantMesh ? GrassAmount : 0.0, FallSet = Falls]()
 		{
-			TSharedPtr<FWwTileData> Data = BuildTile(*World, Key, Base, CellCount, bTrees, Grass);
+			TSharedPtr<FWwTileData> Data = BuildTile(*World, Key, Base, CellCount, bTrees, Grass, FallSet.get());
 			Data->WorldSerial = Serial;
 			State->Done.Enqueue(Data);
 			State->InFlight--;
@@ -563,12 +565,16 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 		ClearAll();
 		WorldSerial = WorldSystem->GetWorldSerial();
 		Sampler = WorldSystem->GetSampler();
+		Falls = std::make_shared<ww::FFallSet>(*Sampler->Plan->Hydrology);
+		UE_LOG(LogWayfarer, Display, TEXT("Waterfalls in this world: %d"), (int32)Falls->All().size());
 		WorldHalf = Sampler->Plan->Profile().WorldSize * 0.5;
 		if (!TerrainMaterial) TerrainMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwTerrain.M_WwTerrain"));
 		if (!WaterMaterial) WaterMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwWater.M_WwWater"));
 		if (!TerrainMaterial) { TerrainMaterial = UMaterial::GetDefaultMaterial(MD_Surface); UE_LOG(LogWayfarer, Warning, TEXT("M_WwTerrain missing: run Tools/CreateAssets.cmd")); }
 		if (!WaterMaterial) WaterMaterial = TerrainMaterial;
 		LoadTreeMeshes();
+		if (!FallMaterial) FallMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwWaterfall.M_WwWaterfall"));
+		if (!FallFoamMaterial) FallFoamMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwWaterfallFoam.M_WwWaterfallFoam"));
 		if (!PlantMesh)
 		{
 			PlantMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Plants/SM_WwPlantUpright.SM_WwPlantUpright"));
@@ -605,6 +611,7 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 	MaxCommitMs = FMath::Max(MaxCommitMs, (FPlatformTime::Seconds() - Started) * 1000.0);
 	if (bChanged || bMoved) ResolveVisibility();
 	LaunchJobs(Viewers);
+	UpdateWaterfalls(Viewers, bMoved || bChanged);
 }
 
 bool AWwTerrainStreamer::IsGroundReady(const FVector& Location) const
@@ -612,4 +619,80 @@ bool AWwTerrainStreamer::IsGroundReady(const FVector& Location) const
 	const FWwTileKey Key{ 0, (int64)FMath::FloorToDouble(Location.X / 100.0 / BaseTile), (int64)FMath::FloorToDouble(Location.Y / 100.0 / BaseTile) };
 	const FTile* Tile = Tiles.Find(Key);
 	return Tile && Tile->bVisible;
+}
+
+// ---------------------------------------------------------------------------------------------------- waterfalls
+void AWwTerrainStreamer::UpdateWaterfalls(const TArray<FVector2D>& Viewers, bool bMoved)
+{
+	if (!Falls || !FallMaterial) return;
+	const double DrawRange = 4000; // (Thornwake's)
+	const std::vector<ww::FFall>& All = Falls->All();
+	auto Near = [&](const ww::FFall& F, double Range)
+	{
+		for (const FVector2D& V : Viewers) if (FMath::Abs(F.LipX - V.X) < Range && FMath::Abs(F.LipZ - V.Y) < Range) return true;
+		return false;
+	};
+	if (bMoved || FallsBuilding.Num() > 0)
+	{
+		for (auto It = FallsShown.CreateIterator(); It; ++It)
+			if (!Near(All[It.Key()], DrawRange * 1.1)) { if (It.Value()) It.Value()->DestroyComponent(); It.RemoveCurrent(); }
+		// Built on worker threads, at most four at a time.
+		for (int32 Index = 0; Index < (int32)All.size() && FallsBuilding.Num() < 4; Index++)
+		{
+			if (!Near(All[Index], DrawRange) || FallsShown.Contains(Index) || FallsBuilding.Contains(Index)) continue;
+			FallsBuilding.Add(Index);
+			UE::Tasks::Launch(UE_SOURCE_LOCATION, [State = Shared, World = Sampler, Set = Falls, Index]()
+			{
+				TSharedPtr<ww::FFallModel> Model = MakeShared<ww::FFallModel>(ww::FFallModel::Build(*World, Set->All()[Index]));
+				State->FallsDone.Enqueue(TPair<int32, TSharedPtr<ww::FFallModel>>(Index, Model));
+			}, UE::Tasks::ETaskPriority::BackgroundNormal);
+		}
+	}
+	TPair<int32, TSharedPtr<ww::FFallModel>> Done;
+	if (!Shared->FallsDone.Dequeue(Done)) return; // (one a frame)
+	FallsBuilding.Remove(Done.Key);
+	if (Done.Key >= (int32)All.size() || FallsShown.Contains(Done.Key) || !Near(All[Done.Key], DrawRange * 1.1)) return;
+	const ww::FFall& Fall = All[Done.Key];
+	UProceduralMeshComponent* Mesh = NewObject<UProceduralMeshComponent>(this);
+	Mesh->SetMobility(EComponentMobility::Movable);
+	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Mesh->SetCanEverAffectNavigation(false);
+	Mesh->SetCastShadow(false);
+	Mesh->SetTranslucentSortPriority(2); // (drawn after the water: it is see-through too)
+	Mesh->SetupAttachment(RootComponent);
+	Mesh->RegisterComponent();
+	Mesh->SetWorldLocation(FVector(Fall.LipX * 100.0, Fall.LipZ * 100.0, 0.0));
+	static const TArray<FVector2D> NoUvs;
+	static const TArray<FProcMeshTangent> NoTangents;
+	auto Section = [&](int32 Id, const std::vector<ww::FFallModel::FVertex>& Vertices, const std::vector<int>& Indices, UMaterialInterface* Material)
+	{
+		if (Vertices.empty() || Indices.empty()) return;
+		TArray<FVector> Positions, Normals; TArray<FVector2D> Uv0, Uv1; TArray<FColor> Colours; TArray<int32> Triangles;
+		Positions.Reserve((int32)Vertices.size()); Uv0.Reserve((int32)Vertices.size()); Uv1.Reserve((int32)Vertices.size()); Colours.Reserve((int32)Vertices.size());
+		for (const ww::FFallModel::FVertex& V : Vertices)
+		{
+			Positions.Add(FVector(V.X * 100.0, V.Z * 100.0, V.Y * 100.0));
+			Uv0.Add(FVector2D(V.U, V.V)); Uv1.Add(FVector2D(V.Travel, 0));
+			Colours.Add(Bytes(V.Speed, V.Foot, V.OnRock, V.Edge));
+		}
+		Normals.SetNumZeroed(Positions.Num());
+		Triangles.Reserve((int32)Indices.size());
+		for (size_t T = 0; T + 2 < Indices.size(); T += 3)
+		{
+			const int32 A = Indices[T], B = Indices[T + 1], C = Indices[T + 2];
+			Triangles.Append({ A, B, C });
+			// (the face normal by Thornwake's winding, in its axes: x, up, z; written back in Unreal's)
+			const ww::FFallModel::FVertex& Va = Vertices[A]; const ww::FFallModel::FVertex& Vb = Vertices[B]; const ww::FFallModel::FVertex& Vc = Vertices[C];
+			const FVector E1(Vb.X - Va.X, Vb.Y - Va.Y, Vb.Z - Va.Z), E2(Vc.X - Va.X, Vc.Y - Va.Y, Vc.Z - Va.Z);
+			const FVector N = FVector::CrossProduct(E1, E2);
+			const FVector Unreal(N.X, N.Z, N.Y);
+			Normals[A] += Unreal; Normals[B] += Unreal; Normals[C] += Unreal;
+		}
+		for (FVector& N : Normals) N = N.SizeSquared() > 1e-12 ? N.GetSafeNormal() : FVector::UpVector;
+		Mesh->CreateMeshSection(Id, Positions, Triangles, Normals, Uv0, Uv1, NoUvs, NoUvs, Colours, NoTangents, false);
+		Mesh->SetMaterial(Id, Material);
+	};
+	Section(0, Done.Value->Curtain, Done.Value->CurtainIndices, FallMaterial);
+	Section(1, Done.Value->Foam, Done.Value->FoamIndices, FallFoamMaterial ? FallFoamMaterial.Get() : FallMaterial.Get());
+	FallsShown.Add(Done.Key, Mesh);
 }

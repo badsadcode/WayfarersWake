@@ -199,5 +199,74 @@ def water(mat):
     mel.connect_material_property(part('Surface', False, False, True, 500), '', unreal.MaterialProperty.MP_SPECULAR)
 
 
+def waterfall(foam_disc):
+    """Falling water (Tools/WwWaterfall.hlsl): the curtain, or the white water on the pool at its foot."""
+    def build(mat):
+        mat.set_editor_property('blend_mode', unreal.BlendMode.BLEND_TRANSLUCENT)
+        mat.set_editor_property('translucency_lighting_mode', unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
+        mat.set_editor_property('two_sided', True)
+        with open(os.path.join(HERE, 'WwWaterfall.hlsl'), 'r') as f:
+            code = f.read().replace('#if FOAM_DISC', '#if %d' % (1 if foam_disc else 0))
+        node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
+        node.set_editor_property('description', 'WwWaterfall')
+        node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT4)
+        inputs = []
+        for name in ['Uv', 'Travel', 'Col', 'ColA', 'T']:
+            i = unreal.CustomInput()
+            i.set_editor_property('input_name', name)
+            inputs.append(i)
+        node.set_editor_property('inputs', inputs)
+        rough = unreal.CustomOutput()
+        rough.set_editor_property('output_name', 'Rough')
+        rough.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT1)
+        node.set_editor_property('additional_outputs', [rough])
+        node.set_editor_property('code', code)
+
+        def expr(kind, y, **props):
+            e = mel.create_material_expression(mat, kind, -1000, y)
+            for key, value in props.items():
+                e.set_editor_property(key, value)
+            return e
+
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionTextureCoordinate, 0, coordinate_index=0), '', node, 'Uv')
+        travel = expr(unreal.MaterialExpressionComponentMask, 100, r=True, g=False, b=False, a=False)
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionTextureCoordinate, 150, coordinate_index=1), '', travel, '')
+        mel.connect_material_expressions(travel, '', node, 'Travel')
+        colour = expr(unreal.MaterialExpressionVertexColor, 250)
+        mel.connect_material_expressions(colour, '', node, 'Col')
+        mel.connect_material_expressions(colour, 'A', node, 'ColA')
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionTime, 350), '', node, 'T')
+        rgb = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -150, 0)
+        alpha = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -150, 150)
+        for mask, flags in ((rgb, (True, True, True, False)), (alpha, (False, False, False, True))):
+            for key, value in zip(('r', 'g', 'b', 'a'), flags):
+                mask.set_editor_property(key, value)
+            mel.connect_material_expressions(node, '', mask, '')
+        mel.connect_material_property(rgb, '', unreal.MaterialProperty.MP_BASE_COLOR)
+        mel.connect_material_property(alpha, '', unreal.MaterialProperty.MP_OPACITY)
+        mel.connect_material_property(node, 'Rough', unreal.MaterialProperty.MP_ROUGHNESS)
+        mel.connect_material_property(constant(mat, 0.5, -150, 300), '', unreal.MaterialProperty.MP_SPECULAR)
+        # A little of its own light (Thornwake: emission 5 % and light through white water; in a cliff's shade it was a blue strip).
+        glow = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -150, 450)
+        glow.set_editor_property('const_b', 0.05)
+        mel.connect_material_expressions(rgb, '', glow, 'A')
+        mel.connect_material_property(glow, '', unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+        # Pulled toward the camera a little, more with distance: far away the terrain's coarser mesh across a steep wall
+        # stands metres above the falling water and buried it.
+        pull = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 700)
+        pull.set_editor_property('description', 'WwWaterfallPull')
+        pull.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+        rel = unreal.CustomInput()
+        rel.set_editor_property('input_name', 'Rel')
+        pull.set_editor_property('inputs', [rel])
+        pull.set_editor_property('code', 'float d = length(Rel); float bias = (%s) * 100.0; return -normalize(Rel) * min(bias, d * 0.5);'
+                                 % ('0.3 + 0.004 * d / 100.0' if foam_disc else '0.6 + 0.012 * d / 100.0'))
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionWorldPosition, 700, world_position_shader_offset=unreal.WorldPositionIncludedOffsets.WPT_CAMERA_RELATIVE), '', pull, 'Rel')
+        mel.connect_material_property(pull, '', unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+    return build
+
+
+make('M_WwWaterfall', waterfall(False))
+make('M_WwWaterfallFoam', waterfall(True))
 make('M_WwTerrain', terrain)
 make('M_WwWater', water)

@@ -283,8 +283,8 @@ void AWwCharacter::DebugDump()
 		CameraAt.X / 100, CameraAt.Y / 100, CameraAt.Z / 100);
 	if (Sky) Out += Sky->DebugInfo() + TEXT("\n");
 	if (Streamer)
-		Out += FString::Printf(TEXT("Terrain: %d tiles (%d wanted, %d missing, %d building), %d trees and %d plants shown, tile build %.2f ms average\n"), Streamer->GetTileCount(), Streamer->GetDesiredCount(),
-			Streamer->GetMissingCount(), Streamer->GetPendingCount(), Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetAverageBuildMs());
+		Out += FString::Printf(TEXT("Terrain: %d tiles (%d wanted, %d missing, %d building), %d trees, %d plants and %d waterfalls shown, tile build %.2f ms average\n"), Streamer->GetTileCount(), Streamer->GetDesiredCount(),
+			Streamer->GetMissingCount(), Streamer->GetPendingCount(), Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetFallCount(), Streamer->GetAverageBuildMs());
 	Out += FString::Printf(TEXT("Memory: %.0f MB\n"), FPlatformMemory::GetStats().UsedPhysical / 1048576.0);
 	Out += FString::Printf(TEXT("Command line: %s\n\n"), FCommandLine::Get());
 	// The same scene again (for the developer's screenshot runs).

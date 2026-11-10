@@ -3,7 +3,7 @@
 // neighbours' level (so the shoreline is where the sheet meets the ground, not a row of squares), the sea reaching
 // ~14 m under the beach. Per vertex: depth, the kind of water, how much river water is in it (plume), an edge fade,
 // and the current. Engine-free and thread-safe.
-// Not ported: the cut-outs at waterfall faces (FallSet), dug ground and the local water simulation, shore data for
+// Not ported: dug ground and the local water simulation, shore data for
 // sea waves, obstacle wakes.
 #pragma once
 
@@ -27,6 +27,8 @@ struct FWaterSheet
 	std::vector<int> Indices;    // triangles (a, b, c / b, d, c per square), vertex = j * Side + i
 
 	/// Samples and Heights: Side x Side, row by row. X0, Z0: the tile's corner in the world.
-	void Build(const FTerrainSample* Samples, const double* Heights, int Side, double Spacing, double SeaLevel, const FHydrology& Rivers, double X0, double Z0);
+	/// Falls: where given, a waterfall's face is left to the falling water (the sheet fades out and is cut there).
+	void Build(const FTerrainSample* Samples, const double* Heights, int Side, double Spacing, double SeaLevel, const FHydrology& Rivers, double X0, double Z0,
+		const class FFallSet* Falls = nullptr);
 };
 }

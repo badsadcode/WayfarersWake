@@ -52,3 +52,10 @@
 * At the two Godot dump places (river shore, waterfall lip) the picture now agrees in kind: white streaks down fast water, pale turquoise between them, a soft waterline. Mine is paler and more opaque.
 * Frame rate unchanged by the new water (89-90 fps at the shore scene with all plants).
 * Not done: the sea's waves, falling water, spray, standing waves, rocks in the current, caustics.
+
+## 2026-11-10, session 1 (continued): waterfalls
+
+* Ported `Waterfalls.cs`: the fall set, the cut-outs in the river sheet, the curtain mesh (free fall or sliding on rock, with depth) and the foam disc; `WaterFall.gdshader` as two materials. 275 falls in the 512 km test world.
+* It looked right on the first launch: from above the lip the picture agrees with Tom's Godot dump of the same place; from below it is a wide streaked curtain with white water at its foot.
+* One build hung for over ten minutes: four compiler processes sat idle under the build accelerator. Killing them made the build tool retry without it, and that passed. Not a code fault; if it happens again, kill `cl.exe`.
+* Not done: spray and mist, the curtain's relief and back-light.

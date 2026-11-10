@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "Containers/Queue.h"
 #include "WorldGen/WwWorld.h"
+#include "WorldGen/WwWaterfalls.h"
 #include "InstanceDataTypes.h"
 #include <atomic>
 #include "WwTerrainStreamer.generated.h"
@@ -117,7 +118,9 @@ public:
 	double GetMaxCommitMs() const { return MaxCommitMs; }
 	void ResetStats() { MaxCommitMs = 0; }
 
-	static TSharedPtr<FWwTileData> BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass);
+	static TSharedPtr<FWwTileData> BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass,
+		const ww::FFallSet* Falls = nullptr);
+	int32 GetFallCount() const { return FallsShown.Num(); }
 
 private:
 	struct FTreeBatch { int32 Component; TArray<FPrimitiveInstanceId> Ids; };
@@ -133,6 +136,7 @@ private:
 	{
 		TQueue<TSharedPtr<FWwTileData>, EQueueMode::Mpsc> Done;
 		std::atomic<int32> InFlight{ 0 };
+		TQueue<TPair<int32, TSharedPtr<ww::FFallModel>>, EQueueMode::Mpsc> FallsDone;
 	};
 
 	void ClearAll();
@@ -145,11 +149,16 @@ private:
 	void Release(FTile& Tile);
 	void ShowTile(const FWwTileKey& Key, FTile& Tile);
 	void LoadTreeMeshes();
+	void UpdateWaterfalls(const TArray<FVector2D>& Viewers, bool bMoved);
 	void SetPlants(TObjectPtr<UInstancedStaticMeshComponent>& Component, UStaticMesh* Mesh, const TArray<FTransform>& Transforms, const TArray<float>& Data, const FVector& Origin);
 	double TileSize(int32 Level) const { return BaseTile * (double)((int64)1 << Level); }
 
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> TerrainMaterial;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> WaterMaterial;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> FallMaterial;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> FallFoamMaterial;
+	/// Falling water of the waterfalls within a few kilometres (by index into the fall set).
+	UPROPERTY(Transient) TMap<int32, TObjectPtr<UProceduralMeshComponent>> FallsShown;
 	UPROPERTY(Transient) TArray<FWwTileSlot> Slots;
 	UPROPERTY(Transient) TArray<TObjectPtr<UStaticMesh>> TreeMeshes;
 	UPROPERTY(Transient) TObjectPtr<UStaticMesh> PlantMesh;
@@ -161,6 +170,8 @@ private:
 	TArray<FTreeModel> TreeModels;
 	TMap<FTreeKey, int32> TreeLookup;
 	int32 TreesShown = 0, PlantsShown = 0;
+	std::shared_ptr<ww::FFallSet> Falls;
+	TSet<int32> FallsBuilding;
 	bool bPlantShadows = true;
 
 	TMap<FWwTileKey, FTile> Tiles;

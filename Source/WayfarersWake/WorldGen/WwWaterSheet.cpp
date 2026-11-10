@@ -1,5 +1,6 @@
 // Port of Thornwake Game/Rewrite/TileBuilder.cs: BuildWater, Flow, ReachFlow (river water, D287).
 #include "WwWaterSheet.h"
+#include "WwWaterfalls.h"
 #include <unordered_map>
 
 namespace ww
@@ -72,7 +73,7 @@ bool ReachFlow(const FHydrology& rivers, int reachId, double x, double z, std::u
 }
 }
 
-void FWaterSheet::Build(const FTerrainSample* samples, const double* heights, int n, double spacing, double sea, const FHydrology& rivers, double x0, double z0)
+void FWaterSheet::Build(const FTerrainSample* samples, const double* heights, int n, double spacing, double sea, const FHydrology& rivers, double x0, double z0, const FFallSet* falls)
 {
 	int count = n * n;
 	std::vector<char> wet(count);
@@ -148,11 +149,31 @@ void FWaterSheet::Build(const FTerrainSample* samples, const double* heights, in
 			Edge[k] = wet[k] ? 1 : under[k] != Never ? Mx(0, 1 - under[k] / 3.f) : kind < .5f ? 0.f : 1.f;
 		}
 	auto Covered = [&](int k) { return wet[k] || under[k] != Never; };
+	// A waterfall's face is left to the falling water: the sheet ran straight from the lip to the pool. Its vertices there
+	// turn transparent (the sheet fades out across the last square); squares wholly on the face are dropped.
+	std::vector<char> onFace(count, 0);
+	if (falls)
+		for (int j = 0; j < n; j++)
+			for (int i = 0; i < n; i++)
+			{
+				int k = j * n + i;
+				if (!Covered(k)) continue;
+				double y = Level[k];
+				if (falls->OnFace(x0 + i * spacing, z0 + j * spacing, y, y)) { onFace[k] = 1; Edge[k] = 0; }
+			}
 	for (int j = 0; j < n - 1; j++)
 		for (int i = 0; i < n - 1; i++)
 		{
 			int a = j * n + i, b = a + 1, c = a + n, d = c + 1;
 			if (!(Covered(a) || Covered(b) || Covered(c) || Covered(d))) continue;
+			if (onFace[a] && onFace[b] && onFace[c] && onFace[d]) continue;
+			if (falls)
+			{
+				// (a square spanning from the lip's level down to a plunge pool's stood as a wall of water at the rock face)
+				float low = 1e30f, high = -1e30f;
+				for (int k : { a, b, c, d }) if (Covered(k)) { if (Level[k] < low) low = Level[k]; if (Level[k] > high) high = Level[k]; }
+				if (high - low > 1.5 && falls->OnFace(x0 + (i + .5) * spacing, z0 + (j + .5) * spacing, low, high)) continue;
+			}
 			Indices.insert(Indices.end(), { a, b, c, b, d, c });
 		}
 
