@@ -4,6 +4,8 @@
 #include "Game/WwGame.h"
 #include "WorldGen/WwVegetation.h"
 #include "Engine/Engine.h"
+#include "Engine/OverlapResult.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMemory.h"
@@ -285,6 +287,14 @@ void AWwCharacter::DebugDump()
 	if (Streamer)
 		Out += FString::Printf(TEXT("Terrain: %d tiles (%d wanted, %d missing, %d building), %d trees, %d plants, %d waterfalls and %d spray puffs shown, tile build %.2f ms average\n"), Streamer->GetTileCount(), Streamer->GetDesiredCount(),
 			Streamer->GetMissingCount(), Streamer->GetPendingCount(), Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetFallCount(), Streamer->GetPuffCount(), Streamer->GetAverageBuildMs());
+	{
+		// Solid things near by (tree trunks, rocks, bushes, stumps, logs): what the player bumps into besides the ground.
+		TArray<FOverlapResult> Hits;
+		GetWorld()->OverlapMultiByChannel(Hits, Here, FQuat::Identity, ECC_WorldStatic, FCollisionShape::MakeSphere(3000.f), FCollisionQueryParams(FName(TEXT("WwDump")), false, this));
+		int32 Solid = 0;
+		for (const FOverlapResult& Hit : Hits) if (Cast<UInstancedStaticMeshComponent>(Hit.GetComponent())) Solid++;
+		Out += FString::Printf(TEXT("Solid objects within 30 m: %d\n"), Solid);
+	}
 	Out += FString::Printf(TEXT("Memory: %.0f MB\n"), FPlatformMemory::GetStats().UsedPhysical / 1048576.0);
 	Out += FString::Printf(TEXT("Command line: %s\n\n"), FCommandLine::Get());
 	// The same scene again (for the developer's screenshot runs).

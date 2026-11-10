@@ -136,8 +136,9 @@ private:
 	struct FTreeKey
 	{
 		int64 X, Y; int32 Mesh;
-		bool operator==(const FTreeKey& O) const { return X == O.X && Y == O.Y && Mesh == O.Mesh; }
-		friend uint32 GetTypeHash(const FTreeKey& K) { return HashCombine(HashCombine(::GetTypeHash(K.X), ::GetTypeHash(K.Y)), ::GetTypeHash(K.Mesh)); }
+		bool bSolid = false; // (instances of the nearest tiles stand in a component with collision)
+		bool operator==(const FTreeKey& O) const { return X == O.X && Y == O.Y && Mesh == O.Mesh && bSolid == O.bSolid; }
+		friend uint32 GetTypeHash(const FTreeKey& K) { return HashCombine(HashCombine(::GetTypeHash(K.X), ::GetTypeHash(K.Y)), ::GetTypeHash(K.Mesh * 2 + (K.bSolid ? 1 : 0))); }
 	};
 	struct FShared
 	{
@@ -184,6 +185,8 @@ private:
 	int32 TreesShown = 0, PlantsShown = 0, RocksShown = 0;
 	/// Rock and prop meshes (built in code) follow the tree meshes in TreeMeshes.
 	int32 RockMeshFirst = -1, PropMeshFirst = -1;
+	/// An unseen cylinder for tree trunks (collision only), after the rock and prop meshes.
+	int32 TrunkMesh = -1;
 	std::shared_ptr<ww::FFallSet> Falls;
 	/// Spray and mist of the falls shown (by fall index), drawn as one set of camera-facing instances.
 	TMap<int32, FWwFallSpray> FallSpray;

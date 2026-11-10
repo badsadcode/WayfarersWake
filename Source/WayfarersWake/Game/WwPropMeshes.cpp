@@ -4,7 +4,7 @@
 #include "MeshDescription.h"
 #include "StaticMeshAttributes.h"
 
-UStaticMesh* WwBuildStaticMesh(UObject* Outer, const ww::FSoup& Shape, UMaterialInterface* Material, const TCHAR* Name)
+UStaticMesh* WwBuildStaticMesh(UObject* Outer, const ww::FSoup& Shape, UMaterialInterface* Material, const TCHAR* Name, bool bSolid)
 {
 	FMeshDescription Description;
 	FStaticMeshAttributes Attributes(Description);
@@ -35,7 +35,7 @@ UStaticMesh* WwBuildStaticMesh(UObject* Outer, const ww::FSoup& Shape, UMaterial
 	UStaticMesh* Mesh = NewObject<UStaticMesh>(Outer, Name, RF_Transient);
 	Mesh->GetStaticMaterials().Add(FStaticMaterial(Material, FName(TEXT("Surface"))));
 	UStaticMesh::FBuildMeshDescriptionsParams Params;
-	Params.bBuildSimpleCollision = false;
+	Params.bBuildSimpleCollision = bSolid;
 	Params.bFastBuild = true;
 	Params.bAllowCpuAccess = false;
 	Mesh->BuildFromMeshDescriptions({ &Description }, Params);

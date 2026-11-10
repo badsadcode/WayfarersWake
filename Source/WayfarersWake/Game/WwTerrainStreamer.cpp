@@ -512,7 +512,10 @@ void AWwTerrainStreamer::ShowTile(const FWwTileKey& Key, FTile& Tile)
 		const int64 Rx = (int64)FMath::FloorToDouble(At.X / Region), Ry = (int64)FMath::FloorToDouble(At.Y / Region);
 		FTransform Local = S.Transform;
 		Local.SetLocation(At - FVector(Rx * Region, Ry * Region, 0.0));
-		const FTreeKey GroupKey{ Rx, Ry, Mesh };
+		// (solid on the nearest tiles, as in Thornwake: rocks, boulders, cliff blocks, bushes, stumps and logs; small stones
+		// stay passable; the rock kit's formations have no collision yet)
+		const bool bSolid = Key.Level == 0 && S.Mesh != ww::FRocks::Stone && (S.Mesh >= 100 || S.Mesh < ww::FRocks::Formation);
+		const FTreeKey GroupKey{ Rx, Ry, Mesh, bSolid };
 		Groups.FindOrAdd(GroupKey).Add(Local);
 		GroupData.FindOrAdd(GroupKey).Append({ S.Data.R, S.Data.G, S.Data.B, S.Data.A });
 	}
@@ -525,6 +528,13 @@ void AWwTerrainStreamer::ShowTile(const FWwTileKey& Key, FTile& Tile)
 		const int64 Rx = (int64)FMath::FloorToDouble(T.Position.X / Region), Ry = (int64)FMath::FloorToDouble(T.Position.Y / Region);
 		const FTransform Local(FRotator(0.0, FMath::RadiansToDegrees(T.Yaw), 0.0), T.Position - FVector(Rx * Region, Ry * Region, 0.0), FVector(T.Scale));
 		for (int32 Part = 0; Part < Parts.Count; Part++) Groups.FindOrAdd(FTreeKey{ Rx, Ry, Parts.First + Part }).Add(Local);
+		// Trunks are solid near the player: a cylinder 4 m tall of the species' trunk radius (Thornwake's ObjectCollision).
+		static const float Trunk[] = { .28f, .28f, .26f, .32f, .3f, .45f, .42f, .4f, .2f, .2f, .18f, .32f, .28f, .4f, .16f, .18f, .18f };
+		if (Key.Level == 0 && TrunkMesh >= 0 && T.Species < UE_ARRAY_COUNT(Trunk))
+		{
+			const double Radius = Trunk[T.Species] * T.Scale; // (the engine's cylinder is 1 m across and 1 m tall)
+			Groups.FindOrAdd(FTreeKey{ Rx, Ry, TrunkMesh, true }).Add(FTransform(FQuat::Identity, Local.GetLocation() + FVector(0, 0, 200.0), FVector(Radius * 2, Radius * 2, 4.0)));
+		}
 	}
 	TreesShown += Tile.Trees.Num();
 	for (auto& Group : Groups)
@@ -535,9 +545,11 @@ void AWwTerrainStreamer::ShowTile(const FWwTileKey& Key, FTile& Tile)
 			UInstancedStaticMeshComponent* Component = NewObject<UInstancedStaticMeshComponent>(this);
 			Component->SetStaticMesh(TreeMeshes[Group.Key.Mesh]);
 			Component->SetMobility(EComponentMobility::Movable);
-			Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			if (Group.Key.bSolid) { Component->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics); Component->SetCollisionProfileName(TEXT("BlockAll")); }
+			else Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			if (Group.Key.Mesh == TrunkMesh) { Component->SetVisibility(false); Component->SetCastShadow(false); }
 			Component->SetCanEverAffectNavigation(false);
-			if (RockMeshFirst >= 0 && Group.Key.Mesh >= RockMeshFirst) Component->SetNumCustomDataFloats(4); // (rock colour and look)
+			if (RockMeshFirst >= 0 && Group.Key.Mesh >= RockMeshFirst && Group.Key.Mesh != TrunkMesh) Component->SetNumCustomDataFloats(4); // (rock colour and look)
 			Component->SetupAttachment(RootComponent);
 			Component->RegisterComponent();
 			Component->SetWorldLocation(FVector(Group.Key.X * Region, Group.Key.Y * Region, 0.0));
@@ -546,7 +558,7 @@ void AWwTerrainStreamer::ShowTile(const FWwTileKey& Key, FTile& Tile)
 		FTreeBatch Batch;
 		Batch.Component = *Found;
 		Batch.Ids = TreeComponents[*Found]->AddInstancesById(Group.Value, false, false);
-		if (const TArray<float>* Numbers = GroupData.Find(Group.Key)) TreeComponents[*Found]->SetCustomDataById(Batch.Ids, *Numbers);
+		if (const TArray<float>* Numbers = GroupData.Find(Group.Key)) if (Numbers->Num() == Batch.Ids.Num() * 4) TreeComponents[*Found]->SetCustomDataById(Batch.Ids, *Numbers);
 		Tile.Batches.Add(MoveTemp(Batch));
 	}
 }
@@ -602,10 +614,10 @@ void AWwTerrainStreamer::LoadTreeMeshes()
 		UMaterialInterface* Big = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwRockBig.M_WwRockBig"));
 		if (!Big) Big = RockMaterial;
 		for (int32 Kind = 0; Kind < ww::FRocks::CliffRock; Kind++)
-			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Rock(Kind), RockMaterial, *FString::Printf(TEXT("WwRock%d"), Kind)));
+			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Rock(Kind), RockMaterial, *FString::Printf(TEXT("WwRock%d"), Kind), Kind != ww::FRocks::Stone));
 		// Worn cliff blocks: six shapes near, the same coarse for the middle distance, the near ones again for a cliff's lip.
 		for (int32 Shape = 0; Shape < ww::FRocks::CliffShapes; Shape++)
-			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::CliffBlock(Shape, false), Big, *FString::Printf(TEXT("WwCliff%d"), Shape)));
+			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::CliffBlock(Shape, false), Big, *FString::Printf(TEXT("WwCliff%d"), Shape), true));
 		for (int32 Shape = 0; Shape < ww::FRocks::CliffShapes; Shape++)
 			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::CliffBlock(Shape, true), Big, *FString::Printf(TEXT("WwCliffCoarse%d"), Shape)));
 		for (int32 Shape = 0; Shape < ww::FRocks::CliffShapes; Shape++) { UStaticMesh* Near = TreeMeshes[RockMeshFirst + ww::FRocks::CliffRock + Shape]; TreeMeshes.Add(Near); } // (a copy first: Add may move the array)
@@ -616,9 +628,10 @@ void AWwTerrainStreamer::LoadTreeMeshes()
 		check(TreeMeshes.Num() - RockMeshFirst == ww::FRocks::RockKinds);
 		PropMeshFirst = TreeMeshes.Num();
 		for (int32 Kind = 0; Kind < ww::FRocks::PropKinds; Kind++)
-			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Prop(Kind), PropMaterial, *FString::Printf(TEXT("WwProp%d"), Kind)));
+			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Prop(Kind), PropMaterial, *FString::Printf(TEXT("WwProp%d"), Kind), true));
 	}
 	else UE_LOG(LogWayfarer, Warning, TEXT("M_WwRock or M_WwProp missing: run Tools/CreateAssets.cmd"));
+	if (UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"))) TrunkMesh = TreeMeshes.Add(Cylinder);
 	UE_LOG(LogWayfarer, Display, TEXT("Trees: %d mesh parts for %d species"), TreeMeshes.Num(), (int32)ww::FVegetation::SpeciesWithArt);
 }
 
