@@ -435,7 +435,9 @@ const float tile = 4.0;
 float3 tx = RockArr.Sample(RockArrSampler, float3(p.z / tile, -p.y / tile, look)).rgb;
 float3 ty = RockArr.Sample(RockArrSampler, float3(p.x / tile, p.z / tile, look)).rgb;
 float3 tz = RockArr.Sample(RockArrSampler, float3(p.x / tile, -p.y / tile, look)).rgb;
-float3 t = (tx * w.x + ty * w.y + tz * w.z) / 0.5;
+// (each look's texture around its own mean brightness: its light and shade and a share of its hue, over the stone's colour)
+const float rock_means[6] = { ROCK_MEANS };
+float3 t = (tx * w.x + ty * w.y + tz * w.z) / rock_means[int(look)];
 float3 base = Vc * Tint.rgb;
 #if BIG
 {
@@ -444,10 +446,10 @@ float3 base = Vc * Tint.rgb;
 	float2 qy = float2(0.8 * p.x - 0.6 * p.z, 0.6 * p.x + 0.8 * p.z) / second_tile;
 	float2 qz = float2(0.8 * p.x - 0.6 * p.y, 0.6 * p.x + 0.8 * p.y) / second_tile;
 	float3 sx = RockArr.Sample(RockArrSampler, float3(qx, look)).rgb, sy = RockArr.Sample(RockArrSampler, float3(qy, look)).rgb, sz = RockArr.Sample(RockArrSampler, float3(qz, look)).rgb;
-	t = lerp(t, (sx * w.x + sy * w.y + sz * w.z) / 0.5, 0.45);
+	t = lerp(t, (sx * w.x + sy * w.y + sz * w.z) / rock_means[int(look)], 0.45);
 	// Tom's cliff rocks on the sides: per rock look a first and a second texture, one over whole stretches of cliff.
 	const int cliff_first[6] = { 0, 3, 2, 3, 4, 1 }, cliff_second[6] = { 1, 1, 4, 5, 0, 2 };
-	const float cliff_means[6] = { 0.275, 0.427, 0.395, 0.514, 0.269, 0.468 }, cliff_contrast[6] = { 0.55, 0.85, 0.85, 0.85, 0.7, 0.85 };
+	const float cliff_means[6] = { CLIFF_MEANS }, cliff_contrast[6] = { 0.55, 0.85, 0.85, 0.85, 0.7, 0.85 };
 	int lk = int(look);
 	int layer = fn.rock_noise(p.xz / 260.0) > 0.58 ? cliff_second[lk] : cliff_first[lk];
 	float sides = w.x + w.z;
@@ -486,7 +488,10 @@ def rock(big):
             i.set_editor_property('input_name', name)
             inputs.append(i)
         node.set_editor_property('inputs', inputs)
-        node.set_editor_property('code', ROCK.replace('#if BIG', '#if %d' % (1 if big else 0)))
+        # (the mean brightness of each stone look and cliff face: Tools/PrepareTextures.py measures the textures)
+        with open(os.path.join(HERE, 'WwRockMeans.txt'), 'r') as f:
+            rock_means, cliff_means = [line.strip() for line in f.read().splitlines()[:2]]
+        node.set_editor_property('code', ROCK.replace('#if BIG', '#if %d' % (1 if big else 0)).replace('ROCK_MEANS', rock_means).replace('CLIFF_MEANS', cliff_means))
 
         def expr(kind, x, y, **props):
             e = mel.create_material_expression(mat, kind, x, y)

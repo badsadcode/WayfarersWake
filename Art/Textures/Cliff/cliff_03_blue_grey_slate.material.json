@@ -1,0 +1,73 @@
+{
+  "generator": "NoorMD NoorMaterial",
+  "kind": "material",
+  "name": "cliff_03_blue_grey_slate",
+  "family": "Custom",
+  "recipe": "cliff_03_blue_grey_slate.noortex.json",
+  "size": 1024,
+  "tileMetres": 2,
+  "pixelsPerMetre": 512,
+  "heightRangeCm": 4,
+  "albedoMeanLinear": [
+    0.1195,
+    0.1263,
+    0.1212
+  ],
+  "albedoLuminance": 0.1245,
+  "maps": [
+    {
+      "file": "cliff_03_blue_grey_slate_albedo.png",
+      "map": "albedo",
+      "colorSpace": "sRGB",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "cliff_03_blue_grey_slate_normal.png",
+      "map": "normal",
+      "colorSpace": "linear",
+      "convention": "OpenGL (green \u002BY)",
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "cliff_03_blue_grey_slate_roughness.png",
+      "map": "roughness",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "cliff_03_blue_grey_slate_ao.png",
+      "map": "ao",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "cliff_03_blue_grey_slate_metallic.png",
+      "map": "metallic",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "cliff_03_blue_grey_slate_height.png",
+      "map": "height",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 16,
+      "range": "black 0 cm \u2026 white 4 cm (low is where water collects)",
+      "channels": null
+    }
+  ]
+}

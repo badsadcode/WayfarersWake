@@ -196,3 +196,9 @@
 * All four packs in `Content` load in 5.9 (no failures). Animals: seven with idle, walk, run. Whale 15 m with 36 animations; megalodon 1.5 m as shipped. Synty Sidekick: 157 parts on one skeleton, good human faces, only a knight and a sci-fi outfit, no animations, every file twice on disk.
 * Tom: the whale and the megalodon are to be mystical and gigantic. He will model a raft; meanwhile he wants a debug mode to spawn things.
 * Debug page: items, needs, creatures. The first megalodon hung in the air over a shallow bay (the sea bed pushed a 35 m shark up through 5 m of water); sea creatures now lie just under the surface whatever the depth.
+
+## 2026-11-10, session 1 (continued): Tom's new textures
+
+* Within the hour of my giving him the list, Tom delivered all 28 world textures: albedos from his other AI friend, the remaining maps made in his own NoorMaterial. One consistent painted style, 1024 px.
+* Sorted into Ground, Stone and Cliff; metallic maps deleted at his word; swapped into the existing texture arrays so no shader input changed. Colour maps only for now.
+* The pictures themselves stay out of the repository (224 MB); the imported copies and his NoorMaterial project files go in.

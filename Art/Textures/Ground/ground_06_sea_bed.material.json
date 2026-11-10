@@ -1,0 +1,73 @@
+{
+  "generator": "NoorMD NoorMaterial",
+  "kind": "material",
+  "name": "ground_06_sea_bed",
+  "family": "Custom",
+  "recipe": "ground_06_sea_bed.noortex.json",
+  "size": 1024,
+  "tileMetres": 2,
+  "pixelsPerMetre": 512,
+  "heightRangeCm": 4,
+  "albedoMeanLinear": [
+    0.2236,
+    0.1746,
+    0.108
+  ],
+  "albedoLuminance": 0.1802,
+  "maps": [
+    {
+      "file": "ground_06_sea_bed_albedo.png",
+      "map": "albedo",
+      "colorSpace": "sRGB",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_06_sea_bed_normal.png",
+      "map": "normal",
+      "colorSpace": "linear",
+      "convention": "OpenGL (green \u002BY)",
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_06_sea_bed_roughness.png",
+      "map": "roughness",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_06_sea_bed_ao.png",
+      "map": "ao",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_06_sea_bed_metallic.png",
+      "map": "metallic",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_06_sea_bed_height.png",
+      "map": "height",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 16,
+      "range": "black 0 cm \u2026 white 4 cm (low is where water collects)",
+      "channels": null
+    }
+  ]
+}

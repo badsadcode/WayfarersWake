@@ -31,3 +31,7 @@ Content/__ExternalObjects__/
 # Downloaded asset packs as they came (licensed; unpacked into Content by hand)
 *.zip
 Art/Synty/
+
+# The world textures as pictures (224 MB): the game uses the imported copies in Content/Terrain/Noor2; the NoorMaterial
+# project files beside them are kept.
+Art/Textures/**/*.png
