@@ -71,3 +71,15 @@
 * Swimming: switched on correctly but the player stayed on the river bed; the engine's braking cancelled the swim velocity nearly every frame. Braking is off while swimming. Movement speeds set to Thornwake's.
 * Not reached: the sea's waves and shore, the underwater view, far tree cards, the middle tree model.
 * Frame rate at the river-shore scene, 1280x720, hovering: 90 fps before this round, 74 after (the wind's moving shadows cost most of that).
+
+## 2026-11-10, session 1 (continued): the sea
+
+* Tom: "Yes, the sea."
+* Read Thornwake's water shader again in full, its FFT ocean and compute shaders, `WaterShore.cs`, `FoamNet.cs`. Tom plays "experimental 4" water with the foam net, so that is what was ported, not the older wave sets.
+* The simulated sea as engine-free code on worker threads (D22), with headless checks. The wave height came out right first time (3.96 m against 3.97 m).
+* The water material gained a vertex stage (the waves move the sheet), shore waves, breakers, the foam net, swash, light through crests. Swimming rides the waves.
+* Things that went wrong: adding one generator file reshuffled which files compile together, and three old name clashes surfaced (fixed by renaming). The build accelerator hung again (two compiler processes idle for ten minutes); builds now run without it. The first water material used more than 16 texture samplers and fell back to the default grey; the cascade textures now share one sampler. My patch to the material script changed the wrong function (same text twice in the file).
+* Believed for a while that breakers were missing on the sandy test beach: from 200 m at a low angle they do not show. From above they are there. A debug view (`-WwWaterDebug=`) was added on the way; its dark blotches fooled me into suspecting bad shore data, which a dump disproved.
+* Compared with Tom's Godot dump of a rocky shore (`dump-20261108-154929`): the foam net round the rocks looks alike; my water is brighter and bluer, my cliff paler, and the sea stacks are missing.
+* Not done: underwater view, far tree cards, the middle tree model, light rays and mist, weather.
+* The packaged game had no clouds (the engine's cloud material was never packaged: every EXE so far, not noticed before) and logged a warning once from the rock meshes built in code. Both fixed; the packaged game was launched in the surf: clouds, sea, 143 fps, a clean log.

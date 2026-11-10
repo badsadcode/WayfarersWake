@@ -55,6 +55,8 @@ static std::string Fingerprint(const FTerrainSampler& s)
 	return sha.FinishHex();
 }
 
+int OceanTest();
+
 int main(int argc, char** argv)
 {
 	if (argc < 2) { std::printf("usage: WorldGenTest <repo root> [--quick] [--sizes] [--bench]\n"); return 2; }
@@ -68,6 +70,7 @@ int main(int argc, char** argv)
 		else if (a.rfind("--rev=", 0) == 0) only = std::stoi(a.substr(6));
 		else if (a.rfind("--dump=", 0) == 0) dump = a.substr(7);
 		else if (a == "--types") typesOnly = true;
+		else if (a == "--ocean") return OceanTest();
 		else if (a.rfind("--dump-type=", 0) == 0) dumpType = a.substr(12);
 	}
 	ParallelForHook() = &ThreadedFor;

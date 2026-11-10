@@ -195,3 +195,23 @@ bool UWwWorldSubsystem::RunSelfTest(FString& Report)
 		UTF8_TO_TCHAR(Hash.c_str()), FPlatformTime::Seconds() - Started);
 	return bMatch;
 }
+
+std::shared_ptr<ww::FOcean> UWwWorldSubsystem::GetOcean()
+{
+	if (!Ocean)
+	{
+		Ocean = std::make_shared<ww::FOcean>(77); // (Thornwake's seed for the sea)
+		Ocean->Configure(0.5, FMath::Atan2(WindZ, WindX));
+	}
+	return Ocean;
+}
+
+double UWwWorldSubsystem::SeaSurface(double X, double Z, double Depth, double Time)
+{
+	if (!Sampler) return 0;
+	float Gx = 0, Gz = 0, Exposure = 1;
+	ww::FShore::CoastAt(*Sampler, X, Z, Depth, 1, Gx, Gz, Exposure);
+	// (the shader's own position for its noise: the world's, folded every 65536 m)
+	auto Fold = [](double V) { return (double)(float)(V - 65536.0 * FMath::FloorToDouble(V / 65536.0)); };
+	return ww::FShore::Surface(*GetOcean(), X, Z, Fold(X), Fold(Z), Time, Depth, Exposure, Gx, Gz);
+}

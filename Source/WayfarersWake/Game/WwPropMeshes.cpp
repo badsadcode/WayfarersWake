@@ -34,6 +34,7 @@ UStaticMesh* WwBuildStaticMesh(UObject* Outer, const ww::FSoup& Shape, UMaterial
 	}
 	UStaticMesh* Mesh = NewObject<UStaticMesh>(Outer, Name, RF_Transient);
 	Mesh->GetStaticMaterials().Add(FStaticMaterial(Material, FName(TEXT("Surface"))));
+	Mesh->GetStaticMaterials()[0].UVChannelData = FMeshUVChannelInfo(1.f); // (no textures by UV: nothing to stream; unset, the packaged game warns)
 	UStaticMesh::FBuildMeshDescriptionsParams Params;
 	Params.bBuildSimpleCollision = bSolid;
 	Params.bFastBuild = true;

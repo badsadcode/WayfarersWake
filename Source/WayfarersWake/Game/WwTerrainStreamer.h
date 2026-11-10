@@ -1,5 +1,7 @@
 #pragma once
 
+#include "WorldGen/WwOcean.h"
+#include "Async/Future.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Containers/Queue.h"
@@ -41,9 +43,10 @@ struct FWwTileData
 	TArray<FColor> Colors;
 	TArray<FVector2D> Uv0, Uv1;
 	/// Water sheet (Thornwake's): colour = depth / 20 m, kind code, river-water share, edge fade; UV0 = current (m/s east,
-	/// south); UV1 = position within the tile.
+	/// south); UV1 = position within the tile; UV2 = the bed's uphill gradient (toward the shore; length = slope);
+	/// UV3 = how open the coast is (0 sheltered .. 1 open), the water's fetch (m: a lake's size, a river's width).
 	TArray<FColor> WaterColors;
-	TArray<FVector2D> WaterUv0, WaterUv1;
+	TArray<FVector2D> WaterUv0, WaterUv1, WaterUv2, WaterUv3;
 	/// Biome ground colours per vertex, three squares side by side (GroundSide texels each): grass + snow,
 	/// dry ground + plant cover, rock + wetness. Colours are display (gamma) values, as Thornwake's shader expects.
 	TArray<FColor> Ground;
@@ -121,6 +124,8 @@ public:
 	int64 GetTilesBuilt() const { return TilesBuilt; }
 	double GetAverageBuildMs() const { return TilesBuilt > 0 ? TotalBuildMs / TilesBuilt : 0; }
 	double GetMaxCommitMs() const { return MaxCommitMs; }
+	/// How long one update of the simulated sea takes on the worker threads (recent longest, ms).
+	double GetOceanMs() const { return OceanMs; }
 	void ResetStats() { MaxCommitMs = 0; }
 
 	static TSharedPtr<FWwTileData> BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass,
@@ -159,6 +164,11 @@ private:
 	void LoadTreeMeshes();
 	void UpdateWaterfalls(const TArray<FVector2D>& Viewers, bool bMoved);
 	void UpdateSpray(const TArray<FVector2D>& Viewers, float DeltaSeconds);
+	/// The simulated sea (WwOcean): its textures and the foam net are made once; every frame the sea is worked out for the
+	/// game's clock on worker threads and the last finished moment is sent to the graphics card.
+	void StartOcean();
+	void UpdateOcean(float DeltaSeconds);
+	void ApplyOcean(UMaterialInstanceDynamic* Water, double CornerX, double CornerZ) const;
 	void SetPlants(TObjectPtr<UInstancedStaticMeshComponent>& Component, UStaticMesh* Mesh, const TArray<FTransform>& Transforms, const TArray<float>& Data, const FVector& Origin);
 	double TileSize(int32 Level) const { return BaseTile * (double)((int64)1 << Level); }
 
@@ -176,6 +186,9 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UStaticMesh> LeafMesh;
 	UPROPERTY(Transient) TObjectPtr<UInstancedStaticMeshComponent> SprayMesh;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> SprayMaterial;
+	/// Per cascade: displacement, slopes (three cascades: six textures).
+	UPROPERTY(Transient) TArray<TObjectPtr<UTexture2D>> OceanTextures;
+	UPROPERTY(Transient) TObjectPtr<UTexture2D> FoamNet;
 	UPROPERTY(Transient) TArray<TObjectPtr<UInstancedStaticMeshComponent>> TreeComponents;
 	TArray<int32> Free;
 	/// Per species and model (near, distant): first index into TreeMeshes and how many parts (bark, foliage, cards).
@@ -188,6 +201,8 @@ private:
 	/// An unseen cylinder for tree trunks (collision only), after the rock and prop meshes.
 	int32 TrunkMesh = -1;
 	std::shared_ptr<ww::FFallSet> Falls;
+	TFuture<std::shared_ptr<ww::FOceanFrame>> OceanTask;
+	double OceanMs = 0;
 	/// Spray and mist of the falls shown (by fall index), drawn as one set of camera-facing instances.
 	TMap<int32, FWwFallSpray> FallSpray;
 	int32 PuffsShown = 0;

@@ -85,6 +85,20 @@ Tile builds cost two to three times what they did (1.7-3 ms before): each vertex
 
 Thornwake reports 37-49 fps at 1920x1080 in the same scenes with everything on (its dumps), so the two are not comparable yet: this game draws far less. Not measured: walking or flying through grass (each new tile adds about 10,000 plants on the game thread), 1920x1080.
 
+## The sea (2026-11-10)
+
+RTX 3080, 1280x720, editor build run as a game, hovering, 09:00.
+
+| Scene | fps | Sea update (worker threads) |
+|---|---|---|
+| Open coast, 4 m over the sea, looking out (`-WwCoast`) | 160-173 | 3.0-3.2 ms |
+| In the surf beside a beach (`-WwAt=-68445,2190`) | 144 | 3.0 ms |
+| 150 m over the surf, looking down | 166-168 | |
+| Rocky shore of Godot dump `dump-20261108-154929` | 220 | |
+| River-shore scene of the earlier rounds (no sea in view) | 71.5 (74 before the sea) | 3.2 ms |
+
+Packaged build, in the surf beside the beach: 143 fps, sea update 3.9 ms, 1.7 GB, no errors in its log. One update of the sea on a single thread: 15 ms (headless test). Not measured: storms (the sea state is fixed), 1920x1080, a packaged build over open sea for long.
+
 ## Not measured yet
 
 GPU and CPU frame breakdown, 1 % lows over long runs, the scene types of `Content/WorldData/benchmarks.json` (forest, lake, coast, mountain, flight), packaged (non-editor) builds.

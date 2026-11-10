@@ -126,6 +126,26 @@ void AWwCharacter::TryPlace()
 			if (Override.Split(TEXT(","), &Left, &Right)) { X = FCString::Atod(*Left); Z = FCString::Atod(*Right); Height = WorldSystem->GetSampler()->Height(X, Z); }
 		}
 		else if (!WorldSystem->FindSpawn(X, Z, Height)) { X = 0; Z = 0; Height = WorldSystem->GetSampler()->Height(0, 0); }
+		if (FParse::Param(FCommandLine::Get(), TEXT("WwCoast"))) // test switch: start over the nearest open, shelving sea shore
+		{
+			const ww::FTerrainSampler& Sampler = *WorldSystem->GetSampler();
+			bool bFound = false;
+			for (double Radius = 250; Radius < 200000 && !bFound; Radius += 250)
+				for (int32 Dir = 0; Dir < 48 && !bFound; Dir++)
+				{
+					const double Px = X + FMath::Cos(Dir * UE_DOUBLE_PI / 24) * Radius, Pz = Z + FMath::Sin(Dir * UE_DOUBLE_PI / 24) * Radius;
+					const ww::FTerrainSample T = Sampler.Sample(Px, Pz, 8);
+					const double Depth = T.WaterLevel - T.Height;
+					if (T.Water != ww::EWaterKind::Ocean || Depth < 4 || Depth > 8) continue;
+					float Gx, Gz, Exposure;
+					ww::FShore::CoastAt(Sampler, Px, Pz, Depth, 1, Gx, Gz, Exposure);
+					const double Slope = FMath::Sqrt(Gx * Gx + Gz * Gz);
+					if (Exposure < .9f || Slope < .015 || Slope > .12) continue;
+					bFound = true; X = Px; Z = Pz; Height = T.Height;
+					UE_LOG(LogWayfarer, Display, TEXT("Coast: %.1f, %.1f (water %.1f m deep, bed slope %.3f, exposure %.2f); the shore lies toward yaw %.0f"),
+						Px, Pz, Depth, Slope, Exposure, FMath::RadiansToDegrees(FMath::Atan2(Gz, Gx)));
+				}
+		}
 		SpawnPoint = UWwWorldSubsystem::ToUnreal(X, Z, Height);
 		SetActorLocation(SpawnPoint + FVector(0, 0, 300), false, nullptr, ETeleportType::TeleportPhysics);
 		bHaveSpawn = true;
@@ -213,8 +233,8 @@ void AWwCharacter::Tick(float DeltaSeconds)
 	const float Right = (PC->IsInputKeyDown(EKeys::D) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::A) ? 1.f : 0.f);
 	const bool bShift = PC->IsInputKeyDown(EKeys::LeftShift), bCtrl = PC->IsInputKeyDown(EKeys::LeftControl);
 	const FRotator Yaw(0, Control.Yaw, 0);
-	// Swimming (Thornwake's rules): in water over 1.25 m deep at the feet the player swims, head above the surface.
-	// (the surface is the still water level: waves are not ported, so there is nothing to ride yet)
+	// Swimming (Thornwake's rules): in water over 1.25 m deep at the feet the player swims, head above the surface,
+	// riding the sea's waves.
 	bool bWasSwimming = bSwimming;
 	bSwimming = false;
 	double WaterLevel = 0;
@@ -225,7 +245,10 @@ void AWwCharacter::Tick(float DeltaSeconds)
 				const FVector Here = GetActorLocation();
 				const ww::FTerrainSample T = Sampler->Sample(Here.X / 100.0, Here.Y / 100.0, 2);
 				const double Feet = (Here.Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) / 100.0;
-				if (T.Water != ww::EWaterKind::None && T.WaterLevel - Feet > 1.25) { bSwimming = true; WaterLevel = T.WaterLevel; }
+				// (the sea's surface is its still level plus the waves the water shader shows here)
+				double Level = T.WaterLevel;
+				if (T.Water == ww::EWaterKind::Ocean) Level += WorldSystem->SeaSurface(Here.X / 100.0, Here.Y / 100.0, T.WaterLevel - T.Height, GetWorld()->GetTimeSeconds());
+				if (T.Water != ww::EWaterKind::None && Level - Feet > 1.25) { bSwimming = true; WaterLevel = Level; }
 			}
 	if (bSwimming)
 	{
@@ -313,6 +336,16 @@ void AWwCharacter::DebugDump()
 	Out += FString::Printf(TEXT("Player: x %.3f, z %.3f, y %.3f (%.3f m above ground/water) · %s\n"), X, Z, Feet, Above, bFly ? TEXT("fly") : bSwimming ? TEXT("swimming") : TEXT("walking"));
 	Out += FString::Printf(TEXT("Ground %.3f m · water %s"), T.Height, WaterNames[FMath::Clamp((int32)T.Water, 0, 4)]);
 	if (bWater) Out += FString::Printf(TEXT(" surface %.3f m, depth %.3f m"), T.WaterLevel, T.WaterLevel - T.Height);
+	if (T.Water == ww::EWaterKind::Ocean)
+	{
+		float Gx = 0, Gz = 0, Exposure = 1;
+		ww::FShore::CoastAt(*Sampler, X, Z, T.WaterLevel - T.Height, 1, Gx, Gz, Exposure);
+		Out += FString::Printf(TEXT(", shore: bed rises toward (%.4f, %.4f), exposure %.3f"), Gx, Gz, Exposure);
+	}
+	if (T.Water == ww::EWaterKind::Ocean)
+		if (UWwWorldSubsystem* Waves = GetGameInstance()->GetSubsystem<UWwWorldSubsystem>())
+			Out += FString::Printf(TEXT(", waves now %+.3f m (sea state %.2f, significant wave height %.2f m)"),
+				Waves->SeaSurface(X, Z, T.WaterLevel - T.Height, GetWorld()->GetTimeSeconds()), Waves->GetOcean()->SeaState(), Waves->GetOcean()->Hs());
 	Out += FString::Printf(TEXT(" · mountain %.3f · land %.4f · scree %.3f · lava %.3f\n"), T.Mountain, T.Land, T.Scree, T.Lava);
 	Out += FString::Printf(TEXT("Biome %s"), UTF8_TO_TCHAR(Pool[A].Name.c_str()));
 	if (A != B) Out += FString::Printf(TEXT(" (%.3f %%, -> %s)"), Share * 100, UTF8_TO_TCHAR(Pool[B].Name.c_str()));

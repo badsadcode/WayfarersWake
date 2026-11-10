@@ -14,6 +14,10 @@
 #include "WorldGen/WwFlora.h"
 #include "WorldGen/WwWaterSheet.h"
 #include "WorldGen/WwRocks.h"
+#include "WorldGen/WwOcean.h"
+#include "Async/Async.h"
+#include "Async/ParallelFor.h"
+#include <unordered_map>
 #include "Game/WwPropMeshes.h"
 #include "Misc/CommandLine.h"
 #include "Tasks/Task.h"
@@ -285,6 +289,8 @@ TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler&
 		{
 			Data->WaterVertices.Reserve(VertexCount); Data->WaterNormals.Reserve(VertexCount); Data->WaterColors.Reserve(VertexCount);
 			Data->WaterUv0.Reserve(VertexCount); Data->WaterUv1.Reserve(VertexCount);
+			Data->WaterUv2.Reserve(VertexCount); Data->WaterUv3.Reserve(VertexCount);
+			std::unordered_map<int, float> Widths; // a river reach's typical width: its mean
 			for (int32 j = 0; j < Side; j++)
 				for (int32 i = 0; i < Side; i++)
 				{
@@ -294,6 +300,33 @@ TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler&
 					Data->WaterColors.Add(Bytes(Sheet.Depth[K], Sheet.Kind[K], Sheet.Plume[K], Sheet.Edge[K]));
 					Data->WaterUv0.Add(FVector2D(Sheet.FlowX[K], Sheet.FlowZ[K]));
 					Data->WaterUv1.Add(FVector2D((double)i / Cells, (double)j / Cells));
+					// Shore data for the waves (Thornwake TileBuilder.ShoreData; a pure function of the world position, so
+					// neighbouring tiles agree): near the coast the bed's uphill gradient and how open the sea is around;
+					// for lakes their size, for rivers their width (the wind's fetch).
+					float Gx = 0, Gz = 0, Exposure = 1, Fetch = 0;
+					const float Kind = Sheet.Kind[K];
+					const int32 Body = SheetSamples[K].WaterBody;
+					if (Kind < .25f)
+					{
+						Fetch = 60000.f; // (Thornwake: 1e5; these numbers travel as half floats)
+						ww::FShore::CoastAt(Sampler, X0 + i * Spacing, Z0 + j * Spacing, Sheet.Level[K] - Heights[K], Spacing, Gx, Gz, Exposure);
+					}
+					else if (Kind > .5f && Body >= 0 && Body < (int32)Plan.Hydrology->Lakes.size())
+						Fetch = (float)FMath::Sqrt(Plan.Hydrology->Lakes[Body].Area);
+					else if (FMath::Abs(Kind - ww::FWaterSheet::RiverCode) < 1 / 6.f && Body >= 0 && Body < (int32)Plan.Hydrology->Reaches.size())
+					{
+						auto Found = Widths.find(Body);
+						if (Found == Widths.end())
+						{
+							const std::vector<float>& W = Plan.Hydrology->Reaches[Body].Width;
+							double Sum = 0;
+							for (float V : W) Sum += V;
+							Found = Widths.emplace(Body, W.empty() ? 0.f : (float)(Sum / W.size())).first;
+						}
+						Fetch = Found->second;
+					}
+					Data->WaterUv2.Add(FVector2D(Gx, Gz));
+					Data->WaterUv3.Add(FVector2D(Exposure, FMath::Min(Fetch, 60000.f)));
 				}
 			Data->WaterTriangles.Reserve((int32)Sheet.Indices.size());
 			for (size_t T = 0; T + 2 < Sheet.Indices.size(); T += 3) // (Thornwake's a, b, c is clockwise seen from above here)
@@ -447,8 +480,9 @@ void AWwTerrainStreamer::Commit(const TSharedPtr<FWwTileData>& Data)
 	Mesh->SetMaterial(0, Slot.Material);
 	if (Data->WaterTriangles.Num() > 0)
 	{
-		Mesh->CreateMeshSection(1, Data->WaterVertices, Data->WaterTriangles, Data->WaterNormals, Data->WaterUv0, Data->WaterUv1, NoUvs, NoUvs, Data->WaterColors, NoTangents, false);
+		Mesh->CreateMeshSection(1, Data->WaterVertices, Data->WaterTriangles, Data->WaterNormals, Data->WaterUv0, Data->WaterUv1, Data->WaterUv2, Data->WaterUv3, Data->WaterColors, NoTangents, false);
 		if (!Slot.Water) Slot.Water = UMaterialInstanceDynamic::Create(WaterMaterial, this);
+		ApplyOcean(Slot.Water, Data->Key.X * Size, Data->Key.Y * Size);
 		Slot.Water->SetVectorParameterValue(TEXT("Tile"), FLinearColor(Fold(Data->Key.X * Size), Fold(Data->Key.Y * Size), (float)Size, (float)TileCells));
 		Mesh->SetMaterial(1, Slot.Water);
 	}
@@ -679,6 +713,7 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 		if (!WaterMaterial) WaterMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwWater.M_WwWater"));
 		if (!TerrainMaterial) { TerrainMaterial = UMaterial::GetDefaultMaterial(MD_Surface); UE_LOG(LogWayfarer, Warning, TEXT("M_WwTerrain missing: run Tools/CreateAssets.cmd")); }
 		if (!WaterMaterial) WaterMaterial = TerrainMaterial;
+		StartOcean();
 		LoadTreeMeshes();
 		if (!FallMaterial) FallMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwWaterfall.M_WwWaterfall"));
 		if (!SprayMaterial) SprayMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwSpray.M_WwSpray"));
@@ -721,6 +756,123 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 	LaunchJobs(Viewers);
 	UpdateWaterfalls(Viewers, bMoved || bChanged);
 	UpdateSpray(Viewers, DeltaSeconds);
+	UpdateOcean(DeltaSeconds);
+}
+
+// ---------------------------------------------------------------------------------------------------- the sea
+namespace
+{
+/// A texture made in code, with its mipmap levels. Pixels: every level one after another, or null (zeros).
+UTexture2D* WwMakeTexture(int32 Size, EPixelFormat Format, int32 MipCount, int32 BytesPerTexel, const uint8* Pixels)
+{
+	UTexture2D* Texture = UTexture2D::CreateTransient(Size, Size, Format);
+	Texture->SRGB = false;
+	Texture->Filter = TF_Default; // (the world textures' filter: anisotropic, so the far sea is not blurred flat)
+	Texture->LODGroup = TEXTUREGROUP_World;
+	Texture->AddressX = Texture->AddressY = TA_Wrap;
+	Texture->NeverStream = true;
+	FTexturePlatformData* Platform = Texture->GetPlatformData();
+	int64 Offset = 0;
+	for (int32 M = 0; M < MipCount; M++)
+	{
+		const int32 S = FMath::Max(1, Size >> M);
+		const int64 Bytes = (int64)S * S * BytesPerTexel;
+		if (M > 0) Platform->Mips.Add(new FTexture2DMipMap(S, S, 1));
+		FTexture2DMipMap& Mip = Platform->Mips[M];
+		void* Dest = Mip.BulkData.Lock(LOCK_READ_WRITE);
+		if (M > 0) Dest = Mip.BulkData.Realloc(Bytes);
+		if (Pixels) FMemory::Memcpy(Dest, Pixels + Offset, Bytes); else FMemory::Memzero(Dest, Bytes);
+		Mip.BulkData.Unlock();
+		Offset += Bytes;
+	}
+	Texture->UpdateResource();
+	return Texture;
+}
+}
+
+void AWwTerrainStreamer::StartOcean()
+{
+	if (OceanTextures.Num() > 0) return;
+	const double Started = FPlatformTime::Seconds();
+	for (int32 i = 0; i < ww::FOcean::Cascades * 2; i++)
+		OceanTextures.Add(WwMakeTexture(ww::FOcean::N, PF_FloatRGBA, ww::FOcean::Mips, 8, nullptr));
+	// The foam net (Thornwake's FoamNet), with its mipmap levels.
+	const int32 NetSize = 512;
+	const std::vector<uint8_t> Net = ww::FFoamNet::Create(NetSize);
+	TArray<uint8> All;
+	All.Reserve(NetSize * NetSize * 4 * 4 / 3 + 16);
+	for (int32 i = 0; i < NetSize * NetSize; i++) All.Append({ Net[i * 4 + 2], Net[i * 4 + 1], Net[i * 4], Net[i * 4 + 3] }); // (blue first)
+	int32 MipCount = 1, Last = 0;
+	for (int32 S = NetSize / 2; S >= 1; S /= 2, MipCount++)
+	{
+		const int32 Big = S * 2, Next = All.Num();
+		All.AddUninitialized(S * S * 4);
+		for (int32 y = 0; y < S; y++)
+			for (int32 x = 0; x < S; x++)
+				for (int32 k = 0; k < 4; k++)
+					All[Next + (y * S + x) * 4 + k] = (uint8)((All[Last + ((2 * y) * Big + 2 * x) * 4 + k] + All[Last + ((2 * y) * Big + 2 * x + 1) * 4 + k]
+						+ All[Last + ((2 * y + 1) * Big + 2 * x) * 4 + k] + All[Last + ((2 * y + 1) * Big + 2 * x + 1) * 4 + k] + 2) / 4);
+		Last = Next;
+	}
+	FoamNet = WwMakeTexture(NetSize, PF_B8G8R8A8, MipCount, 4, All.GetData());
+	UE_LOG(LogWayfarer, Display, TEXT("Sea: textures and foam net made in %.0f ms"), (FPlatformTime::Seconds() - Started) * 1000.0);
+}
+
+void AWwTerrainStreamer::ApplyOcean(UMaterialInstanceDynamic* Water, double CornerX, double CornerZ) const
+{
+	if (!Water || OceanTextures.Num() < ww::FOcean::Cascades * 2) return;
+	// The tile's corner modulo each cascade's size (in double precision): the waves are anchored to the world.
+	auto Wrap = [](double V, int32 C) { const double L = ww::FOcean::Sizes[C]; return (float)(V - FMath::FloorToDouble(V / L) * L); };
+	Water->SetVectorParameterValue(TEXT("FftX"), FLinearColor(Wrap(CornerX, 0), Wrap(CornerX, 1), Wrap(CornerX, 2), 0));
+	Water->SetVectorParameterValue(TEXT("FftZ"), FLinearColor(Wrap(CornerZ, 0), Wrap(CornerZ, 1), Wrap(CornerZ, 2), 0));
+	static const TCHAR* Names[6] = { TEXT("Disp0"), TEXT("Slope0"), TEXT("Disp1"), TEXT("Slope1"), TEXT("Disp2"), TEXT("Slope2") };
+	for (int32 i = 0; i < 6; i++) Water->SetTextureParameterValue(Names[i], OceanTextures[i]);
+	Water->SetTextureParameterValue(TEXT("FoamNet"), FoamNet);
+	static const float Debug = [] { float V = 0; FParse::Value(FCommandLine::Get(), TEXT("WwWaterDebug="), V); return V; }(); // test switch: see WwWater.hlsl
+	if (Debug > 0) Water->SetScalarParameterValue(TEXT("Debug"), Debug);
+}
+
+void AWwTerrainStreamer::UpdateOcean(float DeltaSeconds)
+{
+	if (OceanTextures.Num() == 0) return;
+	UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+	if (!WorldSystem) return;
+	if (OceanTask.IsValid())
+	{
+		if (!OceanTask.IsReady()) return;
+		const std::shared_ptr<ww::FOceanFrame> Frame = OceanTask.Get();
+		OceanTask = TFuture<std::shared_ptr<ww::FOceanFrame>>();
+		for (int32 C = 0; Frame && C < ww::FOcean::Cascades; C++)
+			for (int32 K = 0; K < 2; K++)
+			{
+				UTexture2D* Texture = OceanTextures[C * 2 + K];
+				const std::vector<uint16_t>& Source = K == 0 ? Frame->Displacement[C] : Frame->Derivatives[C];
+				for (int32 M = 0; M < ww::FOcean::Mips; M++)
+				{
+					const int32 S = ww::FOcean::N >> M;
+					FUpdateTextureRegion2D* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, S, S);
+					// (the frame is kept until the render thread has copied this level)
+					Texture->UpdateTextureRegions(M, 1, Region, S * 8, 8, (uint8*)(Source.data() + (size_t)ww::FOcean::MipOffset(M) * 4),
+						[Frame](uint8*, const FUpdateTextureRegion2D* Done) { delete Done; });
+				}
+			}
+	}
+	// The next moment, for when it will be shown (about a frame from now). Foam drifts at 3 % of the wind (Thornwake).
+	const std::shared_ptr<ww::FOcean> Ocean = WorldSystem->GetOcean();
+	const double Time = GetWorld()->GetTimeSeconds() + DeltaSeconds;
+	const double DriftX = UWwWorldSubsystem::WindX * UWwWorldSubsystem::WindSpeed * .03, DriftZ = UWwWorldSubsystem::WindZ * UWwWorldSubsystem::WindSpeed * .03;
+	TWeakObjectPtr<AWwTerrainStreamer> Self(this);
+	OceanTask = Async(EAsyncExecution::ThreadPool, [Ocean, Time, DriftX, DriftZ, Self]()
+	{
+		const double Started = FPlatformTime::Seconds();
+		std::shared_ptr<ww::FOceanFrame> Frame = Ocean->Update(Time, DriftX, DriftZ, [](int Count, const std::function<void(int)>& Job)
+		{
+			ParallelFor(Count, [&Job](int32 i) { Job(i); });
+		});
+		const double Ms = (FPlatformTime::Seconds() - Started) * 1000.0;
+		AsyncTask(ENamedThreads::GameThread, [Self, Ms]() { if (Self.IsValid()) Self->OceanMs = FMath::Max(Self->OceanMs * 0.98, Ms); });
+		return Frame;
+	});
 }
 
 bool AWwTerrainStreamer::IsGroundReady(const FVector& Location) const

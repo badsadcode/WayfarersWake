@@ -175,10 +175,10 @@ void AWwGameMode::LogStats(const TCHAR* Why)
 	const double Average = Frames > 0 ? FrameTimeSum / Frames : 0;
 	const double P99 = FrameTimes.Num() > 0 ? FrameTimes[FMath::Min(FrameTimes.Num() - 1, (int32)(FrameTimes.Num() * 0.99))] : 0;
 	const FVector P = Player->GetActorLocation();
-	UE_LOG(LogWayfarer, Display, TEXT("WwStats[%s] pos=(%.0f, %.0f) m alt=%.0f m travelled=%.1f km tiles=%d trees=%d plants=%d desired=%d missing=%d pending=%d built=%lld avgBuild=%.2f ms maxCommit=%.2f ms fps=%.1f worstFrame=%.1f ms p99=%.1f ms mem=%.0f MB (start %.0f MB)"),
+	UE_LOG(LogWayfarer, Display, TEXT("WwStats[%s] pos=(%.0f, %.0f) m alt=%.0f m travelled=%.1f km tiles=%d trees=%d plants=%d desired=%d missing=%d pending=%d built=%lld avgBuild=%.2f ms maxCommit=%.2f ms fps=%.1f worstFrame=%.1f ms p99=%.1f ms sea=%.1f ms mem=%.0f MB (start %.0f MB)"),
 		Why, P.X / 100, P.Y / 100, P.Z / 100, Player->GetDistanceTravelled() / 1000, Streamer->GetTileCount(), Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetDesiredCount(), Streamer->GetMissingCount(),
 		Streamer->GetPendingCount(), Streamer->GetTilesBuilt(), Streamer->GetAverageBuildMs(), Streamer->GetMaxCommitMs(),
-		Average > 0 ? 1.0 / Average : 0.0, WorstFrame * 1000, P99 * 1000, FPlatformMemory::GetStats().UsedPhysical / 1048576.0, StartMemoryMb);
+		Average > 0 ? 1.0 / Average : 0.0, WorstFrame * 1000, P99 * 1000, Streamer->GetOceanMs(), FPlatformMemory::GetStats().UsedPhysical / 1048576.0, StartMemoryMb);
 	Frames = 0; FrameTimeSum = 0; WorstFrame = 0; FrameTimes.Reset();
 	Streamer->ResetStats();
 }

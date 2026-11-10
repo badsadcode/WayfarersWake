@@ -1,6 +1,6 @@
 # Creates the project's code-defined assets (run with Tools/CreateAssets.cmd; safe to run again).
 #   M_WwTerrain       - the ground: a port of Thornwake's classic ground shader (Tools/WwTerrainGround.hlsl)
-#   M_WwWater         - translucent lit water coloured by vertex colour (sea, lake, river, pond tints)
+#   M_WwWater         - the water: a port of Thornwake's water shader (Tools/WwWater.hlsl, WwSeaVertex.hlsl, WwSea.hlsl)
 #   T_WwTileDefault   - a small linear texture: the default of the per-tile ground-colour texture
 # Run Tools/ImportAssets.cmd first (the ground uses the rock texture it imports).
 import os
@@ -129,23 +129,42 @@ def terrain(mat):
     mel.connect_material_property(constant(mat, 0.3, -150, 300), '', unreal.MaterialProperty.MP_SPECULAR)
 
 
+def with_sea(filename):
+    """A Custom node's code with the shared sea methods (Tools/WwSea.hlsl) put inside its struct."""
+    with open(os.path.join(HERE, filename), 'r') as f:
+        code = f.read()
+    with open(os.path.join(HERE, 'WwSea.hlsl'), 'r') as f:
+        sea = f.read()
+    if '//#include WwSea' not in code:
+        raise RuntimeError('WwAssets: %s has no place for WwSea.hlsl' % filename)
+    return code.replace('//#include WwSea', sea)
+
+
 def water(mat):
-    """The water surface (Tools/WwWater.hlsl): a first port of Thornwake's inland water."""
+    """The water surface (Tools/WwWater.hlsl, WwSeaVertex.hlsl, WwSea.hlsl): a port of Thornwake's water."""
     mat.set_editor_property('blend_mode', unreal.BlendMode.BLEND_TRANSLUCENT)
     mat.set_editor_property('translucency_lighting_mode', unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
     mat.set_editor_property('tangent_space_normal', False)
-    with open(os.path.join(HERE, 'WwWater.hlsl'), 'r') as f:
-        code = f.read()
-    node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
-    node.set_editor_property('description', 'WwWater')
-    node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
-    names = ['TileUv', 'Col', 'ColA', 'Flow', 'Rel', 'Tile', 'Cells', 'T', 'Behind', 'Patches', 'Streaks']
-    inputs = []
-    for name in names:
-        i = unreal.CustomInput()
-        i.set_editor_property('input_name', name)
-        inputs.append(i)
-    node.set_editor_property('inputs', inputs)
+    code = with_sea('WwWater.hlsl')
+    cascades = ['D0', 'G0', 'D1', 'G1', 'D2', 'G2']
+
+    def custom(description, names, x, y):
+        n = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, x, y)
+        n.set_editor_property('description', description)
+        n.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+        inputs = []
+        for name in names:
+            i = unreal.CustomInput()
+            i.set_editor_property('input_name', name)
+            inputs.append(i)
+        n.set_editor_property('inputs', inputs)
+        return n
+
+    node = custom('WwWater', ['TileUv', 'Col', 'ColA', 'Flow', 'Shore', 'Shore2', 'Rel', 'RestRel', 'Tile', 'Cells', 'FftX', 'FftZ', 'Debug', 'T', 'Behind',
+                              'SunDir', 'SunLight', 'Patches', 'Streaks', 'Net'] + cascades, -500, 0)
+    # The vertex stage: the waves move the sheet.
+    vertex = custom('WwSeaVertex', ['TileUv', 'Col', 'Shore', 'Shore2', 'Rel', 'Tile', 'FftX', 'FftZ', 'T'] + cascades, -500, 900)
+    vertex.set_editor_property('code', with_sea('WwSeaVertex.hlsl'))
     outputs = []
     for name, kind in (('Emissive', unreal.CustomMaterialOutputType.CMOT_FLOAT3), ('WorldNormal', unreal.CustomMaterialOutputType.CMOT_FLOAT3),
                        ('Surface', unreal.CustomMaterialOutputType.CMOT_FLOAT3)):
@@ -156,9 +175,11 @@ def water(mat):
     node.set_editor_property('additional_outputs', outputs)
     node.set_editor_property('code', code)
 
-    def wire(source, output, name):
+    def wire(source, output, name, both=False):
         if not mel.connect_material_expressions(source, output, node, name):
             raise RuntimeError('WwAssets: cannot connect ' + name)
+        if both and not mel.connect_material_expressions(source, output, vertex, name):
+            raise RuntimeError('WwAssets: cannot connect ' + name + ' (vertex stage)')
 
     def expr(kind, y, **props):
         e = mel.create_material_expression(mat, kind, -1000, y)
@@ -166,16 +187,37 @@ def water(mat):
             e.set_editor_property(key, value)
         return e
 
-    wire(expr(unreal.MaterialExpressionTextureCoordinate, 0, coordinate_index=1), '', 'TileUv')
+    wire(expr(unreal.MaterialExpressionTextureCoordinate, 0, coordinate_index=1), '', 'TileUv', True)
     colour = expr(unreal.MaterialExpressionVertexColor, 100)
-    wire(colour, '', 'Col')
+    wire(colour, '', 'Col', True)
     wire(colour, 'A', 'ColA')
     wire(expr(unreal.MaterialExpressionTextureCoordinate, 200, coordinate_index=0), '', 'Flow')
+    # Shore data per vertex: the bed's uphill gradient; how open the coast is and the water's fetch.
+    wire(expr(unreal.MaterialExpressionTextureCoordinate, 220, coordinate_index=2), '', 'Shore', True)
+    wire(expr(unreal.MaterialExpressionTextureCoordinate, 260, coordinate_index=3), '', 'Shore2', True)
     wire(expr(unreal.MaterialExpressionWorldPosition, 300, world_position_shader_offset=unreal.WorldPositionIncludedOffsets.WPT_CAMERA_RELATIVE), '', 'Rel')
+    rest = expr(unreal.MaterialExpressionWorldPosition, 350, world_position_shader_offset=unreal.WorldPositionIncludedOffsets.WPT_CAMERA_RELATIVE_NO_OFFSETS)
+    wire(rest, '', 'RestRel')
+    if not mel.connect_material_expressions(rest, '', vertex, 'Rel'):
+        raise RuntimeError('WwAssets: cannot connect Rel (vertex stage)')
     tile = expr(unreal.MaterialExpressionVectorParameter, 400, parameter_name='Tile', default_value=unreal.LinearColor(0, 0, 64, 32))
-    wire(tile, '', 'Tile')
+    wire(tile, '', 'Tile', True)
     wire(tile, 'A', 'Cells')
-    wire(expr(unreal.MaterialExpressionTime, 550), '', 'T')
+    wire(expr(unreal.MaterialExpressionVectorParameter, 450, parameter_name='FftX', default_value=unreal.LinearColor(0, 0, 0, 0)), '', 'FftX', True)
+    wire(expr(unreal.MaterialExpressionVectorParameter, 500, parameter_name='FftZ', default_value=unreal.LinearColor(0, 0, 0, 0)), '', 'FftZ', True)
+    wire(expr(unreal.MaterialExpressionTime, 550), '', 'T', True)
+    wire(expr(unreal.MaterialExpressionScalarParameter, 530, parameter_name='Debug', default_value=0.0), '', 'Debug')
+    wire(expr(unreal.MaterialExpressionSkyAtmosphereLightDirection, 580), '', 'SunDir')
+    wire(expr(unreal.MaterialExpressionSkyAtmosphereLightIlluminance, 610), '', 'SunLight')
+    # The simulated sea's textures and the foam net are made by the game when it starts (WwOcean); the small default
+    # texture stands in until then.
+    default = eal.load_asset(PATH + '/T_WwTileDefault')
+    if default is None:
+        raise RuntimeError('WwAssets: T_WwTileDefault missing')
+    for y, name, parameter in ((1100, 'Net', 'FoamNet'), (1200, 'D0', 'Disp0'), (1300, 'G0', 'Slope0'), (1400, 'D1', 'Disp1'), (1500, 'G1', 'Slope1'),
+                               (1600, 'D2', 'Disp2'), (1700, 'G2', 'Slope2')):
+        wire(expr(unreal.MaterialExpressionTextureObjectParameter, y, parameter_name=parameter, texture=default,
+                  sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR), '', name, name != 'Net')
     # (the node makes the engine provide the scene behind the water; the shader reads it at its own, refracted place)
     wire(expr(unreal.MaterialExpressionSceneColor, 650), '', 'Behind')
     for y, name, asset in ((750, 'Patches', 'river_foam_broken_patches_tiled'), (900, 'Streaks', 'river_foam_flowing_streaks_tiled')):
@@ -197,6 +239,7 @@ def water(mat):
     mel.connect_material_property(part('Surface', True, False, False, 300), '', unreal.MaterialProperty.MP_OPACITY)
     mel.connect_material_property(part('Surface', False, True, False, 400), '', unreal.MaterialProperty.MP_ROUGHNESS)
     mel.connect_material_property(part('Surface', False, False, True, 500), '', unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(vertex, '', unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
 
 
 def waterfall(foam_disc):

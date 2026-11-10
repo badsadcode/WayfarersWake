@@ -18,8 +18,8 @@ const std::vector<std::string>& FVegetation::Species()
 namespace
 {
 const double TreeCell = 7;
-const int Broadleaf[] = { 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 0, 1 };
-const int Mixed[] = { 0, 1, 2, 3, 4, 8, 9, 5, 6, 15 };
+const int VgBroadleaf[] = { 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 0, 1 };
+const int VgMixed[] = { 0, 1, 2, 3, 4, 8, 9, 5, 6, 15 };
 const int Conifer[] = { 0, 1, 2, 3, 4, 3, 4, 14 };
 
 u64 ForestSeed(const FTerrainSampler& s) { return Hashing::Mix((u64)(i64)s.Plan->Manifest.Seed * 0x2545F4914F6CDD1DULL + 77); }
@@ -111,8 +111,8 @@ bool FVegetation::TreeAt(const FTerrainSampler& Sampler, i64 cx, i64 cz, FLattic
 		const FBiome& biome = Hashing::Unit(Hashing::Mix(pick + 7)) < share ? pool[a] : pool[b];
 		if (biome.bClassic)
 		{
-			if (elevation < 550) species = Broadleaf[pick % 12];
-			else if (elevation < 1250) species = Mixed[pick % 10];
+			if (elevation < 550) species = VgBroadleaf[pick % 12];
+			else if (elevation < 1250) species = VgMixed[pick % 10];
 			else species = Conifer[pick % 8];
 		}
 		else

@@ -66,3 +66,9 @@ Thornwake has no model files for rocks, cliff blocks, formations, bushes, stumps
 
 **D21. Particles without particle assets.**
 Unreal's particle systems are authored in the editor; this project is built from code and scripts. Waterfall spray is therefore a small emitter of its own (a few hundred puffs a fall, moved on the game thread, drawn as one set of camera-facing instances with the puff drawn by the material). If particle counts grow, this is the place a real particle system would pay off.
+
+**D22. The simulated sea runs on worker threads, not on the graphics card.**
+Thornwake's sea is a Tessendorf FFT ocean computed by four compute shaders every frame. Unreal compute shaders need shader files of their own, registered by a module that loads before the engine's shaders (in practice a plugin), which this code-and-script project does not have yet. The sea's spectrum is sparse (about 12,000 waves in three 256 x 256 cascades), so `WwOcean` transforms only the rows that hold waves, on worker threads, and sends the finished moment to six textures a frame later: about 3 ms spread over the workers, 15 ms on a single thread. It is engine-free like the rest of the generator, so the headless test checks it, and swimming reads the same waves on the CPU. If the workers get crowded (tile building uses them too), moving it to the graphics card is the next step; the textures and the shader would not change.
+
+**D23. One sea state for now.**
+Thornwake's sea follows its weather (sea state 0 to 1; Tom's setting is 0.5). Weather is not ported, so the sea state is fixed at 0.5 and the wind at 5.5 m/s from the north-west, the values in Tom's dumps. The fade between sea states is left out until something can change them.

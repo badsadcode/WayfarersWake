@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "WorldGen/WwWorld.h"
+#include "WorldGen/WwOcean.h"
 #include <atomic>
 #include "WwWorldSubsystem.generated.h"
 
@@ -50,6 +51,16 @@ public:
 
 	/// The terrain authority; null until Ready. Thread-safe to sample.
 	std::shared_ptr<ww::FTerrainSampler> GetSampler() const { return Sampler; }
+	/// The sea's waves: one simulated sea for the whole game (the sea state and the wind are fixed until the weather is
+	/// ported: Thornwake's defaults, sea state 0.5, wind from the north-west).
+	std::shared_ptr<ww::FOcean> GetOcean();
+	/// The sea's surface above its still level (m) at a world position (m) where the still water is Depth deep, at the
+	/// game's clock: what the water shader shows, for swimming.
+	double SeaSurface(double X, double Z, double Depth, double Time);
+	/// The wind (fixed): the direction it blows to (east, south) and its speed, m/s.
+	static constexpr double WindX = 0.496;
+	static constexpr double WindZ = 0.868;
+	static constexpr double WindSpeed = 5.512;
 
 	/// A dry, gently sloping place on land to start at (metres), near the first landmass's centre.
 	bool FindSpawn(double& OutX, double& OutZ, double& OutHeight) const;
@@ -68,6 +79,7 @@ private:
 	FWwWorldSettings Current;
 	EWwWorldState State = EWwWorldState::Idle;
 	std::shared_ptr<ww::FTerrainSampler> Sampler;
+	std::shared_ptr<ww::FOcean> Ocean;
 	TSharedPtr<std::atomic<int32>, ESPMode::ThreadSafe> Stage;
 	FString Failure;
 	double BuildSeconds = 0;

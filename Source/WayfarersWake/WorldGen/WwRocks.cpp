@@ -933,7 +933,7 @@ FSoup FPropShapes::Formation(int kind, int variant)
 	u64 seed = 0x40C4C17ULL + (u64)kind * 7919 + (u64)variant * 104729;
 	FRandomStream rng(seed);
 	std::vector<FBlock> blocks;
-	const float Tau = 6.2831855f;
+	const float RkTau = 6.2831855f;
 	const float ForwardAxis[3] = { 0, 0, -1 };
 	// A piece: half extents, turned about y, tilted a little, corners cut by `cuts` planes.
 	auto Add = [&](FV3 centre, FV3 half, float turn, float tilt, int cuts, float bevel)
@@ -972,9 +972,9 @@ FSoup FPropShapes::Formation(int kind, int variant)
 	{
 		for (int i = 0; i < count; i++)
 		{
-			float a = (float)rng.Unit() * Tau, r = spread * (float)rng.Between(.75, 1.15), s = size * (float)rng.Between(.5, 1.1);
+			float a = (float)rng.Unit() * RkTau, r = spread * (float)rng.Between(.75, 1.15), s = size * (float)rng.Between(.5, 1.1);
 			float hy = s * (float)rng.Between(.4, .7), hz = s * (float)rng.Between(.6, 1);
-			float turn = (float)rng.Unit() * Tau;
+			float turn = (float)rng.Unit() * RkTau;
 			Add({ std::cos(a) * r, s * .3f, std::sin(a) * r }, { s, hy, hz }, turn, .35f, 3, s * .25f);
 		}
 	};
@@ -982,7 +982,7 @@ FSoup FPropShapes::Formation(int kind, int variant)
 	{
 		// Columns: tall prisms packed on a jittered grid in an ellipse, the tallest toward the middle, their tops cut at angles.
 		float rx = (float)rng.Between(5, 8), rz = (float)rng.Between(3.5, 6), top = (float)rng.Between(11, 17), step = (float)rng.Between(2.6, 3.4);
-		float turn = (float)rng.Unit() * Tau;
+		float turn = (float)rng.Unit() * RkTau;
 		for (float gx = -rx; gx <= rx; gx += step)
 			for (float gz = -rz; gz <= rz; gz += step * .9f)
 			{
@@ -1002,7 +1002,7 @@ FSoup FPropShapes::Formation(int kind, int variant)
 	{
 		// Slabs: flat layers, each smaller and set off from the one below, a little tilted: a stack weathered from bedded rock.
 		int layers = 3 + rng.Int(4);
-		float w = (float)rng.Between(6, 9), d = (float)rng.Between(4, 6.5), y = -1.5f, turn = (float)rng.Unit() * Tau;
+		float w = (float)rng.Between(6, 9), d = (float)rng.Between(4, 6.5), y = -1.5f, turn = (float)rng.Unit() * RkTau;
 		FV3 off = { 0, 0, 0 };
 		for (int i = 0; i < layers; i++)
 		{
@@ -1017,7 +1017,7 @@ FSoup FPropShapes::Formation(int kind, int variant)
 		// A slab fallen against the side.
 		if (rng.Unit() < .7)
 		{
-			float a = (float)rng.Unit() * Tau;
+			float a = (float)rng.Unit() * RkTau;
 			Add({ std::cos(a) * 7, 1.2f, std::sin(a) * 6 }, { 3, .8f, 2.2f }, a, .5f, 3, .3f);
 		}
 		int rubble = 3 + rng.Int(4);
@@ -1033,10 +1033,10 @@ FSoup FPropShapes::Formation(int kind, int variant)
 			int count = 7 - 2 * t + rng.Int(2);
 			if (count < 1) count = 1;
 			float ring = r * (1 - (float)t / tiers) * .75f, size = r * .32f * (1 - .12f * t), hgt = (float)rng.Between(1.6, 2.6) + t * .4f;
-			float a0 = (float)rng.Unit() * Tau;
+			float a0 = (float)rng.Unit() * RkTau;
 			for (int i = 0; i < count; i++)
 			{
-				float a = a0 + i * Tau / count + (float)rng.Between(-.25, .25), rr = count == 1 ? 0 : ring * (float)rng.Between(.7, 1);
+				float a = a0 + i * RkTau / count + (float)rng.Between(-.25, .25), rr = count == 1 ? 0 : ring * (float)rng.Between(.7, 1);
 				float sx = size * (float)rng.Between(.7, 1.1), sz = size * (float)rng.Between(.6, 1), own = a + (float)rng.Between(-.3, .3);
 				Add({ std::cos(a) * rr, y + hgt, std::sin(a) * rr }, { sx, hgt, sz }, own, .08f, 3, size * .16f);
 			}
@@ -1057,7 +1057,7 @@ FSoup FPropShapes::Formation(int kind, int variant)
 			float hx = s * (float)rng.Between(1, 1.4), hy = s * (float)rng.Between(.55, .8), hz = s * (float)rng.Between(.8, 1.15);
 			float jx = (float)rng.Between(-1, 1), jz = (float)rng.Between(-1.5, 1.5);
 			FV3 hh = { hx, hy, hz }, at = { i * 4.5f - (ground - 1) * 2.25f + jx, hh.Y * .75f - 1.3f, jz };
-			float turn = (float)rng.Unit() * Tau;
+			float turn = (float)rng.Unit() * RkTau;
 			Add(at, hh, turn, .12f, 2, s * .5f);
 			bases.push_back({ at, hh });
 		}
@@ -1068,13 +1068,13 @@ FSoup FPropShapes::Formation(int kind, int variant)
 			float hx = s * (float)rng.Between(1, 1.3), hy = s * (float)rng.Between(.5, .7), hz = s * (float)rng.Between(.8, 1.1);
 			float jx = (float)rng.Between(-.3, .3), jz = (float)rng.Between(-.3, .3);
 			FV3 hh = { hx, hy, hz }, at = base.first + FV3{ jx * base.second.X, base.second.Y + hh.Y * .8f, jz * base.second.Z };
-			float turn = (float)rng.Unit() * Tau;
+			float turn = (float)rng.Unit() * RkTau;
 			Add(at, hh, turn, .1f, 2, s * .5f);
 			bases.push_back({ at, hh });
 		}
 		for (int i = 0, slabs = 1 + rng.Int(2); i < slabs; i++)
 		{
-			float a = (float)rng.Unit() * Tau;
+			float a = (float)rng.Unit() * RkTau;
 			Add({ std::cos(a) * 6.5f, .3f, std::sin(a) * 5.5f }, { 2.6f, .7f, 1.9f }, a, .35f, 3, .5f);
 		}
 		int rubble = 3 + rng.Int(3);

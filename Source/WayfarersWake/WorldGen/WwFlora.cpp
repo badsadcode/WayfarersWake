@@ -53,7 +53,6 @@ const FCommunity ShoreCommunities[4] = {
 const float ReferenceGrass[3] = { 0x56 / 255.f, 0x6b / 255.f, 0x3f / 255.f }; // temperate biome grass
 
 float Unit(u64 h, int shift) { return (float)Hashing::Unit(Hashing::Mix(h + (u64)shift)); }
-int ClampI(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 float ClampF(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
 int Nearest(const FFloraGrid& g, double x, double z)
 {
