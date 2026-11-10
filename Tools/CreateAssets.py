@@ -1,6 +1,7 @@
 # Creates the project's code-defined assets (run with Tools/CreateAssets.cmd; safe to run again).
 #   M_WwTerrain       - the ground: a port of Thornwake's classic ground shader (Tools/WwTerrainGround.hlsl)
 #   M_WwWater         - the water: a port of Thornwake's water shader (Tools/WwWater.hlsl, WwSeaVertex.hlsl, WwSea.hlsl)
+#   M_WwUnderwater    - the underwater view, a post-process material (Tools/WwUnderwater.hlsl)
 #   T_WwTileDefault   - a small linear texture: the default of the per-tile ground-colour texture
 # Run Tools/ImportAssets.cmd first (the ground uses the rock texture it imports).
 import os
@@ -512,3 +513,58 @@ make('M_WwRockBig', rock(True))
 make('M_WwProp', prop)
 make('M_WwTerrain', terrain)
 make('M_WwWater', water)
+
+
+def underwater(mat):
+    """The underwater view (Tools/WwUnderwater.hlsl): a post-process material, a port of Thornwake's Underwater.gdshader."""
+    mat.set_editor_property('material_domain', unreal.MaterialDomain.MD_POST_PROCESS)
+    # (before the bloom and the tone curve: it works on the scene's light, as Thornwake's pass does)
+    for name in ('BL_SCENE_COLOR_BEFORE_BLOOM', 'BL_BEFORE_TONEMAPPING', 'BL_SCENE_COLOR_AFTER_DOF'):
+        if hasattr(unreal.BlendableLocation, name):
+            mat.set_editor_property('blendable_location', getattr(unreal.BlendableLocation, name))
+            unreal.log('WwAssets: underwater view at ' + name)
+            break
+    with open(os.path.join(HERE, 'WwUnderwater.hlsl'), 'r') as f:
+        code = f.read()
+    node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
+    node.set_editor_property('description', 'WwUnderwater')
+    node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    names = ['ViewUv', 'Ray', 'T', 'SurfaceDepth', 'WaterColor', 'Density', 'UseFft', 'CamFft1', 'CamFft2', 'CamNoise', 'SunDir', 'SunLight', 'G1', 'G2', 'Scene', 'Depth']
+    inputs = []
+    for name in names:
+        i = unreal.CustomInput()
+        i.set_editor_property('input_name', name)
+        inputs.append(i)
+    node.set_editor_property('inputs', inputs)
+    node.set_editor_property('code', code)
+    y = [0]
+
+    def wire(kind, output, name, **props):
+        e = mel.create_material_expression(mat, kind, -1000, y[0])
+        y[0] += 110
+        for key, value in props.items():
+            e.set_editor_property(key, value)
+        if not mel.connect_material_expressions(e, output, node, name):
+            raise RuntimeError('WwAssets: cannot connect ' + name)
+
+    wire(unreal.MaterialExpressionScreenPosition, 'ViewportUV', 'ViewUv')
+    wire(unreal.MaterialExpressionCameraVectorWS, '', 'Ray')
+    wire(unreal.MaterialExpressionTime, '', 'T')
+    wire(unreal.MaterialExpressionScalarParameter, '', 'SurfaceDepth', parameter_name='SurfaceDepth', default_value=1.0)
+    wire(unreal.MaterialExpressionVectorParameter, '', 'WaterColor', parameter_name='WaterColor', default_value=unreal.LinearColor(0.04, 0.26, 0.33, 1))
+    wire(unreal.MaterialExpressionScalarParameter, '', 'Density', parameter_name='Density', default_value=0.05)
+    wire(unreal.MaterialExpressionScalarParameter, '', 'UseFft', parameter_name='UseFft', default_value=0.0)
+    wire(unreal.MaterialExpressionVectorParameter, '', 'CamFft1', parameter_name='CamFft1', default_value=unreal.LinearColor(0, 0, 0, 0))
+    wire(unreal.MaterialExpressionVectorParameter, '', 'CamFft2', parameter_name='CamFft2', default_value=unreal.LinearColor(0, 0, 0, 0))
+    wire(unreal.MaterialExpressionVectorParameter, '', 'CamNoise', parameter_name='CamNoise', default_value=unreal.LinearColor(0, 0, 0, 0))
+    wire(unreal.MaterialExpressionSkyAtmosphereLightDirection, '', 'SunDir')
+    wire(unreal.MaterialExpressionSkyAtmosphereLightIlluminanceOnGround, '', 'SunLight')
+    default = eal.load_asset(PATH + '/T_WwTileDefault')
+    for name, parameter in (('G1', 'Slope1'), ('G2', 'Slope2')):
+        wire(unreal.MaterialExpressionTextureObjectParameter, '', name, parameter_name=parameter, texture=default, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
+    wire(unreal.MaterialExpressionSceneTexture, 'Color', 'Scene', scene_texture_id=unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0)
+    wire(unreal.MaterialExpressionSceneTexture, 'Color', 'Depth', scene_texture_id=unreal.SceneTextureId.PPI_SCENE_DEPTH)
+    mel.connect_material_property(node, '', unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
+make('M_WwUnderwater', underwater)

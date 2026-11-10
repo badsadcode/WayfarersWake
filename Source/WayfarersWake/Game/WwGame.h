@@ -26,6 +26,8 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	/// Light and air settings in words (debug dump).
 	FString DebugInfo() const;
+	/// How far the camera is below a water surface, m (0 or less: above water).
+	float GetCameraDepth() const { return CameraDepth; }
 
 	/// Hour of the day, 0..24.
 	UPROPERTY(EditAnywhere, Category = "Sky") float Hour = 9.5f;
@@ -39,6 +41,12 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UExponentialHeightFogComponent> Fog;
 	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UVolumetricCloudComponent> Clouds;
 	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UPostProcessComponent> Grade;
+	/// The underwater view (Thornwake's Underwater.gdshader as a post-process material), on while the camera is below a
+	/// water surface.
+	UPROPERTY(Transient) TObjectPtr<class UMaterialInstanceDynamic> Underwater;
+	void UpdateUnderwater(const FVector& View);
+	float CameraDepth = 0;
+	bool bUnderwaterTried = false;
 	/// Exposure limits by day, in stops of brightening: deep shade and open sun (test switches -WwEv=, -WwEvSun=);
 	/// haze is the fog density (-WwFog=).
 	float ShadeEv = 4.5f, SunEv = 0.6f, Saturation = 1.15f, ExposureBias = -0.7f;

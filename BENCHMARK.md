@@ -103,6 +103,10 @@ Packaged build, in the surf beside the beach: 143 fps, sea update 3.9 ms, 1.7 GB
 
 Every figure above from the grass round on was measured with no shadows being drawn (see D24), so they flatter the game. Tom's forest view (`-WwSizeKm=64 -WwAt=15534.067,8044.376`, 39 m up, 22,007 trees, 555,113 plants, 1280x720): 86 fps without shadows, 67 with. Tom's own run of the packaged build there, 1920x1080, without shadows: 78-80 fps.
 
+## Under water (2026-11-10)
+
+1280x720, editor build as a game: 3 m under the sea looking level 132 fps, looking up 189 fps; on a river bed among trees 55 fps (54 from just above the water at the same place: the underwater pass is not what costs there).
+
 ## Not measured yet
 
 GPU and CPU frame breakdown, 1 % lows over long runs, the scene types of `Content/WorldData/benchmarks.json` (forest, lake, coast, mountain, flight), packaged (non-editor) builds.

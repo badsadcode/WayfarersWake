@@ -353,6 +353,7 @@ void AWwCharacter::DebugDump()
 	Out += FString::Printf(TEXT("Camera: pitch %.2f, yaw %.2f (degrees; yaw 0 looks east, 90 south) · field of view %.0f · at (%.2f, %.2f, %.2f) m\n"), Pitch, Yaw, Camera->FieldOfView,
 		CameraAt.X / 100, CameraAt.Y / 100, CameraAt.Z / 100);
 	if (Sky) Out += Sky->DebugInfo() + TEXT("\n");
+	if (Sky && Sky->GetCameraDepth() > .02f) Out += FString::Printf(TEXT("Camera under water: %.3f m below the surface\n"), Sky->GetCameraDepth());
 	if (Streamer)
 		Out += FString::Printf(TEXT("Terrain: %d tiles (%d wanted, %d missing, %d building), %d trees, %d plants, %d waterfalls and %d spray puffs shown, tile build %.2f ms average\n"), Streamer->GetTileCount(), Streamer->GetDesiredCount(),
 			Streamer->GetMissingCount(), Streamer->GetPendingCount(), Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetFallCount(), Streamer->GetPuffCount(), Streamer->GetAverageBuildMs());

@@ -93,3 +93,9 @@
 * Cost: Tom's forest view, 1280x720: 86 fps without shadows, 67 with.
 * Also seen on the way: the sun's shadows are the classic cascades out to 600 m; virtual shadow maps are switched on in the config but are not what draws them. Left as it is (Godot's are cascades too).
 * Tom, same day: the Godot game's look has more to it (its environment's post-processing, perhaps ambient occlusion; tree crowns let light through, so shadows under them were not as black). Noted for the look round, after the missing features.
+
+## 2026-11-10, session 1 (continued): the underwater view
+
+* Thornwake's full-screen underwater pass as a post-process material (before the bloom), switched on by the sky actor when the camera is under a water surface; the sea's light pattern reads the simulated sea's slope textures.
+* It worked on the first run. The exposure lifted the dim uniform water into a bright fog; its shade limit is now held near the sunlit one while submerged. Still bright.
+* Seen: sea at 3 m down, level and looking up (shafts fanning from the surface); a river from its bed (green, murky, waterweed with the net of light on it). 132-190 fps in the sea views, 55 in the river scene (54 just above the water there, with shadows now on).

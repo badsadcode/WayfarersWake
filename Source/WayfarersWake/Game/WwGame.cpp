@@ -1,4 +1,8 @@
 #include "Game/WwGame.h"
+#include "Game/WwWorldSubsystem.h"
+#include "Engine/Texture2D.h"
+#include "EngineUtils.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Game/WwCharacter.h"
 #include "Game/WwTerrainStreamer.h"
 #include "WayfarersWake.h"
@@ -86,7 +90,8 @@ void AWwSky::Tick(float DeltaSeconds)
 	Sun->SetIntensity(8.f * Day * SunScale);
 	static const bool bSunShadows = !FParse::Param(FCommandLine::Get(), TEXT("WwNoSunShadows")); // test switch
 	Sun->SetCastShadows(bSunShadows && Day > 0.02f);
-	Grade->Settings.AutoExposureMinBrightness = -FMath::Lerp(SunEv - 3.f, ShadeEv, Day);
+	// (under water the whole view is one dim colour: left to itself the exposure lifts it to a bright fog)
+	Grade->Settings.AutoExposureMinBrightness = -FMath::Lerp(SunEv - 3.f, CameraDepth > .02f ? SunEv + 1.f : ShadeEv, Day);
 	Grade->Settings.AutoExposureMaxBrightness = -FMath::Lerp(SunEv - 3.f, SunEv, Day);
 
 	// Keep the planet's top (and the fog and clouds with it) under the view: correct horizon anywhere in the world.
@@ -96,7 +101,68 @@ void AWwSky::Tick(float DeltaSeconds)
 		PC->GetPlayerViewPoint(View, Rotation);
 		const FVector Wanted(FMath::GridSnap(View.X, 100000.0), FMath::GridSnap(View.Y, 100000.0), 0.0);
 		if (!Wanted.Equals(GetActorLocation(), 1.0)) SetActorLocation(Wanted);
+		UpdateUnderwater(View);
 	}
+}
+
+void AWwSky::UpdateUnderwater(const FVector& View)
+{
+	if (!Underwater && !bUnderwaterTried)
+	{
+		bUnderwaterTried = true;
+		if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwUnderwater.M_WwUnderwater")))
+		{
+			Underwater = UMaterialInstanceDynamic::Create(Base, this);
+			Grade->Settings.AddBlendable(Underwater, 0.f);
+		}
+	}
+	UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+	const std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem ? WorldSystem->GetSampler() : nullptr;
+	CameraDepth = 0;
+	ww::EWaterKind Kind = ww::EWaterKind::None;
+	const double X = View.X / 100.0, Z = View.Y / 100.0;
+	if (Sampler)
+	{
+		// The water surface over the camera: its still level, and in the sea the waves the shader shows there.
+		const ww::FTerrainSample T = Sampler->Sample(X, Z, 2);
+		Kind = T.Water;
+		if (Kind != ww::EWaterKind::None)
+		{
+			double Level = T.WaterLevel;
+			if (Kind == ww::EWaterKind::Ocean) Level += WorldSystem->SeaSurface(X, Z, T.WaterLevel - T.Height, GetWorld()->GetTimeSeconds());
+			CameraDepth = (float)(Level - View.Z / 100.0);
+		}
+	}
+	const bool bUnder = CameraDepth > .02f;
+	if (!Underwater) return;
+	for (FWeightedBlendable& Blendable : Grade->Settings.WeightedBlendables.Array)
+		if (Blendable.Object == Underwater) Blendable.Weight = bUnder ? 1.f : 0.f;
+	if (!bUnder) return;
+	// The water's colour and clarity by its kind (Thornwake Atmosphere.SetUnderwater): the sea clear blue-green, lakes
+	// greener, rivers greener and murkier, wetland pools peaty.
+	FLinearColor Colour(.04f, .26f, .33f); float Density = .05f;
+	if (Kind == ww::EWaterKind::Lake) { Colour = FLinearColor(.06f, .24f, .2f); Density = .09f; }
+	else if (Kind == ww::EWaterKind::River) { Colour = FLinearColor(.08f, .2f, .15f); Density = .16f; }
+	else if (Kind == ww::EWaterKind::Pond) { Colour = FLinearColor(.07f, .09f, .05f); Density = .45f; }
+	Underwater->SetScalarParameterValue(TEXT("SurfaceDepth"), CameraDepth);
+	Underwater->SetVectorParameterValue(TEXT("WaterColor"), Colour);
+	Underwater->SetScalarParameterValue(TEXT("Density"), Density);
+	// The light pattern: from the simulated sea's own slopes in the sea, else drifting noise.
+	auto Wrap = [](double V, double L) { return (float)(V - FMath::FloorToDouble(V / L) * L); };
+	AWwTerrainStreamer* Streamer = nullptr;
+	for (TActorIterator<AWwTerrainStreamer> It(GetWorld()); It; ++It) { Streamer = *It; break; }
+	UTexture2D* Slope1 = Streamer ? Streamer->GetOceanTexture(3) : nullptr;
+	UTexture2D* Slope2 = Streamer ? Streamer->GetOceanTexture(5) : nullptr;
+	const bool bFft = Kind == ww::EWaterKind::Ocean && Slope1 && Slope2;
+	Underwater->SetScalarParameterValue(TEXT("UseFft"), bFft ? 1.f : 0.f);
+	if (bFft)
+	{
+		Underwater->SetTextureParameterValue(TEXT("Slope1"), Slope1);
+		Underwater->SetTextureParameterValue(TEXT("Slope2"), Slope2);
+		Underwater->SetVectorParameterValue(TEXT("CamFft1"), FLinearColor(Wrap(X, ww::FOcean::Sizes[1]), Wrap(Z, ww::FOcean::Sizes[1]), 0, 0));
+		Underwater->SetVectorParameterValue(TEXT("CamFft2"), FLinearColor(Wrap(X, ww::FOcean::Sizes[2]), Wrap(Z, ww::FOcean::Sizes[2]), 0, 0));
+	}
+	Underwater->SetVectorParameterValue(TEXT("CamNoise"), FLinearColor(Wrap(X, 4096.0), Wrap(Z, 4096.0), 0, 0));
 }
 
 FString AWwSky::DebugInfo() const

@@ -126,6 +126,8 @@ public:
 	double GetMaxCommitMs() const { return MaxCommitMs; }
 	/// How long one update of the simulated sea takes on the worker threads (recent longest, ms).
 	double GetOceanMs() const { return OceanMs; }
+	/// The sea's wave textures: per cascade its displacement (0, 2, 4) and slopes (1, 3, 5); null before they are made.
+	UTexture2D* GetOceanTexture(int32 Index) const { return OceanTextures.IsValidIndex(Index) ? OceanTextures[Index].Get() : nullptr; }
 	void ResetStats() { MaxCommitMs = 0; }
 
 	static TSharedPtr<FWwTileData> BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass,
