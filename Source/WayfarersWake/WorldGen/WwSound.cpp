@@ -6,17 +6,15 @@ namespace ww
 namespace
 {
 const double SoPi = 3.14159265358979323846, SoSpeedOfSound = 340;
-// Tom's Thornwake settings.
-const double SoWeather = 1.05, SoRain = .4, SoWind = .6, SoThunder = .6, SoMaster = 1.2, SoRainTone = 0;
 }
 
 void FSoundscape::Render(int frames, float* out)
 {
-	double rainTarget = bSnowing ? 0 : std::pow(DetMath::Clamp(Precipitation, 0, 1), .7) * SoWeather * SoRain;
-	double windTarget = DetMath::Clamp((WindSpeed - 2) / 22, 0, 1.2) * (.6 + .5 * Gust) * SoWeather * SoWind;
-	double waterTarget = DetMath::Clamp(Water, 0, 1) * .5;
+	double rainTarget = bSnowing ? 0 : std::pow(DetMath::Clamp(Precipitation, 0, 1), .7) * VolWeather * VolRain;
+	double windTarget = DetMath::Clamp((WindSpeed - 2) / 22, 0, 1.2) * (.6 + .5 * Gust) * VolWeather * VolWind;
+	double waterTarget = DetMath::Clamp(Water, 0, 1) * .5 * VolWater;
 	// Rain tone: soft tones low-pass the hiss (a gentler patter) and quieten the hiss and the drops.
-	double tone = SoRainTone;
+	double tone = RainTone;
 	double hissCut = .12 + .88 * tone, hissGain = .35 * (.55 + .45 * tone), dropGain = .25 * (.5 + .5 * tone);
 	// (under cover: the open hiss and single drops mostly gone, the deeper roar from outside kept)
 	hissCut *= 1 - .7 * Shelter; hissGain *= 1 - .6 * Shelter; dropGain *= 1 - .7 * Shelter;
@@ -69,8 +67,8 @@ void FSoundscape::Render(int frames, float* out)
 		// Under water everything is dull and close: the highs go.
 		MuffleL += .05 * (l - MuffleL); MuffleR += .05 * (r - MuffleR);
 		l = l + (MuffleL * 1.6 - l) * Muffle; r = r + (MuffleR * 1.6 - r) * Muffle;
-		out[2 * i] = (float)DetMath::Clamp(l * SoMaster, -1, 1);
-		out[2 * i + 1] = (float)DetMath::Clamp(r * SoMaster, -1, 1);
+		out[2 * i] = (float)DetMath::Clamp(l * VolMaster, -1, 1);
+		out[2 * i + 1] = (float)DetMath::Clamp(r * VolMaster, -1, 1);
 		Clock++;
 	}
 	// Voices that have played out go.
@@ -147,7 +145,7 @@ void FSoundscape::Thunder(double near, bool ground, int seed)
 		maxAbs = Mx(maxAbs, std::fabs(s));
 	}
 	// Fade in a few ms and out at the end; loudness about 1 / distance, full at about 700 m.
-	double loud = DetMath::Clamp(700 / near, .02, 1.4) * SoThunder * SoWeather;
+	double loud = DetMath::Clamp(700 / near, .02, 1.4) * VolThunder * VolWeather;
 	for (int i = 0; i < count; i++)
 	{
 		double fade = Mn(1, i / (Rate * .004)) * Mn(1, (count - i) / (Rate * .5));
@@ -170,7 +168,7 @@ void FSoundscape::Blip(EBlip kind)
 		double signal = std::sin(t * 2 * SoPi * frequency) * (kind == Craft ? .7 : .4) + (Next() * 2 - 1) * (kind == Craft ? .03 : .45);
 		voice.Samples[i] = (float)(signal * env * (8000.0 / 32767.0));
 	}
-	voice.Gain = kind == Step ? .126f : .447f; // (-18 dB for a step, -7 dB otherwise)
+	voice.Gain = (kind == Step ? .126f : .447f) * VolSmall; // (-18 dB for a step, -7 dB otherwise)
 	voice.Start = Clock;
 	Voices.push_back(std::move(voice));
 }

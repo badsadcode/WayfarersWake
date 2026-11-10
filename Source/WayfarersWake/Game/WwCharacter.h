@@ -46,6 +46,15 @@ public:
 
 private:
 	void TryPlace();
+	/// To a place in the world (metres): waits for the ground there, as at the start.
+	void GoTo(double X, double Z);
+	/// Keys as the game hears them: nothing while the menu is open.
+	bool KeyDown(const FKey& Key) const;
+	bool KeyPressed(const FKey& Key) const;
+	class APlayerController* InputPC = nullptr;
+	bool bMenuOpen = false, bMoved = false;
+	int32 FlySeen = -1, DumpSeen = -1, GoSeen = -1, HomeSeen = -1;
+	FVector Home = FVector::ZeroVector;
 	void SetFly(bool bEnable);
 	void AddPart(const TCHAR* Name, const FVector& Centre, const FVector& Size, const FLinearColor& Colour);
 

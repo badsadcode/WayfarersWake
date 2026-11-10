@@ -1,4 +1,5 @@
 #include "Game/WwTerrainStreamer.h"
+#include "Game/WwSettings.h"
 #include "Game/WwWorldSubsystem.h"
 #include "WayfarersWake.h"
 #include "ProceduralMeshComponent.h"
@@ -794,12 +795,20 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 			PlantMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Plants/SM_WwPlantUpright.SM_WwPlantUpright"));
 			LeafMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Plants/SM_WwPlantFlat.SM_WwPlantFlat"));
 			if (!PlantMesh) UE_LOG(LogWayfarer, Warning, TEXT("Plant meshes missing: run Tools/ImportAssets.cmd"));
-			FParse::Value(FCommandLine::Get(), TEXT("WwGrass="), GrassAmount);
-			FParse::Value(FCommandLine::Get(), TEXT("WwLevels="), Levels);         // test switches: how many tile sizes; how far trees reach
-			FParse::Value(FCommandLine::Get(), TEXT("WwTreeLevels="), TreeLevels);
-			FParse::Value(FCommandLine::Get(), TEXT("WwFarTreeLevels="), FarTreeLevels);
-			bPlantShadows = !FParse::Param(FCommandLine::Get(), TEXT("WwNoPlantShadows"));
 		}
+	}
+	// How much is drawn (the menu's View page; the old test switches reach it there). A change draws the land again.
+	{
+		FWwSettings& Set = FWwSettings::Get();
+		static const TCHAR* Keys[5] = { TEXT("view.grass"), TEXT("view.levels"), TEXT("view.trees"), TEXT("view.fartrees"), TEXT("view.plantshadows") };
+		bool bAgain = false;
+		for (int32 i = 0; i < 5; i++) bAgain |= Set.Changed(Keys[i], DrawnSeen[i]);
+		GrassAmount = Set.Num(Keys[0]);
+		Levels = FMath::Clamp(Set.Int(Keys[1]), 3, 10);
+		TreeLevels = FMath::Clamp(Set.Int(Keys[2]), 0, 6);
+		FarTreeLevels = Set.Int(Keys[3]);
+		bPlantShadows = Set.On(Keys[4]);
+		if (bAgain) { UE_LOG(LogWayfarer, Display, TEXT("Menu: drawing the land again (grass %.2f, land %d, trees %d, distant forests %d)"), GrassAmount, Levels, TreeLevels, FarTreeLevels); ClearAll(); }
 	}
 
 	TArray<FVector2D> Viewers;
@@ -902,8 +911,7 @@ void AWwTerrainStreamer::ApplyOcean(UMaterialInstanceDynamic* Water, double Corn
 	static const TCHAR* Names[6] = { TEXT("Disp0"), TEXT("Slope0"), TEXT("Disp1"), TEXT("Slope1"), TEXT("Disp2"), TEXT("Slope2") };
 	for (int32 i = 0; i < 6; i++) Water->SetTextureParameterValue(Names[i], OceanTextures[i]);
 	Water->SetTextureParameterValue(TEXT("FoamNet"), FoamNet);
-	static const float Debug = [] { float V = 0; FParse::Value(FCommandLine::Get(), TEXT("WwWaterDebug="), V); return V; }(); // test switch: see WwWater.hlsl
-	if (Debug > 0) Water->SetScalarParameterValue(TEXT("Debug"), Debug);
+	Water->SetScalarParameterValue(TEXT("Debug"), (float)FWwSettings::Get().Num(TEXT("test.waterview"))); // (a test view: see WwWater.hlsl)
 }
 
 void AWwTerrainStreamer::UpdateOcean(float DeltaSeconds)

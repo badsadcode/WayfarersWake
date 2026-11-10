@@ -3,6 +3,7 @@
 #include "Game/WwWorldSubsystem.h"
 #include "Game/WwTerrainStreamer.h"
 #include "Game/WwGame.h"
+#include "Game/WwSettings.h"
 #include "WorldGen/WwVegetation.h"
 #include "Engine/Engine.h"
 #include "Engine/OverlapResult.h"
@@ -148,6 +149,7 @@ void AWwCharacter::TryPlace()
 				}
 		}
 		SpawnPoint = UWwWorldSubsystem::ToUnreal(X, Z, Height);
+		Home = SpawnPoint;
 		SetActorLocation(SpawnPoint + FVector(0, 0, 300), false, nullptr, ETeleportType::TeleportPhysics);
 		bHaveSpawn = true;
 		if (FParse::Param(FCommandLine::Get(), TEXT("WwProfile"))) // test switch: generated heights around the start place
@@ -170,7 +172,7 @@ void AWwCharacter::TryPlace()
 	SetActorLocation(Hit.ImpactPoint + FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5), false, nullptr, ETeleportType::TeleportPhysics);
 	bPlaced = true;
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
-		if (PC->IsLocalController()) { PC->SetInputMode(FInputModeGameOnly()); PC->bShowMouseCursor = false; PC->SetControlRotation(FRotator(-12, 35, 0));
+		if (PC->IsLocalController() && !bMoved) { PC->SetInputMode(FInputModeGameOnly()); PC->bShowMouseCursor = false; PC->SetControlRotation(FRotator(-12, 35, 0));
 			FString Look, Pitch, Yaw; // test switch -WwLook=pitch,yaw (degrees)
 			if (FParse::Value(FCommandLine::Get(), TEXT("WwLook="), Look, false) && Look.Split(TEXT(","), &Pitch, &Yaw)) PC->SetControlRotation(FRotator(FCString::Atod(*Pitch), FCString::Atod(*Yaw), 0)); }
 	LastPlace = GetActorLocation();
@@ -183,6 +185,27 @@ void AWwCharacter::TryPlace()
 		SetFly(true); AddActorWorldOffset(FVector(0, 0, Up * 100.0));
 	}
 	UE_LOG(LogWayfarer, Log, TEXT("Player placed on the ground at Z %.1f m (generated height %.1f m)"), Hit.ImpactPoint.Z / 100.0, SpawnPoint.Z / 100.0);
+}
+
+bool AWwCharacter::KeyDown(const FKey& Key) const { return !bMenuOpen && InputPC && InputPC->IsInputKeyDown(Key); }
+bool AWwCharacter::KeyPressed(const FKey& Key) const { return !bMenuOpen && InputPC && InputPC->WasInputKeyJustPressed(Key); }
+
+void AWwCharacter::GoTo(double X, double Z)
+{
+	UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+	const std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem ? WorldSystem->GetSampler() : nullptr;
+	if (!Sampler) return;
+	const double Half = Sampler->Plan->Profile().WorldSize * 0.5 - 50;
+	X = FMath::Clamp(X, -Half, Half); Z = FMath::Clamp(Z, -Half, Half);
+	const ww::FTerrainSample T = Sampler->Sample(X, Z, 2);
+	// (onto the ground or the bed; in deep water the swimmer comes up by itself)
+	SpawnPoint = UWwWorldSubsystem::ToUnreal(X, Z, T.Height);
+	bFly = false; bSwimming = false; bPlaced = false; bMoved = true;
+	GetCharacterMovement()->StopMovementImmediately();
+	GetCharacterMovement()->SetMovementMode(MOVE_None);
+	GetCharacterMovement()->GravityScale = 0;
+	SetActorLocation(SpawnPoint + FVector(0, 0, 300), false, nullptr, ETeleportType::TeleportPhysics);
+	UE_LOG(LogWayfarer, Display, TEXT("Menu: going to %.2f km east, %.2f km south (%s)"), X / 1000, Z / 1000, *WorldSystem->BiomeNameAt(X, Z));
 }
 
 void AWwCharacter::Tick(float DeltaSeconds)
@@ -210,6 +233,26 @@ void AWwCharacter::Tick(float DeltaSeconds)
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC || !PC->IsLocalController()) return;
 
+	// The menu (WwMenu): while it is open the game hears no keys and the view does not turn; its settings and buttons.
+	AWwHUD* Hud = Cast<AWwHUD>(PC->GetHUD());
+	InputPC = PC;
+	bMenuOpen = Hud && Hud->IsMenuOpen();
+	FWwSettings& Set = FWwSettings::Get();
+	Camera->SetFieldOfView((float)Set.Num(TEXT("view.fov")));
+	MouseSensitivity = (float)Set.Num(TEXT("view.sens"));
+	if (Set.Changed(TEXT("test.fly"), FlySeen) && Set.On(TEXT("test.fly")) != bFly) SetFly(!bFly);
+	Set.Show(TEXT("test.fly"), bFly ? 1 : 0);
+	if (Set.Changed(TEXT("test.dump"), DumpSeen)) DebugDump();
+	const bool bGo = Set.Changed(TEXT("test.go"), GoSeen), bHome = Set.Changed(TEXT("test.home"), HomeSeen);
+	if (bGo || bHome)
+	{
+		if (bMenuOpen && Hud) Hud->ToggleMenu();
+		if (bGo) GoTo(Set.Num(TEXT("test.gox")) * 1000.0, Set.Num(TEXT("test.goz")) * 1000.0);
+		else GoTo(Home.X / 100.0, Home.Y / 100.0);
+		return;
+	}
+	if (PC->WasInputKeyJustPressed(EKeys::Escape) && Hud && AutoFlySpeed <= 0) Hud->ToggleMenu();
+
 	if (AutoFlySpeed > 0)
 	{
 		Move->MaxFlySpeed = AutoFlySpeed * 100;
@@ -221,19 +264,19 @@ void AWwCharacter::Tick(float DeltaSeconds)
 	// Look.
 	float MouseX = 0, MouseY = 0;
 	PC->GetInputMouseDelta(MouseX, MouseY);
+	if (bMenuOpen) { MouseX = 0; MouseY = 0; }
 	FRotator Control = PC->GetControlRotation();
 	Control.Yaw += MouseX * MouseSensitivity * 20;
 	Control.Pitch = FMath::Clamp(FRotator::NormalizeAxis(Control.Pitch) + MouseY * MouseSensitivity * 20, -85.0, 85.0);
 	PC->SetControlRotation(Control);
 
-	if (PC->WasInputKeyJustPressed(EKeys::F)) SetFly(!bFly);
-	if (PC->WasInputKeyJustPressed(EKeys::F9)) DebugDump();
-	UpdateGameplay(DeltaSeconds, PC, PC->IsInputKeyDown(EKeys::LeftShift) && (PC->IsInputKeyDown(EKeys::W) || PC->IsInputKeyDown(EKeys::S) || PC->IsInputKeyDown(EKeys::A) || PC->IsInputKeyDown(EKeys::D)));
-	if (PC->WasInputKeyJustPressed(EKeys::Escape)) PC->ConsoleCommand(TEXT("quit"));
+	if (KeyPressed(EKeys::F)) SetFly(!bFly);
+	if (KeyPressed(EKeys::F9)) DebugDump();
+	UpdateGameplay(DeltaSeconds, PC, KeyDown(EKeys::LeftShift) && (KeyDown(EKeys::W) || KeyDown(EKeys::S) || KeyDown(EKeys::A) || KeyDown(EKeys::D)));
 
-	const float Forward = (PC->IsInputKeyDown(EKeys::W) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::S) ? 1.f : 0.f);
-	const float Right = (PC->IsInputKeyDown(EKeys::D) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::A) ? 1.f : 0.f);
-	const bool bShift = PC->IsInputKeyDown(EKeys::LeftShift), bCtrl = PC->IsInputKeyDown(EKeys::LeftControl);
+	const float Forward = (KeyDown(EKeys::W) ? 1.f : 0.f) - (KeyDown(EKeys::S) ? 1.f : 0.f);
+	const float Right = (KeyDown(EKeys::D) ? 1.f : 0.f) - (KeyDown(EKeys::A) ? 1.f : 0.f);
+	const bool bShift = KeyDown(EKeys::LeftShift), bCtrl = KeyDown(EKeys::LeftControl);
 	const FRotator Yaw(0, Control.Yaw, 0);
 	// Swimming (Thornwake's rules): in water over 1.25 m deep at the feet the player swims, head above the surface,
 	// riding the sea's waves.
@@ -258,7 +301,7 @@ void AWwCharacter::Tick(float DeltaSeconds)
 		Move->BrakingDecelerationFlying = 0; // (the swim sets the velocity itself each frame; the engine's braking cancelled it)
 		const float Speed = bShift ? 3.2f : 1.8f; // m/s
 		const FVector Flat = (FRotationMatrix(Yaw).GetUnitAxis(EAxis::X) * Forward + FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y) * Right).GetClampedToMaxSize(1.0);
-		const bool bDive = PC->IsInputKeyDown(EKeys::C) || PC->IsInputKeyDown(EKeys::Q), bUp = PC->IsInputKeyDown(EKeys::SpaceBar);
+		const bool bDive = KeyDown(EKeys::C) || KeyDown(EKeys::Q), bUp = KeyDown(EKeys::SpaceBar);
 		const double Feet = (GetActorLocation().Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) / 100.0, Target = WaterLevel - 1.3;
 		const bool bSubmerged = Feet < Target - 0.4;
 		double Vertical;
@@ -278,7 +321,7 @@ void AWwCharacter::Tick(float DeltaSeconds)
 		Move->MaxFlySpeed = (bShift ? 22000.f : FlySpeed) * (bCtrl ? 6.f : 1.f);
 		Move->BrakingDecelerationFlying = 6000;
 		Move->MaxAcceleration = Move->MaxFlySpeed * 4;
-		const float Up = (PC->IsInputKeyDown(EKeys::E) || PC->IsInputKeyDown(EKeys::SpaceBar) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::Q) ? 1.f : 0.f);
+		const float Up = (KeyDown(EKeys::E) || KeyDown(EKeys::SpaceBar) ? 1.f : 0.f) - (KeyDown(EKeys::Q) ? 1.f : 0.f);
 		AddMovementInput(Control.Vector(), Forward);
 		AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y), Right);
 		AddMovementInput(FVector::UpVector, Up);
@@ -289,7 +332,7 @@ void AWwCharacter::Tick(float DeltaSeconds)
 		Move->MaxAcceleration = 2048;
 		AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::X), Forward);
 		AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y), Right);
-		if (PC->WasInputKeyJustPressed(EKeys::SpaceBar)) Jump();
+		if (KeyPressed(EKeys::SpaceBar)) Jump();
 		if (PC->WasInputKeyJustReleased(EKeys::SpaceBar)) StopJumping();
 	}
 }
@@ -404,14 +447,14 @@ void AWwCharacter::UpdateGameplay(float DeltaSeconds, APlayerController* PC, boo
 	if (Sky) Game->SetWeather(Sky->GetWind().DirX, Sky->GetWind().DirZ, Sky->GetWind().Speed, Sky->GetWeather().Precipitation, Sky->GetClock().Season, Sky->GetLatitude());
 	if (!bFly) Game->Tick(Sky ? Sky->GetHoursStep() : 0.0, Sky ? Sky->Hour : 12.0, X, Z, Feet, bSwimming, bSprinting ? 1.0 : 0.0);
 	FString Said;
-	if (PC->WasInputKeyJustPressed(EKeys::I)) bPackOpen = !bPackOpen;
-	if (!bFly && PC->WasInputKeyJustPressed(EKeys::E)) Said = Game->Use(X, Z, Feet);
-	if (!bFly && !bPackOpen && PC->WasInputKeyJustPressed(EKeys::LeftMouseButton))
+	if (KeyPressed(EKeys::I)) bPackOpen = !bPackOpen;
+	if (!bFly && KeyPressed(EKeys::E)) Said = Game->Use(X, Z, Feet);
+	if (!bFly && !bPackOpen && KeyPressed(EKeys::LeftMouseButton))
 	{
 		const FVector Look = FRotationMatrix(FRotator(0, PC->GetControlRotation().Yaw, 0)).GetUnitAxis(EAxis::X);
 		Said = Game->Strike(X, Z, Look.X, Look.Y);
 	}
-	if (PC->WasInputKeyJustPressed(EKeys::T)) Said = Game->Eat();
+	if (KeyPressed(EKeys::T)) Said = Game->Eat();
 	// Test switch -WwPlayTest: the game plays itself for a moment (the axe swung all round, E, two recipes, a bite to
 	// eat), so a scripted run can check the mechanics end to end; the log and the F9 dump show what came of it.
 	static const bool bPlayTest = FParse::Param(FCommandLine::Get(), TEXT("WwPlayTest"));
@@ -453,7 +496,7 @@ void AWwCharacter::UpdateGameplay(float DeltaSeconds, APlayerController* PC, boo
 	if (bPackOpen)
 	{
 		static const FKey Numbers[10] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine, EKeys::Zero };
-		for (int32 i = 0; i < 10; i++) if (PC->WasInputKeyJustPressed(Numbers[i])) Said = Game->Make(i, X, Z);
+		for (int32 i = 0; i < 10; i++) if (KeyPressed(Numbers[i])) Said = Game->Make(i, X, Z);
 	}
 	if (Streamer)
 	{

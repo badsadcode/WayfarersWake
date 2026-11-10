@@ -40,6 +40,8 @@ public:
 	/// Seconds of sound handed to the sound card so far, and its recent loudness (0..1): proof that sound is playing.
 	double GetSoundSeconds() const { return SoundSeconds; }
 	double GetSoundLevel() const { return SoundLevel; }
+	/// A lightning strike this many metres away: a flash now, its thunder when the sound arrives.
+	void Strike(double Distance);
 	/// "Day 2, 14:30, light rain, wind 6 m/s from NW".
 	FString WeatherLine() const;
 	/// How far the camera is below a water surface, m (0 or less: above water).
@@ -85,7 +87,8 @@ private:
 	ww::FSkyState SkyNow;
 	double HoursStep = 0, LastHours = -1, Latitude = 45;
 	bool bClockSet = false, bWeatherTried = false, bSnowFalling = false;
-	float ForcedRain = -1, ForcedCloud = -1, FlashSeconds = 0, NextFlash = 8;
+	float FlashSeconds = 0, NextFlash = 8, BaseHaze = 0.0002f;
+	int32 HourSeen = -1, StrikeSeen[4] = { -1, -1, -1, -1 };
 	TArray<FVector> Drops;
 	void UpdateUnderwater(const FVector& View);
 	float CameraDepth = 0;
@@ -135,6 +138,7 @@ private:
 	double StatsTimer = 0, FrameTimeSum = 0, WorstFrame = 0, StartMemoryMb = 0;
 	int32 Frames = 0;
 	bool bShotTaken = false, bLogStats = false;
+	int32 RandomSeen = -1, MakeSeen = -1;
 	double ShotAt = 0;
 	TArray<float> FrameTimes;
 };
@@ -145,6 +149,13 @@ class WAYFARERSWAKE_API AWwHUD : public AHUD
 	GENERATED_BODY()
 public:
 	virtual void DrawHUD() override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
+	/// The Esc menu (WwMenu): settings and things to try. The world keeps running behind it.
+	void ToggleMenu();
+	bool IsMenuOpen() const { return bMenuOpen; }
 private:
+	TSharedPtr<class SWwMenu> Menu;
+	TSharedPtr<class SWidget> MenuHolder;
+	bool bMenuOpen = false, bMenuSwitchDone = false;
 	double SmoothedFrame = 0.016;
 };

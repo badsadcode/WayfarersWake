@@ -220,6 +220,7 @@ private:
 	int32 PuffsShown = 0;
 	TSet<int32> FallsBuilding;
 	bool bPlantShadows = true;
+	int32 DrawnSeen[5] = { -1, -1, -1, -1, -1 };
 
 	TMap<FWwTileKey, FTile> Tiles;
 	TSet<FWwTileKey> Pending, Desired;

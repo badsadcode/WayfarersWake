@@ -26,6 +26,9 @@ public:
 	float Water = 0;           // 0..1: running water or surf close by
 	float Shelter = 0;         // 0 in the open .. 1 under cover
 	bool bUnderwater = false;
+	// Volumes (the defaults are Tom's Thornwake settings; the game's menu sets them).
+	float VolMaster = 1.2f, VolWeather = 1.05f, VolRain = .4f, VolWind = .6f, VolThunder = .6f, VolWater = 1, VolSmall = 1;
+	float RainTone = 0;        // 0 a soft patter .. 1 a sharp bright hiss
 
 	enum EBlip { Step, Wood, Stone, Craft, Hit, Hurt, Other };
 

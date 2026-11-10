@@ -139,3 +139,11 @@
 * I cannot hear. Whether it sounds right is for Tom's ears; the levels are his Thornwake settings.
 * Not done: sounds placed in the world, shelter under trees, birds (none in Thornwake).
 * Tom listened: the rain sounds exactly as in the Godot version.
+
+## 2026-11-10, session 1 (continued): the menu
+
+* Tom asked for a menu like Thornwake's for testing features and tuning, better if I could. Read Thornwake's (seven tabs, about 140 rows, a weather test page), proposed four short pages with a search, and he said build it.
+* One list of settings, a Slate menu drawn from it, and every old test switch routed through the list. Fifty-odd entries; the sound's volumes became fields so the menu can set them.
+* Tom watched a test window sit on "Raising the ground under your feet" and said so. Cause: the new level's game mode saw the "Make this world" press as new and reopened the level, for ever. Watchers now start from the present count.
+* Two builds stalled in the compiler again (two idle processes); killed, run again, fine.
+* Checked by script, not by hand: Esc in and out, settings taking effect, going to a place, making a world, the file.

@@ -1,4 +1,9 @@
 #include "Game/WwGame.h"
+#include "Game/WwSettings.h"
+#include "Game/WwMenu.h"
+#include "Widgets/SWeakWidget.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Engine/GameViewportClient.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundWaveProcedural.h"
 #include "Rules/WrRules.h"
@@ -83,6 +88,7 @@ AWwSky::AWwSky()
 	Fog->FogDensity = 0.0002f;
 	Fog->FogHeightFalloff = 0.02f;
 	FParse::Value(FCommandLine::Get(), TEXT("WwFog="), Fog->FogDensity);
+	BaseHaze = Fog->FogDensity;
 	Clouds = CreateDefaultSubobject<UVolumetricCloudComponent>(TEXT("Clouds"));
 	Clouds->SetupAttachment(RootComponent);
 	// Exposure adapts between open sun and deep shade (as Thornwake's does), within limits, so bright ground and snow
@@ -94,19 +100,16 @@ AWwSky::AWwSky()
 	G.bOverride_MotionBlurAmount = true; G.MotionBlurAmount = 0.f;
 	G.bOverride_AutoExposureMethod = true; G.AutoExposureMethod = AEM_Histogram;
 	// (the automatic exposure aims brighter than Thornwake's picture: measured against Tom's Godot dumps)
-	FParse::Value(FCommandLine::Get(), TEXT("WwBias="), ExposureBias);
 	G.bOverride_AutoExposureBias = true; G.AutoExposureBias = ExposureBias;
 	G.bOverride_AutoExposureMinBrightness = true; G.bOverride_AutoExposureMaxBrightness = true;
 	// A first stand-in for the grading Tom plays Thornwake with ("Fantasy" at 0.6): a little more colour and contrast.
 	G.bOverride_ColorSaturation = true; G.ColorSaturation = FVector4(1.15, 1.15, 1.15, 1.0);
 	G.bOverride_ColorContrast = true; G.ColorContrast = FVector4(1.04, 1.04, 1.04, 1.0);
-	FParse::Value(FCommandLine::Get(), TEXT("WwSaturation="), Saturation);
 	G.ColorSaturation = FVector4(Saturation, Saturation, Saturation, 1.0);
 	G.bOverride_AutoExposureSpeedUp = true; G.AutoExposureSpeedUp = 2.f;
 	G.bOverride_AutoExposureSpeedDown = true; G.AutoExposureSpeedDown = 1.5f;
 	FParse::Value(FCommandLine::Get(), TEXT("WwEv="), ShadeEv);
 	FParse::Value(FCommandLine::Get(), TEXT("WwEvSun="), SunEv);
-	FParse::Value(FCommandLine::Get(), TEXT("WwHour="), Hour);
 }
 
 void AWwSky::Tick(float DeltaSeconds)
@@ -119,19 +122,23 @@ void AWwSky::Tick(float DeltaSeconds)
 	const std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem ? WorldSystem->GetSampler() : nullptr;
 	if (Sampler) Latitude = Sampler->Plan->Climate->Latitude(View.Y / 100.0);
 
+	FWwSettings& Set = FWwSettings::Get();
 	// The clock (Thornwake's GameClock): a game day in DayLength real minutes, daylight by the latitude and the season.
 	if (!bClockSet)
 	{
 		bClockSet = true;
-		FParse::Value(FCommandLine::Get(), TEXT("WwDayLength="), Clock.DayLengthMinutes); // test switches: real minutes a day (0 stops the clock),
-		FParse::Value(FCommandLine::Get(), TEXT("WwSeason="), Clock.Season);              // the season (0 spring .. 3 winter), the day number,
-		FParse::Value(FCommandLine::Get(), TEXT("WwDay="), Clock.Day);                    // rain and cloud forced (0..1)
-		FParse::Value(FCommandLine::Get(), TEXT("WwRain="), ForcedRain);
-		FParse::Value(FCommandLine::Get(), TEXT("WwCloud="), ForcedCloud);
+		FParse::Value(FCommandLine::Get(), TEXT("WwDay="), Clock.Day); // (test switch: the day number)
+		Hour = (float)Set.Num(TEXT("test.hour"));
 		Clock.SetHour(Hour, Latitude);
 	}
+	// The menu's settings (WwSettings; the old test switches arrive through them): the day's length, the season, and
+	// the hour when it is dragged.
+	Clock.DayLengthMinutes = Set.On(TEXT("time.stop")) ? 0.0 : Set.Num(TEXT("time.daylength"));
+	Clock.Season = Set.Int(TEXT("time.season"));
+	if (Set.Changed(TEXT("test.hour"), HourSeen)) Clock.SetHour(Set.Num(TEXT("test.hour")), Latitude);
 	SkyNow = Clock.Advance(DeltaSeconds, Latitude);
 	Hour = (float)Clock.Hour;
+	Set.Show(TEXT("test.hour"), Clock.Hour);
 	const double Hours = Clock.TotalHours();
 	HoursStep = LastHours < 0 ? 0 : FMath::Clamp(Hours - LastHours, 0.0, 1.0);
 	LastHours = Hours;
@@ -150,8 +157,7 @@ void AWwSky::Tick(float DeltaSeconds)
 	const float MoonLit = 0.5f - 0.5f * (float)FMath::Cos(SkyNow.MoonPhase * UE_DOUBLE_TWO_PI);
 	const float MoonUp = (float)FMath::SmoothStep(-0.02, 0.15, ToMoon.Z) * (1.f - Day);
 	Moon->SetIntensity(0.06f + 0.34f * MoonLit * MoonUp);
-	static const bool bNoMoon = FParse::Param(FCommandLine::Get(), TEXT("WwNoMoon")); // (test switch)
-	Moon->SetVisibility(MoonUp > 0.01f && !bNoMoon);
+	Moon->SetVisibility(MoonUp > 0.01f && Set.On(TEXT("view.moon")));
 	Moon->SetCastShadows(MoonUp > 0.3f && MoonLit > 0.3f);
 
 	UpdateWeather(DeltaSeconds, View, Day);
@@ -159,8 +165,10 @@ void AWwSky::Tick(float DeltaSeconds)
 	const float Overcast = (float)FMath::SmoothStep(0.55, 1.0, (double)Weather.Cloudiness);
 	static const float SunScale = [] { float V = 1; FParse::Value(FCommandLine::Get(), TEXT("WwSun="), V); return V; }(); // test switch: the sun's strength
 	Sun->SetIntensity(8.f * Day * SunScale * (1.f - 0.35f * Overcast) * (1.f - 0.2f * Weather.Precipitation));
-	static const bool bSunShadows = !FParse::Param(FCommandLine::Get(), TEXT("WwNoSunShadows")); // test switch
-	Sun->SetCastShadows(bSunShadows && Day > 0.02f);
+	Sun->SetCastShadows(Set.On(TEXT("view.sunshadows")) && Day > 0.02f);
+	ExposureBias = (float)Set.Num(TEXT("view.exposure")); Saturation = (float)Set.Num(TEXT("view.saturation"));
+	Grade->Settings.AutoExposureBias = ExposureBias;
+	Grade->Settings.ColorSaturation = FVector4(Saturation, Saturation, Saturation, 1.0);
 	// (under water the whole view is one dim colour: left to itself the exposure lifts it to a bright fog)
 	// (by night the eye opens much further: moonlight is a few thousandths of daylight, and a night must be dim, not black)
 	Grade->Settings.AutoExposureMinBrightness = -FMath::Lerp(NightEv + 1.5f, CameraDepth > .02f ? SunEv + 1.f : ShadeEv, Day);
@@ -176,6 +184,7 @@ void AWwSky::Tick(float DeltaSeconds)
 	// The stars: a dome round the camera, turning once a day about the pole, lit as the sun goes.
 	if (Stars)
 	{
+		Stars->SetVisibility(Set.On(TEXT("view.stars")));
 		const double Turn = (Clock.Hour - 12.0) * 15.0 + Clock.Day * 0.9856;
 		Stars->SetWorldLocationAndRotation(View, FQuat(FVector(1, 0, 0), FMath::DegreesToRadians(90.0 - Latitude)) * FQuat(FVector(0, 0, 1), FMath::DegreesToRadians(Turn)));
 		if (StarMaterial) StarMaterial->SetScalarParameterValue(TEXT("Glow"), 0.06f * (1.f - (float)FMath::SmoothStep(-0.12, 0.0, ToSun.Z)) * (1.f - 0.7f * MoonLit * MoonUp));
@@ -213,7 +222,7 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 		}
 		UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 		UMaterialInterface* StarBase = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwStars.M_WwStars"));
-		if (Sphere && StarBase && !FParse::Param(FCommandLine::Get(), TEXT("WwNoStars"))) // (test switch)
+		if (Sphere && StarBase)
 		{
 			StarMaterial = UMaterialInstanceDynamic::Create(StarBase, this);
 			Stars = NewObject<UStaticMeshComponent>(this);
@@ -240,9 +249,25 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 	}
 	const ww::u64 Seed = WorldSystem ? (ww::u64)WorldSystem->GetSettings().Seed : 1;
 	Weather.Update(DeltaSeconds, Clock.TotalHours(), AnnualRain, Temperature, 0, Seed);
-	if (ForcedRain >= 0) { Weather.Precipitation = ForcedRain; Weather.Cloudiness = FMath::Max(Weather.Cloudiness, ForcedRain * .95f + .05f); Weather.bThunder = ForcedRain > .78f && Temperature > 6; }
-	if (ForcedCloud >= 0) Weather.Cloudiness = FMath::Max(ForcedCloud, Weather.Precipitation > 0 ? Weather.Precipitation * .95f + .05f : 0.f);
+	FWwSettings& Set = FWwSettings::Get();
+	// Weather set by hand in the menu (or by the test switches -WwRain=, -WwCloud=): it replaces the fronts.
+	if (Set.Int(TEXT("test.weather")) == 1)
+	{
+		const float ByHand = (float)Set.Num(TEXT("test.rain"));
+		Weather.Precipitation = ByHand;
+		Weather.Cloudiness = FMath::Max((float)Set.Num(TEXT("test.cloud")), ByHand > 0 ? ByHand * .95f + .05f : 0.f);
+		if (Set.On(TEXT("test.snow"))) Weather.bSnow = true;
+		Weather.bThunder = ByHand > .78f && !Weather.bSnow;
+	}
 	Wind.Update(DeltaSeconds, Clock.TotalHours(), Weather.Storm(), Seed);
+	if (Set.On(TEXT("test.windset")))
+	{
+		// (the menu gives where it blows from, clockwise from north; the wind holds where it blows to: east, south)
+		const double From = FMath::DegreesToRadians(Set.Num(TEXT("test.winddir")));
+		Wind.DirX = -FMath::Sin(From); Wind.DirZ = FMath::Cos(From);
+		Wind.SteadySpeed = (float)Set.Num(TEXT("test.windspeed"));
+		Wind.Speed = Wind.SteadySpeed * (1.f + 0.3f * Wind.Gust);
+	}
 
 	if (CloudMaterial)
 	{
@@ -254,8 +279,7 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 		CloudMaterial->SetScalarParameterValue(TEXT("StormClouds"), FMath::Clamp(Weather.Precipitation * 1.4f - 0.3f, 0.f, 1.f));
 	}
 	// Rain hangs in the air as haze.
-	static const float Haze = [this] { return Fog->FogDensity; }();
-	Fog->SetFogDensity(Haze * (1.f + 9.f * Weather.Precipitation + 1.5f * (float)FMath::SmoothStep(0.6, 1.0, (double)Weather.Cloudiness)));
+	Fog->SetFogDensity(BaseHaze * (float)Set.Num(TEXT("view.haze")) * (1.f + 9.f * Weather.Precipitation + 1.5f * (float)FMath::SmoothStep(0.6, 1.0, (double)Weather.Cloudiness)));
 	// Lightning: a flash now and then in a thunderstorm.
 	FlashSeconds -= DeltaSeconds;
 	if (Weather.bThunder && (NextFlash -= DeltaSeconds) <= 0)
@@ -266,17 +290,31 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 		// (the strike is somewhere between close and far: its thunder follows after the sound's travel time)
 		Soundscape.Thunder(FMath::FRandRange(500.f, 9000.f), FMath::FRand() < 0.6f, FMath::Rand());
 	}
+	// The menu's lightning buttons.
+	static const TCHAR* StrikeKeys[4] = { TEXT("test.strike150"), TEXT("test.strike1k"), TEXT("test.strike5k"), TEXT("test.strike20k") };
+	static const double StrikeAt[4] = { 150, 1000, 5000, 20000 };
+	for (int32 i = 0; i < 4; i++) if (Set.Changed(StrikeKeys[i], StrikeSeen[i])) Strike(StrikeAt[i]);
 	Flash->SetVisibility(FlashSeconds > 0);
 	UpdateRain(DeltaSeconds, View);
 	UpdateSound(DeltaSeconds, View);
 }
 
+void AWwSky::Strike(double Distance)
+{
+	FlashSeconds = FMath::FRandRange(0.1f, 0.22f) * (Distance < 2000 ? 1.f : 0.6f);
+	Flash->SetWorldRotation(FRotator(FMath::FRandRange(-80.f, -40.f), FMath::FRandRange(0.f, 360.f), 0.f));
+	Flash->SetVisibility(true);
+	Soundscape.Thunder(Distance, true, FMath::Rand());
+	UE_LOG(LogWayfarer, Display, TEXT("Lightning %.0f m away: thunder in %.1f s"), Distance, Distance / 340.0);
+}
+
 void AWwSky::UpdateSound(float DeltaSeconds, const FVector& View)
 {
+	const FWwSettings& Set = FWwSettings::Get();
 	if (!bSoundTried)
 	{
 		bSoundTried = true;
-		if (FParse::Param(FCommandLine::Get(), TEXT("WwNoSound"))) return; // (test switch)
+		if (!Set.On(TEXT("sound.on"))) { bSoundTried = false; return; } // (off: nothing is made until it is turned on)
 		SoundWave = NewObject<USoundWaveProcedural>(this);
 		SoundWave->SetSampleRate(ww::FSoundscape::Rate);
 		SoundWave->NumChannels = 2;
@@ -292,6 +330,11 @@ void AWwSky::UpdateSound(float DeltaSeconds, const FVector& View)
 		SoundPlayer->Play();
 	}
 	if (!SoundWave) return;
+	Soundscape.VolMaster = Set.On(TEXT("sound.on")) ? (float)Set.Num(TEXT("sound.master")) : 0.f;
+	Soundscape.VolWeather = (float)Set.Num(TEXT("sound.weather")); Soundscape.VolRain = (float)Set.Num(TEXT("sound.rain"));
+	Soundscape.VolWind = (float)Set.Num(TEXT("sound.wind")); Soundscape.VolThunder = (float)Set.Num(TEXT("sound.thunder"));
+	Soundscape.VolWater = (float)Set.Num(TEXT("sound.water")); Soundscape.VolSmall = (float)Set.Num(TEXT("sound.small"));
+	Soundscape.RainTone = (float)Set.Num(TEXT("sound.raintone"));
 	Soundscape.Precipitation = Weather.Precipitation;
 	Soundscape.bSnowing = Weather.bSnow;
 	Soundscape.WindSpeed = Wind.Speed;
@@ -490,9 +533,11 @@ void AWwGameMode::InitGame(const FString& MapName, const FString& Options, FStri
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
 	const TCHAR* Cmd = FCommandLine::Get();
-	FParse::Value(Cmd, TEXT("WwSeed="), Settings.Seed);
-	FParse::Value(Cmd, TEXT("WwType="), Settings.WorldType);
-	FParse::Value(Cmd, TEXT("WwSizeKm="), Settings.SizeKm);
+	// The world chosen in the menu's World page (or by the switches -WwSeed= -WwType= -WwSizeKm=, which reach it there).
+	const FWwSettings& Set = FWwSettings::Get();
+	Settings.Seed = Set.Int(TEXT("world.seed"));
+	Settings.WorldType = Set.Option(TEXT("world.type"));
+	Settings.SizeKm = Set.Int(TEXT("world.size")) == 0 ? 0.f : FCString::Atof(*Set.Option(TEXT("world.size")));
 	FParse::Value(Cmd, TEXT("WwRevision="), Settings.TerrainRevision);
 	FParse::Value(Cmd, TEXT("WwAutoShot="), AutoShotSeconds);
 	bLogStats = FParse::Param(Cmd, TEXT("WwStats"));
@@ -536,8 +581,60 @@ void AWwGameMode::LogStats(const TCHAR* Why)
 void AWwGameMode::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	FWwSettings& Set = FWwSettings::Get();
+	Set.SaveIfDue();
+	// The menu's World page: a random seed; and leaving for the world chosen there (the level is opened afresh and
+	// InitGame reads the choice).
+	if (Set.Changed(TEXT("world.random"), RandomSeen)) Set.Set(TEXT("world.seed"), FMath::RandRange(1, 999999));
+	if (Set.Changed(TEXT("world.make"), MakeSeen))
+	{
+		Set.Save();
+		UE_LOG(LogWayfarer, Display, TEXT("Menu: making the world %s, %s km, seed %d"), *Set.Option(TEXT("world.type")), *Set.Option(TEXT("world.size")), Set.Int(TEXT("world.seed")));
+		UGameplayStatics::OpenLevel(this, FName(*UWorld::RemovePIEPrefix(GetWorld()->GetOutermost()->GetName())));
+		return;
+	}
 	AWwCharacter* Player = Cast<AWwCharacter>(UGameplayStatics::GetPlayerPawn(this, 0));
 	if (!Player || !Player->IsPlaced()) return;
+	// Test switch -WwEsc=<seconds>,<seconds>: the Esc key pressed at those moments, as from the keyboard (a scripted
+	// check that the menu opens from the game and closes from inside itself).
+	{
+		static const TArray<double> EscAt = [] { TArray<double> Out; FString Text; TArray<FString> Parts; if (FParse::Value(FCommandLine::Get(), TEXT("WwEsc="), Text, false)) { Text.ParseIntoArray(Parts, TEXT(",")); for (const FString& Part : Parts) Out.Add(FCString::Atod(*Part)); } return Out; }();
+		const double Now = Player->GetSecondsPlaced();
+		for (double At : EscAt)
+			if (Now >= At && Now - DeltaSeconds < At)
+			{
+				FSlateApplication& App = FSlateApplication::Get();
+				const FKeyEvent Down(EKeys::Escape, FModifierKeysState(), 0, false, 0x1B, 0x1B), Up(EKeys::Escape, FModifierKeysState(), 0, false, 0x1B, 0x1B);
+				App.ProcessKeyDownEvent(Down); App.ProcessKeyUpEvent(Up);
+				UE_LOG(LogWayfarer, Display, TEXT("-WwEsc: Esc pressed at %.1f s"), Now);
+			}
+	}
+	// Test switch -WwSet=key=value;key=value: three seconds in, these settings change as if set in the menu (a
+	// scripted check that the menu's settings reach the game). -WwPress=key;key presses buttons the same way.
+	static bool bSetOnce = false; // (once in a run, not once in each world)
+	if (!bSetOnce && Player->GetSecondsPlaced() > 3.0)
+	{
+		bSetOnce = true;
+		FString Text;
+		if (FParse::Value(FCommandLine::Get(), TEXT("WwSet="), Text, false))
+		{
+			TArray<FString> Pairs;
+			Text.ParseIntoArray(Pairs, TEXT(";"));
+			for (const FString& Pair : Pairs)
+			{
+				FString Key, Value;
+				if (!Pair.Split(TEXT("="), &Key, &Value) || !Set.Find(FName(*Key))) { UE_LOG(LogWayfarer, Warning, TEXT("-WwSet: no setting '%s'"), *Pair); continue; }
+				Set.Set(FName(*Key), FCString::Atod(*Value));
+				UE_LOG(LogWayfarer, Display, TEXT("-WwSet: %s = %s"), *Key, *Value);
+			}
+		}
+		if (FParse::Value(FCommandLine::Get(), TEXT("WwPress="), Text, false))
+		{
+			TArray<FString> Keys;
+			Text.ParseIntoArray(Keys, TEXT(";"));
+			for (const FString& Key : Keys) { Set.Press(FName(*Key)); UE_LOG(LogWayfarer, Display, TEXT("-WwPress: %s"), *Key); }
+		}
+	}
 	// (the first second after placement is start-up: shader and collision warm-up, not streaming)
 	if (Player->GetSecondsPlaced() > 1.0) { Frames++; FrameTimeSum += DeltaSeconds; WorstFrame = FMath::Max<double>(WorstFrame, DeltaSeconds); FrameTimes.Add(DeltaSeconds); }
 	StatsTimer += DeltaSeconds;
@@ -581,6 +678,14 @@ void AWwHUD::DrawHUD()
 		return;
 	}
 	SmoothedFrame = FMath::Lerp(SmoothedFrame, (double)GetWorld()->GetDeltaSeconds(), 0.05);
+	// Test switch -WwMenu=<page>: the menu open on that page from the start (for pictures of it).
+	if (!bMenuSwitchDone)
+	{
+		bMenuSwitchDone = true;
+		FString Wanted;
+		if (FParse::Value(FCommandLine::Get(), TEXT("WwMenu="), Wanted)) { ToggleMenu(); if (Menu) Menu->ShowPage(Wanted); }
+	}
+	if (!FWwSettings::Get().On(TEXT("view.hud"))) return;
 	const FVector P = Player->GetActorLocation();
 	const double X = P.X / 100.0, Z = P.Y / 100.0;
 	std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem->GetSampler();
@@ -596,9 +701,9 @@ void AWwHUD::DrawHUD()
 			Y += 20;
 		}
 	if (const FString Status = Player->GetStatus(); !Status.IsEmpty()) { Line(Status, 16, Y, 1.0f); Y += 20; }
-	Line(Player->IsFlying() ? TEXT("FLYING  WASD move, E/Q up/down, Shift fast, Ctrl very fast, F walk, F9 debug dump, Esc quit")
-		: Player->IsSwimming() ? TEXT("SWIMMING  WASD swim, Shift faster, Space up, C dive, F fly, F9 debug dump, Esc quit")
-		: TEXT("WASD walk, Shift sprint, Space jump, I pack, E gather, left mouse axe, T eat, F fly, F9 dump, Esc quit"), 16, Canvas->SizeY - 30, 1.0f);
+	Line(Player->IsFlying() ? TEXT("FLYING  WASD move, E/Q up/down, Shift fast, Ctrl very fast, F walk, F9 debug dump, Esc menu")
+		: Player->IsSwimming() ? TEXT("SWIMMING  WASD swim, Shift faster, Space up, C dive, F fly, F9 debug dump, Esc menu")
+		: TEXT("WASD walk, Shift sprint, Space jump, I pack, E gather, left mouse axe, T eat, F fly, F9 dump, Esc menu"), 16, Canvas->SizeY - 30, 1.0f);
 	for (TActorIterator<AWwSky> It(GetWorld()); It; ++It) { Line(It->WeatherLine(), Canvas->SizeX - 430, 16, 1.0f); break; }
 	// The placeholder mechanics: needs, the last thing that happened, and the pack with what can be made.
 	if (FWwGameplay* Game = WorldSystem->GetGameplay())
@@ -615,4 +720,53 @@ void AWwHUD::DrawHUD()
 			Line(TEXT("I closes the pack. T eats. E picks up or pulls grass. Left mouse: the axe."), Canvas->SizeX - 626, PackY + 4, 0.9f);
 		}
 	}
+}
+
+void AWwHUD::ToggleMenu()
+{
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC || !GEngine || !GEngine->GameViewport) return;
+	if (!bMenuOpen)
+	{
+		if (!Menu)
+		{
+			SAssignNew(Menu, SWwMenu)
+				.OnClose_Lambda([this] { if (bMenuOpen) ToggleMenu(); })
+				.OnQuit_Lambda([this] { FWwSettings::Get().Save(); if (APlayerController* Owner = GetOwningPlayerController()) Owner->ConsoleCommand(TEXT("quit")); })
+				.Status_Lambda([this]() -> FText
+				{
+					const UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+					if (!WorldSystem) return FText::GetEmpty();
+					const FWwWorldSettings& S = WorldSystem->GetSettings();
+					return FText::FromString(FString::Printf(TEXT("You are in: %s, %s, seed %d"), *S.WorldType, S.SizeKm > 0 ? *FString::Printf(TEXT("%.0f km across"), S.SizeKm) : TEXT("its own size"), S.Seed));
+				});
+		}
+		MenuHolder = SNew(SWeakWidget).PossiblyNullContent(Menu);
+		GEngine->GameViewport->AddViewportWidgetContent(MenuHolder.ToSharedRef(), 50);
+		FInputModeGameAndUI Mode;
+		Mode.SetWidgetToFocus(Menu);
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		Mode.SetHideCursorDuringCapture(false);
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = true;
+		bMenuOpen = true;
+		UE_LOG(LogWayfarer, Display, TEXT("Menu opened (%s)"), *Menu->GetPage());
+	}
+	else
+	{
+		if (MenuHolder) GEngine->GameViewport->RemoveViewportWidgetContent(MenuHolder.ToSharedRef());
+		MenuHolder.Reset();
+		PC->SetInputMode(FInputModeGameOnly());
+		PC->bShowMouseCursor = false;
+		bMenuOpen = false;
+		FWwSettings::Get().Save();
+		UE_LOG(LogWayfarer, Display, TEXT("Menu closed"));
+	}
+}
+
+void AWwHUD::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if (MenuHolder && GEngine && GEngine->GameViewport) GEngine->GameViewport->RemoveViewportWidgetContent(MenuHolder.ToSharedRef());
+	MenuHolder.Reset(); Menu.Reset(); bMenuOpen = false;
+	Super::EndPlay(Reason);
 }
