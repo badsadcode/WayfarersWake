@@ -61,6 +61,9 @@ struct FClimateSettings
 	double Span(double WorldSize) const;
 };
 
+/// A world's setting for one landform module: Amount 0 = off, 1 = as designed; Size 1 = as designed.
+struct FLandformSetting { double Amount = 1, Size = 1; bool Off() const { return Amount <= 0; } };
+
 /// Terrain tuning outside the frozen profile schema (Thornwake TerrainStyle).
 struct FTerrainStyle
 {
@@ -71,12 +74,20 @@ struct FTerrainStyle
 	double RiverMinCatchmentKm2 = 30, RiverWidthPerSqrtKm2 = .9, RiverMinWidth = 4, RiverMaxWidth = 320, RiverMinSlope = .00005;
 	double RiverMouthWidening = 3, DeltaMinCatchmentKm2 = 1500;
 	double ForestCover = 1.15, ForestDensity = 1.2, RockAmount = 1, PropAmount = 1;
-	/// Terrain revision. This port implements 8..16; Thornwake's current is 44 (landform modules, see SYSTEM_AUDIT.md).
+	/// Terrain revision: worlds record theirs, so a new revision never changes an existing world. This port implements
+	/// 8..PortedRevision; Thornwake's current is 44.
 	int Revision = PortedRevision;
+	/// Landform module settings by module id (revision 17 on; missing = as designed).
+	std::map<std::string, FLandformSetting> Landforms;
+	FLandformSetting Landform(const char* Id) const
+	{
+		if (Revision >= 17) { auto it = Landforms.find(Id); if (it != Landforms.end()) return it->second; }
+		return FLandformSetting();
+	}
 	FClimateSettings Climate;
 	double MouthBlend = 1, ShoreSlope = 1, BankVariation = 1, MeanderStrength = 1, WanderStrength = 1, WidthVariation = 1;
 
-	static constexpr int PortedRevision = 16;
+	static constexpr int PortedRevision = 23;
 	static FTerrainStyle For(const FWorldProfile& Profile) { FTerrainStyle s; s.LowlandDetail = 20 + Profile.HillHeight * .05; return s; }
 };
 
@@ -192,6 +203,19 @@ public:
 	int LakeNear(double x, double z) const;
 	int LakeDistance(double x, double z, double& cells) const;
 	int NearbyRivers(double x, double z, FRiverHit* Hits, int MaxHits) const;
+	/// Nearest river within radius metres (ranked by distance from the channel edge), if any.
+	bool NearestRiver(double x, double z, double radius, FRiverHit& Hit) const;
+
+	/// A waterfall (revision 20): where on which reach, the lip's position, the height of the drop.
+	struct FWaterfall { int Reach = 0, Point = 0; FPoint2 Lip; double Height = 0; };
+	/// Waterfalls of this world, biggest first.
+	std::vector<FWaterfall> Falls;
+	/// How much a point of a reach lies in the gorge below a waterfall (0..1).
+	double Gorge(int Reach, double Along) const;
+	/// A gorge below a fall made by another landform (glacial troughs).
+	void AddGorge(int Reach, double From, double To);
+	/// Removes the falls of a reach whose drop another landform has taken away (and the gorge below each).
+	void DropFalls(int Reach, const std::function<bool(int)>& Gone);
 	i64 PointCount() const;
 
 	static double Bank(double width) { return Mx(8, width * .8); }
@@ -208,6 +232,8 @@ private:
 	FShaped Shape(const std::vector<double>& bx, const std::vector<double>& bz, const std::vector<std::vector<double>>& battr, double drop,
 		u64 noiseSeed, double endWidth, bool mouth, bool toSea, double wanderScale);
 	void AddDeltas(const FTerrainStyle& style);
+	void AddWaterfalls(FLandformSetting setting);
+	std::unordered_map<int, std::vector<std::pair<double, double>>> Gorges; // reach -> (from, to) metres along
 	void BuildIndex(double bucket);
 
 	const FMacroRaster* Raster;
@@ -263,6 +289,7 @@ public:
 struct FBiomeTerrainMods { double Pools = 0, PoolDepth = 0, PoolSize = 0, PoolChannels = 0, Flatten = 0, Dunes = 0, Mesas = 0, Spires = 0, SpirePresence = 0; };
 
 class FWorldPlan;
+class FPlanLandform;
 
 /// Annual mean temperature and precipitation on a raster half the macro resolution.
 class FClimate
@@ -315,6 +342,10 @@ public:
 	std::unique_ptr<FHydrology> Hydrology;
 	std::unique_ptr<FClimate> Climate;
 	std::unique_ptr<FBiomeMap> Biomes;
+	std::unique_ptr<class FCanyons> Canyons;   // revision 21
+	std::unique_ptr<class FCirques> Cirques;   // revision 23
+	/// Big landform modules applied before erosion (revision 17 on).
+	std::vector<std::unique_ptr<FPlanLandform>> PlanLandforms;
 	double BuildMilliseconds = 0;
 
 	const FWorldProfile& Profile() const { return Manifest.Profile; }
@@ -322,6 +353,7 @@ public:
 	/// Stage: called with 0 land shape, 2 erosion/rivers/lakes, 3 climate, 4 biomes as each starts.
 	FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& InStyle, const FBiomeRegistry& InBiomes,
 		const std::function<void(int)>& Stage = nullptr, int RasterSizeOverride = 0);
+	~FWorldPlan();
 	/// Approximate bytes held by the plan (rasters, rivers, biome map).
 	i64 MemoryBytes() const;
 };
@@ -362,6 +394,8 @@ struct FTerrainSample
 	double WaterLevel = 0;  // absolute surface elevation (NaN if dry)
 	int WaterBody = -1;     // lake id or river reach id
 	double Plume = 0;
+	double Lava = 0;        // 0..1 lava cover (revision 31)
+	double Scree = 0;       // 0..1 loose rock fallen from a wall above (revision 33)
 };
 
 /// The terrain authority for generated ground: a pure, thread-safe function of world position.
@@ -385,7 +419,7 @@ private:
 	double Continent(double land, double rasterLand, double macroHeight, double coastDistance, double& mountainShare) const;
 	void Detail(double lx, double lz, double minWavelength, double land, double mountainShare, double& inland, double& detail, double& roughness) const;
 	double Rivers(double x, double z, double minWavelength, double baseHeight, double inland, double detail, double& riverDamp,
-		EWaterKind& water, double& level, int& body) const;
+		EWaterKind& water, double& level, int& body, double& scree, double wall) const;
 	void LakesStage(double x, double z, double& height, EWaterKind& water, double& level, int& body, double& lakePlume, double& lakeCells) const;
 	double Pool(double lx, double lz, double height, double smooth, double cover, double depth, double size, double channels,
 		double minWavelength, EWaterKind& water, double& level) const;
@@ -398,11 +432,13 @@ private:
 	double WaterHalfWidth(const FRiverHit& r, double& shelf, double& slow) const;
 	double Estuary(const FRiverHit& r) const;
 	double CoastAlong(int index) const;
-	double Profile(const FRiverHit& r0, double terrain, double rise, double spacing, double& weight, double& inside) const;
+	double Profile(const FRiverHit& r0, double terrain, double rise, double spacing, double& weight, double& inside, double x, double z, double wall) const;
 	double Ledge(double h, const FRiverHit& r, double half, double bulge, double& inside) const;
 	double Shelf(double bed, const FRiverHit& r, double nominal, double half, double shelf) const;
 	double ChannelProfile(const FRiverHit& r, double half, double terrain, double rise, double& weight, double& inside, double distance,
-		double beach, double estuary) const;
+		double beach, double estuary, double x, double z, double wall) const;
+	double GorgeWall(double bankTop, double terrain, double w, double ramp, double gorge, double x, double z) const;
+	double PlanGround(double x, double z, double minWavelength, double& bare, double& scree) const;
 	double BiomeLandforms(double x, double z, double lx, double lz, double detail, double inland, double minWavelength, const FBiomeTerrainMods& mods) const;
 	double DuneHeight(double lx, double lz, double minWavelength) const;
 	double MesaUplift(double lx, double lz, double minWavelength) const;
@@ -418,6 +454,8 @@ private:
 	double DuneAngle;
 	std::vector<double> PoolQuantiles, ChannelQuantiles;
 	double PoolStd = 1, ChannelStd = 1, CoastBand = .25;
+	const class FCanyons* Canyons = nullptr;
+	const class FCirques* Cirques = nullptr;
 	std::vector<double> CoastAlongCache; // computed up front (the source caches lazily)
 };
 }

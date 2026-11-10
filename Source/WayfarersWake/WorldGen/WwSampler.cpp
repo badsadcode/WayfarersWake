@@ -1,7 +1,7 @@
 // Port of Thornwake Game/WorldGen: TerrainSampler.cs, TerrainSampler.Water.cs, BiomeLandforms.cs, TerrainEdits.cs
 // (terrain revisions 8..16). The height pipeline, one stage per method, water last so it carves through everything:
 // coast -> sea | continent -> detail -> biome terrain -> rivers -> lakes -> wetland pools -> player edits.
-#include "WwWorld.h"
+#include "WwLandforms.h"
 
 namespace ww
 {
@@ -113,6 +113,8 @@ FTerrainSampler::FTerrainSampler(std::shared_ptr<const FWorldPlan> InPlan)
 	auto SeedOf = [&](const char* layer) { return Hashing::FeatureSeed(m.Seed, 100 + FWorldManifest::CurrentGenerator, m.ProfileDigest, layer); };
 	DetailSeed = SeedOf("detail"); RockSeed = SeedOf("rock"); CoastSeed = SeedOf("coast"); RegionSeed = SeedOf("region"); BankSeed = SeedOf("banks");
 	PoolSeed = SeedOf("pools");
+	Canyons = Plan->Canyons && Plan->Canyons->Count() > 0 ? Plan->Canyons.get() : nullptr;
+	Cirques = Plan->Cirques && Plan->Cirques->Count() > 0 ? Plan->Cirques.get() : nullptr;
 	LandformSeed = SeedOf("landforms");
 	DuneAngle = Hashing::Unit(Hashing::Mix(LandformSeed)) * 6.283185307179586; // prevailing sand-moving wind of this world
 	BuildQuantiles([this](double u, double v) { return PoolNoise(u, v, 1, 0); }, PoolQuantiles, PoolStd);
@@ -144,8 +146,13 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 	Coast(x, z, lx, lz, minWavelength, land, macroHeight, mountainShare, rasterLand, coastDistance);
 	if (land <= 0) return Sea(x, z, land, coastDistance);
 	double baseHeight = Continent(land, rasterLand, macroHeight, coastDistance, mountainShare);
+	double canyon = Canyons ? Canyons->Uplift(x, z) : 0; // (revision 21: raised land a river has cut through)
+	baseHeight += canyon;
 	double inland, detail, roughness;
 	Detail(lx, lz, minWavelength, land, mountainShare, inland, detail, roughness);
+
+	double bare = 0, scree = 0;
+	if (!Plan->PlanLandforms.empty()) { double planScree; detail += PlanGround(x, z, minWavelength, bare, planScree); scree = Mx(scree, planScree); }
 
 	// Stage 3, biome terrain: wetland flattening and pool settings, then the biome landforms (dunes, mesas, spires).
 	bool wetland = false;
@@ -162,13 +169,25 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 	if (Style.Revision >= 12 && wetland && mods.Dunes + mods.Mesas + mods.Spires > 0)
 		detail = BiomeLandforms(x, z, lx, lz, detail, inland, minWavelength, mods);
 
+	// Revision 23: cirques, carved after the biome's landforms so their tarns win.
+	if (Cirques) detail += Cirques->Carve(x, z, baseHeight + detail, detail);
+
 	EWaterKind water = EWaterKind::None; double level = NaNValue(); int body = -1; double riverDamp = 1;
-	double height = Rivers(x, z, minWavelength, baseHeight, inland, detail, riverDamp, water, level, body);
+	double height = Rivers(x, z, minWavelength, baseHeight, inland, detail, riverDamp, water, level, body, scree, FCanyons::Wall(canyon));
+	// Revision 33: a gorge's talus is bare ground as the escarpments' debris slopes are (scree, not cliff rock).
+	bare = Mx(bare, .65 * scree);
 	double lakePlume = 0, lakeCells = Inf;
 	LakesStage(x, z, height, water, level, body, lakePlume, lakeCells);
+	// Revision 23: a cirque's tarn, still water of its own (drawn as a pond), where nothing else is water.
+	if (Cirques && water == EWaterKind::None)
+	{
+		double tarn;
+		if (Cirques->Tarn(x, z, height, tarn)) { water = EWaterKind::Pond; level = tarn; }
+	}
 
 	// Stage 6, wetland pools (revision 11): standing water in pool biomes where nothing else is water.
-	if (wetland && poolCover > 0 && water == EWaterKind::None)
+	// Revision 22: none where a river has cut the ground down by over 2 m (valley sides, canyon and gorge walls).
+	if (wetland && poolCover > 0 && water == EWaterKind::None && (Style.Revision < 22 || baseHeight + detail * riverDamp - height < 2))
 	{
 		double floor = .2 * inland + .05;
 		// Pool water level: the ground without its short relief (the long waves only, flattened like the rest).
@@ -192,9 +211,23 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 		if (water != EWaterKind::None && P.SeaLevel + height >= level - .02) { water = EWaterKind::None; level = NaNValue(); body = -1; }
 	}
 	FTerrainSample out;
-	out.Height = P.SeaLevel + height; out.Land = land; out.Mountain = mountainShare; out.Detail = detail;
+	if (water != EWaterKind::None) scree = 0;
+	out.Height = P.SeaLevel + height; out.Land = land; out.Mountain = bare > 0 ? Mx(mountainShare, bare) : mountainShare; out.Detail = detail;
+	out.Scree = scree;
 	out.Water = water; out.WaterLevel = level; out.WaterBody = body; out.Plume = lakePlume;
 	return out;
+}
+
+/// The big landforms' walking-scale relief (revision 18). Ground they lower is faded at lake shores.
+double FTerrainSampler::PlanGround(double x, double z, double minWavelength, double& bare, double& scree) const
+{
+	double g = 0;
+	bare = 0; scree = 0;
+	for (const auto& Form : Plan->PlanLandforms) { double rock, s; g += Form->Ground(x, z, minWavelength, rock, s); bare = Mx(bare, rock); scree = Mx(scree, s); }
+	if (g >= 0) return g;
+	double cells;
+	int lake = Hydro.LakeDistance(x, z, cells);
+	return lake >= 0 ? g * DetMath::Smooth((cells - 1.6) / .38) : g;
 }
 
 /// Stage 1a, coast: the macro raster (land, eroded height, mountain share) and the sub-raster coastline wiggle.
@@ -302,8 +335,14 @@ double FTerrainSampler::BiomeLandforms(double x, double z, double lx, double lz,
 	{
 		double s = Mn(1, mods.Mesas) * fade;
 		double up = MesaUplift(lx, lz, minWavelength);
+		if (Style.Revision >= 19)
+		{
+			// Revision 19: the biome's strength lowers the uplift itself, and only uplift above ~15 m is tiered.
+			up *= s;
+			if (up > 0) detail += up + (Mx(0, MesaTerrace(up, lx, lz, minWavelength)) - up) * DetMath::Smooth((up - 15) / 15);
+		}
 		// (x a ramp over the first 4 m: the terrace of a near-zero uplift is not exactly zero; no step at the foot.)
-		if (up > 0) detail += Mx(0, MesaTerrace(up, lx, lz, minWavelength)) * DetMath::Smooth(up / 4) * s;
+		else if (up > 0) detail += Mx(0, MesaTerrace(up, lx, lz, minWavelength)) * DetMath::Smooth(up / 4) * s;
 	}
 	return detail;
 }
@@ -375,6 +414,9 @@ double FTerrainSampler::SpireHeight(double lx, double lz, double minWavelength, 
 }
 
 // ------------------------------------------------------------------------------------------------ rivers
+/// The talus the last GorgeWall calls on this thread found (revision 33), for the river stage to report as scree.
+extern thread_local double TTalus;
+
 // Walking-scale detail fades over a wide corridor around a river (valley floors are smoother than hillsides).
 static double DetailDamp(const FRiverHit& r)
 {
@@ -383,7 +425,7 @@ static double DetailDamp(const FRiverHit& r)
 
 /// Stage 4, rivers: channel, banks and slope-limited valley sides replace the terrain near a river.
 double FTerrainSampler::Rivers(double x, double z, double minWavelength, double baseHeight, double inland, double detail, double& riverDamp,
-	EWaterKind& water, double& level, int& body) const
+	EWaterKind& water, double& level, int& body, double& scree, double wall) const
 {
 	double floor = .2 * inland + .05, height;
 	FRiverHit rivers[32];
@@ -427,7 +469,7 @@ double FTerrainSampler::Rivers(double x, double z, double minWavelength, double 
 		if (Style.Revision >= 13 && count > 1)
 		{
 			double deltas[16];
-			for (int i = 0; i < count; i++) deltas[i] = Profile(reaches[i], terrain, rise, minWavelength * .5, weight, inside) - terrain;
+			for (int i = 0; i < count; i++) deltas[i] = Profile(reaches[i], terrain, rise, minWavelength * .5, weight, inside, x, z, wall) - terrain;
 			for (int i = 0; i < count; i++)
 			{
 				double other = 0; int deepest = -1;
@@ -442,8 +484,10 @@ double FTerrainSampler::Rivers(double x, double z, double minWavelength, double 
 		double carve = 0, raise = 0, wetInside = 0;
 		for (int i = 0; i < count; i++)
 		{
-			double delta = Profile(reaches[i], terrain, rise, minWavelength * .5, weight, inside) - terrain;
+			TTalus = 0;
+			double delta = Profile(reaches[i], terrain, rise, minWavelength * .5, weight, inside, x, z, wall) - terrain;
 			if (delta > 0 && Style.MouthBlend > 0) delta *= LeveeFactor(reaches[i]);
+			if (delta < carve) scree = Mx(scree, TTalus); // (the talus of the wall that wins: the deepest carve)
 			carve = Mn(carve, delta);
 			raise = Mx(raise, delta);
 			if (inside > wetInside) { wetInside = inside; water = EWaterKind::River; level = reaches[i].Surface; body = reaches[i].Reach; }
@@ -667,7 +711,7 @@ double FTerrainSampler::Estuary(const FRiverHit& r) const
 	return 1 - DetMath::Smooth(toMouth / stretch);
 }
 
-double FTerrainSampler::Profile(const FRiverHit& r0, double terrain, double rise, double spacing, double& weight, double& inside) const
+double FTerrainSampler::Profile(const FRiverHit& r0, double terrain, double rise, double spacing, double& weight, double& inside, double x, double z, double wall) const
 {
 	bool rev9 = Style.Revision >= 9;
 	double estuary = Estuary(r0);
@@ -682,6 +726,12 @@ double FTerrainSampler::Profile(const FRiverHit& r0, double terrain, double rise
 		bulge = Mx(fast, 0);
 		shift = slow + Mn(fast, 0);
 	}
+	// Revision 20: no bank irregularity in the gorge below a waterfall (each small shift became a step on a high wall).
+	if (Style.Revision >= 20)
+	{
+		double inGorge = Mx(Hydro.Gorge(r0.Reach, r0.Along), wall);
+		if (inGorge > 0) { shift *= 1 - inGorge; bulge *= 1 - inGorge; }
+	}
 	double fade = bankWidth * 1.5 + (rev9 ? 2 * std::fabs(shift) : 0);
 	double carry = 1 - DetMath::Smooth((r0.Distance - nominal - Mx(shift, 0) - bankWidth) / fade);
 	FRiverHit r = r0;
@@ -690,7 +740,7 @@ double FTerrainSampler::Profile(const FRiverHit& r0, double terrain, double rise
 	double beach = BeachWidth(r0);
 	if (spacing <= 2.5 || spacing > 40)
 	{
-		double h = ChannelProfile(r, half, terrain, rise, weight, inside, -1, beach, estuary);
+		double h = ChannelProfile(r, half, terrain, rise, weight, inside, -1, beach, estuary, x, z, wall);
 		if (!rev9 && shelf > 0 && inside > 0 && shift > 0) h = Shelf(h, r0, nominal, nominal + shift, shelf);
 		if (bulge > 0) h = Ledge(h, r, half, bulge, inside);
 		return h;
@@ -699,13 +749,13 @@ double FTerrainSampler::Profile(const FRiverHit& r0, double terrain, double rise
 	// it really is; channels narrower than the spacing are drawn at least that wide.
 	half = Mx(half, spacing * .5);
 	double band = spacing * 1.5, d = r.Distance, surface = r.Surface - P.SeaLevel;
-	double outer = ChannelProfile(r, half, terrain, rise, weight, inside, half + band, beach, estuary);
+	double outer = ChannelProfile(r, half, terrain, rise, weight, inside, half + band, beach, estuary, x, z, wall);
 	inside = (half - d) / half;
 	double unusedWeight, unusedInside;
-	if (std::fabs(d - half) >= band) return ChannelProfile(r, half, terrain, rise, weight, unusedInside, -1, beach, estuary);
+	if (std::fabs(d - half) >= band) return ChannelProfile(r, half, terrain, rise, weight, unusedInside, -1, beach, estuary, x, z, wall);
 	double g = Mx(.05, (outer - surface) / band);
 	if (d >= half) return surface + g * (d - half);
-	double bed = ChannelProfile(r, half, terrain, rise, unusedWeight, unusedInside, -1, 0, 0);
+	double bed = ChannelProfile(r, half, terrain, rise, unusedWeight, unusedInside, -1, 0, 0, x, z, wall);
 	return Mx(bed, surface - g * (half - d));
 }
 
@@ -731,13 +781,16 @@ double FTerrainSampler::Shelf(double bed, const FRiverHit& r, double nominal, do
 }
 
 double FTerrainSampler::ChannelProfile(const FRiverHit& r, double half, double terrain, double rise, double& weight, double& inside, double distance,
-	double beach, double estuary) const
+	double beach, double estuary, double x, double z, double wall) const
 {
 	double bank = FHydrology::Bank(r.Width) * (1 + 2 * estuary), d = distance >= 0 ? distance : r.Distance, surface = r.Surface - P.SeaLevel;
 	double bankTop = surface + .6 + .15 * r.Depth; // (kept in this exact form: earlier terrain versions are bit-exact)
 	if (estuary > 0) bankTop -= (.6 + .15 * r.Depth) * .6 * estuary;
 	double extra = estuary > 0 ? Mx(0, half - r.Width * .5) + (bank - FHydrology::Bank(r.Width)) : 0; // estuary widening
 	double flood = Mn(FHydrology::Floodplain(r.Width, rise - bankTop), FHydrology::MaxFloodplain(r.Width) - beach - extra);
+	// Revision 20: below a waterfall the valley sides are a gorge's steep walls (about 70 degrees), not a floodplain.
+	double gorge = Style.Revision >= 20 ? Mx(Hydro.Gorge(r.Reach, r.Along), wall) : 0; // (wall: canyons, revision 21)
+	if (gorge > 0) flood += (Mx(bank, (rise - bankTop) * .35 + 4) - flood) * gorge;
 	// A beach: a low, gently sloping strip before the bank rises; everything beyond the waterline moves outward.
 	double lift = 0;
 	if (beach > 0 && d > half)
@@ -760,6 +813,7 @@ double FTerrainSampler::ChannelProfile(const FRiverHit& r, double half, double t
 		return from + (bankTop - from) * DetMath::Lerp(gentle, quick, high);
 	}
 	double ramp = DetMath::Lerp(Mn(flood, bank * 2 + 10), flood, DetMath::Smooth(terrain - bankTop + .5));
+	if (gorge > 0 && Style.Revision >= 21) return GorgeWall(bankTop, terrain, d - half - bank, ramp, gorge, x, z);
 	return bankTop + (terrain - bankTop) * DetMath::Smooth((d - half - bank) / ramp);
 }
 }

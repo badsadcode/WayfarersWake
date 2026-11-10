@@ -1,5 +1,5 @@
 // Port of Thornwake Game/WorldGen: Climate.cs, BiomeMap.cs, BiomeRegistry.cs, WorldPlan.cs (revision 16 paths).
-#include "WwWorld.h"
+#include "WwLandforms.h"
 #include <chrono>
 
 namespace ww
@@ -733,6 +733,11 @@ FWorldPlan::FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& In
 		}
 	});
 
+	// Big landforms (revision 17 on), before erosion, so rivers flow round, cut through or fill them.
+	if (Style.Revision >= 18 && !Style.Landform("escarpments").Off()) PlanLandforms.push_back(std::make_unique<FEscarpments>(Style.Revision));
+	if (!PlanLandforms.empty() && Stage) Stage(1);
+	for (auto& Form : PlanLandforms) Form->Shape(Macro, Manifest, Style.Landform(Form->Id()));
+
 	// Macro height above sea level: the lowland ramp from the coast plus faded relief; sea floor below 0.
 	std::vector<double> height((size_t)size * size);
 	for (size_t k = 0; k < height.size(); k++)
@@ -748,12 +753,17 @@ FWorldPlan::FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& In
 	Hydrology = std::make_unique<FHydrology>(Macro, height, p, Style, riverSeed);
 	for (size_t k = 0; k < height.size(); k++) heightRaster[k] = (float)height[k];
 	Hydrology->RefineSurfaces(Style);
+	// Canyons (revision 21): placed on the final rivers, before climate. Cirques (revision 23) read the rivers.
+	if (Style.Revision >= 21 && !Style.Landform("canyons").Off()) Canyons = std::make_unique<FCanyons>(*this, Style.Landform("canyons"));
+	if (Style.Revision >= 23 && !Style.Landform("cirques").Off()) Cirques = std::make_unique<FCirques>(*this, Style.Landform("cirques"));
 	if (Stage) Stage(3);
 	Climate = std::make_unique<FClimate>(*this, Style.Climate);
 	if (Stage) Stage(4);
 	Biomes = std::make_unique<FBiomeMap>(*this, *Climate, Style.Climate.Biomes ? InBiomes : FBiomeRegistry::ClassicOnly());
 	BuildMilliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Started).count();
 }
+
+FWorldPlan::~FWorldPlan() = default;
 
 i64 FWorldPlan::MemoryBytes() const
 {

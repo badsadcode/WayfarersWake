@@ -1,0 +1,62 @@
+[
+  {
+    "Case": "balanced/-9",
+    "Hash": "43ee5b2aa60ffa009c2f7a488ad8b753e0aa7afbf444c8bd3b21071cd859aa69"
+  },
+  {
+    "Case": "balanced/42",
+    "Hash": "4395627a8d86909eeef8db3891930bbe3675d0156b4bb59372392be2229ab7fd"
+  },
+  {
+    "Case": "balanced/7319",
+    "Hash": "8676f7504d678f64fcc9f014132cc2cd18f5fc67efd8a3c472b381b999681040"
+  },
+  {
+    "Case": "continental/-9",
+    "Hash": "8d058d1089183e8981d9880b20cdf8620dd31d67b567f22d2e0aaf8c338d04a3"
+  },
+  {
+    "Case": "continental/42",
+    "Hash": "ed2484869c1fb57042a69d85794a5bb8d545e73ce2e549447410297cb05521d6"
+  },
+  {
+    "Case": "continental/7319",
+    "Hash": "686f44e3c2828008ec4fbea669f8db361625aed7a9dbce16419bae7fcde1ff24"
+  },
+  {
+    "Case": "archipelago/-9",
+    "Hash": "96a622a20fd86f4d6eeda31cd673d44aabd92f99f2a1e277bc9379c71c0e808c"
+  },
+  {
+    "Case": "archipelago/42",
+    "Hash": "85d4b031e75852b7e750b014c58a7a1cca0c87c70c0a0dcc3c7ac02beddbe452"
+  },
+  {
+    "Case": "archipelago/7319",
+    "Hash": "8c1dc59c10ada9adb539f044a55aa413eda9f2187b186130f50f81767c9f0bb1"
+  },
+  {
+    "Case": "mountainous/-9",
+    "Hash": "32dc6383f8e2523d816dfe81f9a9f8d409462e921ef462bcf66657be93f09d38"
+  },
+  {
+    "Case": "mountainous/42",
+    "Hash": "8ac4861c482dd60e4b24ad1d1cedcff3b5a8a1294ea93bd4963cea116c28f7cb"
+  },
+  {
+    "Case": "mountainous/7319",
+    "Hash": "9de597cb3f40f60e0bf41610ec9b90013eaa84a98c246ccee2a5fd24b3722cdd"
+  },
+  {
+    "Case": "vast-world/-9",
+    "Hash": "758e4caf0de206e4a954e2609eb036dd016c2bb852a731244ceda5fdb2ef328d"
+  },
+  {
+    "Case": "vast-world/42",
+    "Hash": "764074e4f2e1ede55c3f7a33962b7f57295b7255203dbadabb6710e6daf14747"
+  },
+  {
+    "Case": "vast-world/7319",
+    "Hash": "f07c0c93636c6d7a349fa01fceaf100685c98fd6276016a8f1b28983d63eb769"
+  }
+]

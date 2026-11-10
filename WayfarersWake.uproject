@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.9",
+	"EngineAssociation": "{BDEA5045-4B76-E2EA-23B9-7DA674C7727E}",
 	"Category": "",
 	"Description": "Wayfarer's Wake - procedural fantasy survival sandbox (Unreal reimplementation of Thornwake).",
 	"Modules": [

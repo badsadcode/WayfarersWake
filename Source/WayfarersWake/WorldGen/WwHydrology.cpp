@@ -676,6 +676,7 @@ void FHydrology::RefineSurfaces(const FTerrainStyle& style)
 		r.Surface = std::move(surface);
 		if (r.DownstreamReach >= 0 && --pending[r.DownstreamReach] == 0) ready.push_back(r.DownstreamReach);
 	}
+	if (style.Revision >= 20 && !style.Landform("waterfalls").Off()) AddWaterfalls(style.Landform("waterfalls"));
 	// Confluences: all arriving reaches end exactly where the outgoing reach starts.
 	for (FRiverReach& r : Reaches)
 		if (r.DownstreamReach >= 0) r.Surface.back() = Mn(r.Surface.back(), Reaches[r.DownstreamReach].Surface[0]);
@@ -711,6 +712,149 @@ void FHydrology::RefineSurfaces(const FTerrainStyle& style)
 		}
 	}
 	BuildIndex(768);
+}
+
+double FHydrology::Gorge(int reach, double along) const
+{
+	if (Gorges.empty()) return 0;
+	auto it = Gorges.find(reach);
+	if (it == Gorges.end()) return 0;
+	double g = 0;
+	for (const auto& stretch : it->second)
+	{
+		double from = stretch.first, to = stretch.second;
+		if (along > from - 60 && along < to)
+			g = Mx(g, DetMath::Smooth((along - from + 60) / 50) * DetMath::Smooth((to - along) / ((to - from) * .3 + 1)));
+	}
+	return g;
+}
+
+void FHydrology::AddGorge(int reach, double from, double to) { Gorges[reach].push_back({ from, to }); }
+
+void FHydrology::DropFalls(int reach, const std::function<bool(int)>& gone)
+{
+	const FRiverReach& r = Reaches[reach];
+	for (int i = (int)Falls.size() - 1; i >= 0; i--)
+	{
+		const FWaterfall f = Falls[i];
+		if (f.Reach != reach || !gone(f.Point)) continue;
+		Falls.erase(Falls.begin() + i);
+		auto it = Gorges.find(reach);
+		if (it != Gorges.end())
+		{
+			auto& list = it->second;
+			list.erase(std::remove_if(list.begin(), list.end(), [&](const std::pair<double, double>& g) { return std::fabs(g.first - r.Along[f.Point]) < .1; }), list.end());
+		}
+	}
+}
+
+/// Waterfalls and the rapids below them (landform no. 2, revision 20): where a river drops much more steeply than
+/// just upstream, the water keeps its level to the lip, falls there, and runs on in a pool and gentle rapids.
+void FHydrology::AddWaterfalls(FLandformSetting setting)
+{
+	const double Window = 400, Upstream = 2000, MaxRun = 1500, MinAbove = 800;
+	double minDrop = 15 / Mx(setting.Amount, .1), minGrade = .04, maxFall = 120 * setting.Size;
+	for (FRiverReach& r : Reaches)
+	{
+		if (r.bDistributary || r.Points.size() < 8) continue;
+		std::vector<double>& s = r.Surface;
+		int np = (int)r.Points.size();
+		// (Along is only filled after this step: measure it here)
+		std::vector<double> along(np, 0.0);
+		for (int k = 1; k < np; k++) along[k] = along[k - 1] + std::sqrt(Sq(r.Points[k].X - r.Points[k - 1].X) + Sq(r.Points[k].Z - r.Points[k - 1].Z));
+		auto Ahead = [&](int k, double metres) { int j = k; while (j < np - 2 && along[j] - along[k] < metres) j++; return j; };
+		// A lake's outlet keeps the lake's level while its course runs inside the lake: no fall before it has left.
+		int first = 1;
+		if (r.StartLake >= 0)
+		{
+			double cells;
+			while (first < np && LakeDistance(r.Points[first].X, r.Points[first].Z, cells) == r.StartLake && cells < 1.6) first++;
+		}
+		for (int k = MxI(1, first); k < np - 3; k++)
+		{
+			// (a source has nothing upstream to judge a step against: mountain streams near their source stay cascades)
+			if (along[k] < MinAbove && r.UpstreamReaches.empty() && r.StartLake < 0) continue;
+			int w = Ahead(k, Window);
+			double drop = s[k] - s[w], grade = drop / Mx(1, along[w] - along[k]);
+			if (drop < minDrop || grade < minGrade) continue;
+			// Upstream grade over the last 2 km (or what the reach has): the step must be much steeper than that.
+			int u = k; while (u > 0 && along[k] - along[u] < Upstream) u--;
+			double up = u < k ? (s[u] - s[k]) / Mx(1, along[k] - along[u]) : 0;
+			if (grade < 4 * up) continue;
+			// The steep stretch: until the river's grade falls back toward its upstream grade, or the fall would be too high.
+			int end = w;
+			while (end < np - 2 && along[end] - along[k] < MaxRun && (s[k] - s[end]) * .85 < maxFall)
+			{
+				int next = Ahead(end, 200);
+				if (next == end || (s[end] - s[next]) / Mx(1, along[next] - along[end]) < Mx(2 * up, .015)) break;
+				end = next;
+			}
+			while (end > k + 2 && (s[k] - s[end]) * .85 > maxFall) end--; // (a steep first window: trim it back)
+			double top = s[k], bottom = s[end], height = (top - bottom) * .85;
+			// (not where the river already reaches the sea's level)
+			if (bottom < SeaLevel + .5) { k = end; continue; }
+			// Below the lip: at the pool's level at once, then rapids carrying the last 15 % of the drop.
+			for (int j = k + 1; j <= end; j++)
+			{
+				double f = (along[j] - along[k + 1]) / Mx(1, along[end] - along[k + 1]);
+				s[j] = Mn(s[j], bottom + (top - bottom) * .15 * (1 - f));
+			}
+			// Strictly descending, and above the stretch's end, which stays as it was.
+			for (int j = k + 1; j < end; j++)
+			{
+				if (s[j] >= s[j - 1]) s[j] = s[j - 1] - 1e-5;
+				s[j] = Mx(s[j], s[end] + (end - j) * 1e-5);
+			}
+			// The plunge pool: deeper and wider for the first ~40 m below the lip.
+			for (int j = k + 1; j <= end && along[j] - along[k] < 40; j++)
+			{
+				r.Depth[j] = (float)(r.Depth[j] + Mn(10, .25 * height) * setting.Size);
+				r.Width[j] = (float)(r.Width[j] * (1 + .5 * setting.Size));
+			}
+			FWaterfall fall;
+			fall.Reach = r.Id; fall.Point = k; fall.Lip = r.Points[k]; fall.Height = height;
+			Falls.push_back(fall);
+			Gorges[r.Id].push_back({ along[k], along[end] });
+			k = end;
+		}
+	}
+	// (the source's List.Sort: unstable; equal heights are not expected between different falls)
+	std::sort(Falls.begin(), Falls.end(), [](const FWaterfall& a, const FWaterfall& b) { return a.Height > b.Height; });
+}
+
+bool FHydrology::NearestRiver(double x, double z, double radius, FRiverHit& hit) const
+{
+	hit = FRiverHit();
+	int bx = (int)std::floor((x - IndexMinX) / IndexBucket), bz = (int)std::floor((z - IndexMinZ) / IndexBucket);
+	if (bx < 0 || bz < 0 || bx >= IndexSide || bz >= IndexSide) return false;
+	int b = bz * IndexSide + bx;
+	double best = Inf;
+	bool found = false;
+	for (int i = IndexStart[b]; i < IndexStart[b + 1]; i++)
+		for (int k = IndexRuns[i].First, end = IndexRuns[i].First + IndexRuns[i].Count; k < end; k++)
+		{
+			int r = IndexRuns[i].Reach;
+			const FRiverReach& reach = Reaches[r];
+			const FPoint2& p = reach.Points[k]; const FPoint2& q = reach.Points[k + 1];
+			double dx = q.X - p.X, dz = q.Z - p.Z, l2 = dx * dx + dz * dz;
+			double t = l2 > 0 ? DetMath::Clamp(((x - p.X) * dx + (z - p.Z) * dz) / l2, 0, 1) : 0;
+			double ex = x - p.X - dx * t, ez = z - p.Z - dz * t;
+			double distance = std::sqrt(ex * ex + ez * ez);
+			double width = reach.Width[k] + (reach.Width[k + 1] - reach.Width[k]) * t;
+			// Rank by distance from the channel edge, so a wide river's water wins over a creek's centreline.
+			double score = distance - width * .5;
+			if (distance > Influence(width) || (distance > radius && radius > 0)) continue;
+			if (score < best)
+			{
+				best = score; found = true;
+				hit.Reach = r; hit.Distance = distance;
+				hit.Surface = reach.Surface[k] + (reach.Surface[k + 1] - reach.Surface[k]) * t;
+				hit.Width = width;
+				hit.Depth = reach.Depth[k] + (reach.Depth[k + 1] - reach.Depth[k]) * t;
+				hit.Catchment = reach.Catchment[k] + (reach.Catchment[k + 1] - reach.Catchment[k]) * t;
+			}
+		}
+	return found;
 }
 
 void FHydrology::AddDeltas(const FTerrainStyle& style)

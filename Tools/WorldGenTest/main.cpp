@@ -56,12 +56,13 @@ int main(int argc, char** argv)
 {
 	if (argc < 2) { std::printf("usage: WorldGenTest <repo root> [--quick] [--sizes] [--bench]\n"); return 2; }
 	std::string root = argv[1];
-	bool quick = false, sizes = false, bench = false; std::string point;
+	bool quick = false, sizes = false, bench = false; std::string point; int only = 0;
 	for (int i = 2; i < argc; i++)
 	{
 		std::string a = argv[i];
 		if (a == "--quick") quick = true; else if (a == "--sizes") sizes = true; else if (a == "--bench") bench = true;
 		else if (a.rfind("--point=", 0) == 0) point = a.substr(8);
+		else if (a.rfind("--rev=", 0) == 0) only = std::stoi(a.substr(6));
 	}
 	ParallelForHook() = &ThreadedFor;
 
@@ -93,7 +94,9 @@ int main(int argc, char** argv)
 
 	// ---- frozen fingerprints
 	struct FFixture { const char* File; int Revision; const FBiomeRegistry* Biomes; };
-	const FFixture fixtures[] = { { "terrain-build114.json", 16, &current }, { "terrain-build52.json", 15, &build51 } };
+	const FFixture fixtures[] = { { "terrain-build114.json", 16, &current }, { "terrain-build52.json", 15, &build51 },
+		{ "terrain-build115.json", 17, &current }, { "terrain-build116.json", 18, &current }, { "terrain-build117.json", 19, &current },
+		{ "terrain-r20.json", 20, &current }, { "terrain-build118.json", 21, &current }, { "terrain-r22.json", 22, &current }, { "terrain-build119.json", 23, &current } };
 	for (const FFixture& fx : fixtures)
 	{
 		FJson expected;
@@ -118,7 +121,7 @@ int main(int argc, char** argv)
 				Check(ok, "fingerprint " + name + " " + fx.File);
 			}
 		}
-		if (quick) break;
+		if (quick && only == 0) break;
 	}
 
 	// ---- every selectable world size: plan builds, is deterministic, memory stays bounded, far corners sample finite
