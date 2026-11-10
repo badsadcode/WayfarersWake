@@ -40,7 +40,7 @@ AWwSky::AWwSky()
 	SkyLight->SetupAttachment(RootComponent);
 	SkyLight->SetMobility(EComponentMobility::Movable);
 	SkyLight->bRealTimeCapture = true;
-	SkyLight->Intensity = 1.f;
+	SkyLight->Intensity = 1.3f; // (shade was black beside Thornwake's)
 	Fog = CreateDefaultSubobject<UExponentialHeightFogComponent>(TEXT("Fog"));
 	Fog->SetupAttachment(RootComponent);
 	// Light haze only: the atmosphere already fades the distance (0.004 washed out everything beyond a kilometre).
@@ -57,8 +57,15 @@ AWwSky::AWwSky()
 	FPostProcessSettings& G = Grade->Settings;
 	G.bOverride_MotionBlurAmount = true; G.MotionBlurAmount = 0.f;
 	G.bOverride_AutoExposureMethod = true; G.AutoExposureMethod = AEM_Histogram;
-	G.bOverride_AutoExposureBias = true; G.AutoExposureBias = 0.f;
+	// (the automatic exposure aims brighter than Thornwake's picture: measured against Tom's Godot dumps)
+	FParse::Value(FCommandLine::Get(), TEXT("WwBias="), ExposureBias);
+	G.bOverride_AutoExposureBias = true; G.AutoExposureBias = ExposureBias;
 	G.bOverride_AutoExposureMinBrightness = true; G.bOverride_AutoExposureMaxBrightness = true;
+	// A first stand-in for the grading Tom plays Thornwake with ("Fantasy" at 0.6): a little more colour and contrast.
+	G.bOverride_ColorSaturation = true; G.ColorSaturation = FVector4(1.15, 1.15, 1.15, 1.0);
+	G.bOverride_ColorContrast = true; G.ColorContrast = FVector4(1.04, 1.04, 1.04, 1.0);
+	FParse::Value(FCommandLine::Get(), TEXT("WwSaturation="), Saturation);
+	G.ColorSaturation = FVector4(Saturation, Saturation, Saturation, 1.0);
 	G.bOverride_AutoExposureSpeedUp = true; G.AutoExposureSpeedUp = 2.f;
 	G.bOverride_AutoExposureSpeedDown = true; G.AutoExposureSpeedDown = 1.5f;
 	FParse::Value(FCommandLine::Get(), TEXT("WwEv="), ShadeEv);
@@ -88,6 +95,12 @@ void AWwSky::Tick(float DeltaSeconds)
 		const FVector Wanted(FMath::GridSnap(View.X, 100000.0), FMath::GridSnap(View.Y, 100000.0), 0.0);
 		if (!Wanted.Equals(GetActorLocation(), 1.0)) SetActorLocation(Wanted);
 	}
+}
+
+FString AWwSky::DebugInfo() const
+{
+	return FString::Printf(TEXT("Time: hour %.3f (%.3f game hours per real minute) · sun intensity %.2f · exposure limits: shade %.2f, sun %.2f stops · haze (fog density) %.5f"),
+		Hour, HoursPerMinute, Sun->Intensity, ShadeEv, SunEv, Fog->FogDensity);
 }
 
 // ---------------------------------------------------------------------------------------------------- game state
@@ -185,6 +198,7 @@ void AWwGameMode::Tick(float DeltaSeconds)
 		ShotAt = Player->GetSecondsPlaced();
 		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("WwAutoShot.png");
 		FScreenshotRequest::RequestScreenshot(Path, true, false);
+		if (FParse::Param(FCommandLine::Get(), TEXT("WwDump"))) Player->DebugDump(); // test switch: the F9 dump too
 		LogStats(TEXT("shot"));
 		UE_LOG(LogWayfarer, Display, TEXT("Screenshot requested: %s"), *Path);
 	}
@@ -231,6 +245,7 @@ void AWwHUD::DrawHUD()
 				Streamer->GetTreeCount(), Streamer->GetPendingCount(), Streamer->GetMissingCount(), Streamer->GetAverageBuildMs()), 16, Y, 1.0f);
 			Y += 20;
 		}
-	Line(Player->IsFlying() ? TEXT("FLYING  WASD move, E/Q up/down, Shift fast, Ctrl very fast, F walk, Esc quit")
-		: TEXT("WASD walk, Shift sprint, Space jump, F fly, Esc quit"), 16, Canvas->SizeY - 30, 1.0f);
+	if (const FString Status = Player->GetStatus(); !Status.IsEmpty()) { Line(Status, 16, Y, 1.0f); Y += 20; }
+	Line(Player->IsFlying() ? TEXT("FLYING  WASD move, E/Q up/down, Shift fast, Ctrl very fast, F walk, F9 debug dump, Esc quit")
+		: TEXT("WASD walk, Shift sprint, Space jump, F fly, F9 debug dump, Esc quit"), 16, Canvas->SizeY - 30, 1.0f);
 }

@@ -1,6 +1,18 @@
 #include "Game/WwCharacter.h"
 #include "Game/WwWorldSubsystem.h"
 #include "Game/WwTerrainStreamer.h"
+#include "Game/WwGame.h"
+#include "WorldGen/WwVegetation.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformMemory.h"
+#include "Misc/App.h"
+#include "Misc/EngineVersion.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "RHI.h"
+#include "UnrealClient.h"
 #include "WayfarersWake.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -40,7 +52,7 @@ AWwCharacter::AWwCharacter()
 	Boom->CameraLagSpeed = 14;
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(Boom);
-	Camera->FieldOfView = 80;
+	Camera->FieldOfView = 90; // Thornwake: 59 degrees vertical, which is 90 across at 16:9
 
 	// Alden Wayfarer in blocks (feet at -90 cm, facing +X).
 	const FLinearColor Teal(0.045f, 0.19f, 0.19f), Trousers(0.09f, 0.05f, 0.025f), Boots(0.05f, 0.028f, 0.014f), Skin(0.60f, 0.33f, 0.19f);
@@ -192,6 +204,7 @@ void AWwCharacter::Tick(float DeltaSeconds)
 	PC->SetControlRotation(Control);
 
 	if (PC->WasInputKeyJustPressed(EKeys::F)) SetFly(!bFly);
+	if (PC->WasInputKeyJustPressed(EKeys::F9)) DebugDump();
 	if (PC->WasInputKeyJustPressed(EKeys::Escape)) PC->ConsoleCommand(TEXT("quit"));
 
 	const float Forward = (PC->IsInputKeyDown(EKeys::W) ? 1.f : 0.f) - (PC->IsInputKeyDown(EKeys::S) ? 1.f : 0.f);
@@ -216,4 +229,73 @@ void AWwCharacter::Tick(float DeltaSeconds)
 		if (PC->WasInputKeyJustPressed(EKeys::SpaceBar)) Jump();
 		if (PC->WasInputKeyJustReleased(EKeys::SpaceBar)) StopJumping();
 	}
+}
+
+// ---------------------------------------------------------------------------------------------------- debug dump
+void AWwCharacter::DebugDump()
+{
+	UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+	std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem ? WorldSystem->GetSampler() : nullptr;
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!Sampler || !PC) return;
+	const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Dumps"));
+	IFileManager::Get().MakeDirectory(*Dir, true);
+	const FDateTime Now = FDateTime::Now();
+	const FString Stamp = Now.ToString(TEXT("%Y%m%d-%H%M%S")), Path = Dir / FString::Printf(TEXT("dump-%s.txt"), *Stamp);
+
+	const ww::FWorldPlan& Plan = *Sampler->Plan;
+	const FWwWorldSettings& S = WorldSystem->GetSettings();
+	const FVector Here = GetActorLocation();
+	const double X = Here.X / 100.0, Z = Here.Y / 100.0, Feet = (Here.Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) / 100.0;
+	const ww::FTerrainSample T = Sampler->Sample(X, Z, 2);
+	const bool bWater = T.Water != ww::EWaterKind::None;
+	const double Surface = bWater ? FMath::Max(T.Height, T.WaterLevel) : T.Height, Above = Feet - Surface, Sea = Plan.Profile().SeaLevel;
+	int A, B; double Share;
+	Plan.Biomes->Sample(X, Z, A, B, Share);
+	double Temperature, Rain;
+	Plan.Climate->At(X, Z, FMath::Max(0.0, T.Height - Sea), Temperature, Rain);
+	const std::vector<ww::FBiome>& Pool = Plan.Biomes->Registry.Pool;
+	static const TCHAR* WaterNames[] = { TEXT("None"), TEXT("Sea"), TEXT("Lake"), TEXT("River"), TEXT("Pond") };
+	const FRotator Look = PC->GetControlRotation();
+	FVector CameraAt; FRotator CameraRotation;
+	PC->GetPlayerViewPoint(CameraAt, CameraRotation);
+	AWwSky* Sky = nullptr;
+	for (TActorIterator<AWwSky> It(GetWorld()); It; ++It) { Sky = *It; break; }
+	AWwTerrainStreamer* Streamer = nullptr;
+	for (TActorIterator<AWwTerrainStreamer> It(GetWorld()); It; ++It) { Streamer = *It; break; }
+	const FVector2D Window = GEngine && GEngine->GameViewport ? [&] { FVector2D V; GEngine->GameViewport->GetViewportSize(V); return V; }() : FVector2D::ZeroVector;
+	const double Pitch = FRotator::NormalizeAxis(Look.Pitch), Yaw = FRotator::NormalizeAxis(Look.Yaw);
+
+	FString Out;
+	Out += FString::Printf(TEXT("Wayfarer's Wake debug dump %s\n"), *Now.ToString(TEXT("%Y-%m-%d %H:%M:%S")));
+	Out += FString::Printf(TEXT("Version 0.1 · Unreal Engine %s · %s · %s build\n"), *FEngineVersion::Current().ToString(), *FPlatformMisc::GetOSVersion(), LexToString(FApp::GetBuildConfiguration()));
+	Out += FString::Printf(TEXT("GPU %s · window (%.0f, %.0f) · FPS %.0f\n\n"), *GRHIAdapterName, Window.X, Window.Y, 1.0 / FMath::Max(FApp::GetDeltaTime(), 1e-4));
+	Out += FString::Printf(TEXT("World: %s (type %s), seed %d, size %.0f km, sea level %.3f m, terrain revision %d\n"), UTF8_TO_TCHAR(Plan.Profile().Name.c_str()), *S.WorldType, S.Seed,
+		Plan.Profile().WorldSize / 1000.0, Sea, S.TerrainRevision);
+	Out += FString::Printf(TEXT("Player: x %.3f, z %.3f, y %.3f (%.3f m above ground/water) · %s\n"), X, Z, Feet, Above, bFly ? TEXT("fly") : TEXT("walking"));
+	Out += FString::Printf(TEXT("Ground %.3f m · water %s"), T.Height, WaterNames[FMath::Clamp((int32)T.Water, 0, 4)]);
+	if (bWater) Out += FString::Printf(TEXT(" surface %.3f m, depth %.3f m"), T.WaterLevel, T.WaterLevel - T.Height);
+	Out += FString::Printf(TEXT(" · mountain %.3f · land %.4f · scree %.3f · lava %.3f\n"), T.Mountain, T.Land, T.Scree, T.Lava);
+	Out += FString::Printf(TEXT("Biome %s"), UTF8_TO_TCHAR(Pool[A].Name.c_str()));
+	if (A != B) Out += FString::Printf(TEXT(" (%.3f %%, -> %s)"), Share * 100, UTF8_TO_TCHAR(Pool[B].Name.c_str()));
+	Out += FString::Printf(TEXT(" · %.3f °C, %.3f mm/yr · forest cover %.3f\n"), Temperature, Rain, ww::FVegetation::ForestDensity(*Sampler, X, Z, T));
+	Out += FString::Printf(TEXT("Camera: pitch %.2f, yaw %.2f (degrees; yaw 0 looks east, 90 south) · field of view %.0f · at (%.2f, %.2f, %.2f) m\n"), Pitch, Yaw, Camera->FieldOfView,
+		CameraAt.X / 100, CameraAt.Y / 100, CameraAt.Z / 100);
+	if (Sky) Out += Sky->DebugInfo() + TEXT("\n");
+	if (Streamer)
+		Out += FString::Printf(TEXT("Terrain: %d tiles (%d wanted, %d missing, %d building), %d trees shown, tile build %.2f ms average\n"), Streamer->GetTileCount(), Streamer->GetDesiredCount(),
+			Streamer->GetMissingCount(), Streamer->GetPendingCount(), Streamer->GetTreeCount(), Streamer->GetAverageBuildMs());
+	Out += FString::Printf(TEXT("Memory: %.0f MB\n"), FPlatformMemory::GetStats().UsedPhysical / 1048576.0);
+	Out += FString::Printf(TEXT("Command line: %s\n\n"), FCommandLine::Get());
+	// The same scene again (for the developer's screenshot runs).
+	Out += TEXT("Reproduce:\n");
+	Out += FString::Printf(TEXT("  -WwType=%s -WwSeed=%d -WwSizeKm=%.0f -WwRevision=%d -WwAt=%.3f,%.3f -WwLook=%.2f,%.2f"), *S.WorldType, S.Seed, S.SizeKm, S.TerrainRevision, X, Z, Pitch, Yaw);
+	if (Sky) Out += FString::Printf(TEXT(" -WwHour=%.3f"), Sky->Hour);
+	if (bFly) Out += FString::Printf(TEXT(" -WwAutoFly=0.01 -WwUp=%.3f"), FMath::Max(0.0, Feet - T.Height));
+	Out += TEXT("\n");
+	FFileHelper::SaveStringToFile(Out, *Path, FFileHelper::EEncodingOptions::ForceUTF8);
+	FScreenshotRequest::RequestScreenshot(Dir / FString::Printf(TEXT("dump-%s.png"), *Stamp), true, false);
+	Status = FString::Printf(TEXT("Debug dump saved: %s (send me the .txt and .png)"), *Path);
+	StatusUntil = GetWorld()->GetTimeSeconds() + 12.0;
+	UE_LOG(LogWayfarer, Display, TEXT("DUMPED %s"), *Path);
 }

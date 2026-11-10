@@ -112,3 +112,31 @@ for path in eal.list_assets('/Game/Trees', recursive=True, include_folder=False)
     eal.save_loaded_asset(asset)
     count += 1
 unreal.log('WwAssets: %d tree materials moved to M_WwTreeOpaque / M_WwTreeMasked' % count)
+
+# Noor's ground textures (prepared by Tools/PrepareGround.py: 256 px layers in the shader's order) as one texture
+# array, /Game/Terrain/TA_WwGround. The shader works on the stored display values (no sRGB decoding, as in
+# Thornwake), nearest-filtered with mipmaps, uncompressed (block compression smears pixel art).
+GROUND = os.path.join(unreal.Paths.project_saved_dir(), 'WwAssets', 'Ground')
+layers = sorted(f for f in os.listdir(GROUND) if f.endswith('.png')) if os.path.isdir(GROUND) else []
+if len(layers) != 16:
+    raise RuntimeError('Ground layers missing in %s: run Tools/PrepareGround.py (Tools/ImportAssets.cmd does)' % GROUND)
+tools.import_asset_tasks([task(os.path.join(GROUND, f), '/Game/Terrain/Ground') for f in layers])
+sources = []
+for f in layers:
+    texture = eal.load_asset('/Game/Terrain/Ground/' + f[:-4])
+    texture.set_editor_property('srgb', False)
+    texture.set_editor_property('compression_settings', unreal.TextureCompressionSettings.TC_VECTOR_DISPLACEMENTMAP)
+    texture.set_editor_property('filter', unreal.TextureFilter.TF_NEAREST)
+    texture.set_editor_property('lod_group', unreal.TextureGroup.TEXTUREGROUP_WORLD)
+    eal.save_loaded_asset(texture)
+    sources.append(texture)
+if eal.does_asset_exist('/Game/Terrain/TA_WwGround'):
+    eal.delete_asset('/Game/Terrain/TA_WwGround')
+array = tools.create_asset('TA_WwGround', '/Game/Terrain', unreal.Texture2DArray, unreal.Texture2DArrayFactory())
+array.set_editor_property('source_textures', sources)
+array.set_editor_property('srgb', False)
+array.set_editor_property('compression_settings', unreal.TextureCompressionSettings.TC_VECTOR_DISPLACEMENTMAP)
+array.set_editor_property('filter', unreal.TextureFilter.TF_NEAREST)
+array.set_editor_property('lod_group', unreal.TextureGroup.TEXTUREGROUP_WORLD)
+eal.save_loaded_asset(array)
+unreal.log('WwAssets: ground array with %d layers' % len(array.get_editor_property('source_textures')))

@@ -26,6 +26,11 @@ public:
 	double GetSecondsPlaced() const { return SecondsPlaced; }
 	/// Metres travelled over the ground since placement (streaming tests).
 	double GetDistanceTravelled() const { return Travelled; }
+	/// A line for the HUD (the last debug dump), empty once it has been shown long enough.
+	FString GetStatus() const { return GetWorld() && GetWorld()->GetTimeSeconds() < StatusUntil ? Status : FString(); }
+	/// F9: writes a text dump of where the player is and what the game is doing, with a screenshot beside it, to
+	/// Saved/Dumps (as Thornwake's F9, which writes to its own folder; the two never mix).
+	void DebugDump();
 
 	UPROPERTY(EditAnywhere, Category = "Movement") float WalkSpeed = 450;
 	UPROPERTY(EditAnywhere, Category = "Movement") float SprintSpeed = 900;
@@ -46,6 +51,8 @@ private:
 	TArray<FLinearColor> PartColours;
 
 	bool bPlaced = false, bHaveSpawn = false, bFly = false;
+	FString Status;
+	double StatusUntil = 0;
 	double SecondsPlaced = 0, Travelled = 0;
 	FVector SpawnPoint = FVector::ZeroVector, LastPlace = FVector::ZeroVector;
 };

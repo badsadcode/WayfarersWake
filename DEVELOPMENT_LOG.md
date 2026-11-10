@@ -26,3 +26,12 @@
 * Several aerial screenshots showed only a rock wall. Two causes, neither in the terrain: my camera test switch read `-18,35` only up to the comma and was ignored, so every shot looked the same way; and the start place really is at the foot of a 700 m valley wall (checked against the generator's heights, `-WwProfile`). The same parsing mistake made `-WwAt=x,z` hang on the loading screen, which Tom saw; fixed.
 * Result, inspected in screenshots: forested hills with the right species mix, rock on steep faces, sand at the shore, bare red country in the distance. Not yet compared with the Godot game side by side.
 * Packaged the first standalone build (`Dist/Windows/WayfarersWake.exe`, Development, 980 MB). It needed the tree, terrain and material folders added to the always-cook list, because the code loads them by path. Launched once from the EXE: same picture as the editor build, 200 fps standing still, 2.05 GB.
+
+## 2026-11-10, session 1 (continued): Tom's first play test
+
+* Tom: still very bright and washed out; the terrain does not look like the Godot version; asked for an F9 dump like Thornwake's, in a different place. Everything in Thornwake is his own work; the ground textures are by Noor, an AI friend of his.
+* Added F9: text dump plus screenshot in `Saved/Dumps`, with a `Reproduce:` line.
+* Found Tom's Godot dumps (read only) and reproduced one, the waterfall above the gorge in the 512 km world, at the same place, hour and view. The generator agrees to the last digit shown (river surface 122.768 m here, 122.769 m there; Taiga 60.9 %; 4.925 C; 383.539 mm). The picture did not: about a stop too bright, pale grass, plain rock, flat water.
+* The dumps show Tom plays with Noor's ground textures, which I had left out as "optional". Ported that style and the ground variety, with the sixteen textures as a texture array.
+* Brightness: the exposure limits I set earlier turned out not to limit anything (changing them by a stop changed nothing in the picture); a plain correction of -0.7 stops does. Field of view now matches Thornwake (59 degrees vertical).
+* Still different from the Godot picture, in order of how much it shows: grass and ground plants, water, rock-kit cliffs, light rays and mist.

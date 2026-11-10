@@ -24,6 +24,8 @@ class WAYFARERSWAKE_API AWwSky : public AActor
 public:
 	AWwSky();
 	virtual void Tick(float DeltaSeconds) override;
+	/// Light and air settings in words (debug dump).
+	FString DebugInfo() const;
 
 	/// Hour of the day, 0..24.
 	UPROPERTY(EditAnywhere, Category = "Sky") float Hour = 9.5f;
@@ -39,7 +41,7 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UPostProcessComponent> Grade;
 	/// Exposure limits by day, in stops of brightening: deep shade and open sun (test switches -WwEv=, -WwEvSun=);
 	/// haze is the fog density (-WwFog=).
-	float ShadeEv = 3.2f, SunEv = 1.4f;
+	float ShadeEv = 2.4f, SunEv = 0.6f, Saturation = 1.15f, ExposureBias = -0.7f;
 };
 
 /// Replicates what defines the world; every machine builds the world from it and streams its own terrain.

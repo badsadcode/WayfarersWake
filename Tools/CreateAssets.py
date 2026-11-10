@@ -62,10 +62,14 @@ def default_tile_texture():
 def terrain(mat):
     with open(os.path.join(HERE, 'WwTerrainGround.hlsl'), 'r') as f:
         code = f.read()
+    # Each ground layer's mean colour (Tools/PrepareGround.py), so a texture can be used as detail over a biome colour.
+    with open(os.path.join(HERE, 'WwGroundMeans.txt'), 'r') as f:
+        means = ['float3(%s)' % ', '.join(line.split()) for line in f.read().splitlines() if line.strip()]
+    code = code.replace('GROUND_MEANS', ', '.join(means))
     node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
     node.set_editor_property('description', 'WwGround')
     node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT4)
-    names = ['TileUv', 'Col', 'ColA', 'Ex', 'N', 'Rel', 'AbsZ', 'Tile', 'Cells', 'Sea', 'GroundTex', 'RockTex']
+    names = ['TileUv', 'Col', 'ColA', 'Ex', 'N', 'Rel', 'AbsZ', 'Tile', 'Cells', 'Sea', 'GroundTex', 'RockTex', 'NoorTex', 'Style']
     inputs = []
     for name in names:
         i = unreal.CustomInput()
@@ -104,6 +108,13 @@ def terrain(mat):
     if rock is None:
         raise RuntimeError('WwAssets: /Game/Terrain/T_Cliff_Rock_128 missing: run Tools/ImportAssets.cmd first')
     wire(expr(unreal.MaterialExpressionTextureObject, 1050, texture=rock, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_COLOR), '', 'RockTex')
+
+    noor = eal.load_asset('/Game/Terrain/TA_WwGround')
+    if noor is None:
+        raise RuntimeError('WwAssets: /Game/Terrain/TA_WwGround missing: run Tools/ImportAssets.cmd first')
+    wire(expr(unreal.MaterialExpressionTextureObject, 1200, texture=noor, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR), '', 'NoorTex')
+    # x: ground style (0 classic colours, 1 Noor's textures: what Tom plays with), y: ground variety (bare and tint patches)
+    wire(expr(unreal.MaterialExpressionVectorParameter, 1350, parameter_name='GroundStyle', default_value=unreal.LinearColor(1, 1, 0, 0)), '', 'Style')
 
     colour = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -150, 0)
     for key, value in (('r', True), ('g', True), ('b', True), ('a', False)):

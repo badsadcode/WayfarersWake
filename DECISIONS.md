@@ -51,3 +51,6 @@ Each terrain tile carries its trees and adds them to shared instanced-mesh compo
 
 **D16. Exposure adapts within limits.**
 A fixed exposure could not serve both a shaded forest floor and open sunlit ground (either black or washed out). Thornwake adapts; so does this: Unreal's histogram exposure clamped between a shade limit and a sun limit, both falling at night. Motion blur is off. Haze is light (fog density 0.0002): the first value, 0.004, greyed out everything beyond a kilometre.
+
+**D17. Tom's Godot dumps are the reference for the look.**
+Thornwake's F9 writes a text dump and a screenshot to `%APPDATA%\Thornwake\debug` (several hundred exist). Each has a `Reproduce:` line; the same place, hour and view can be started here with `-WwSizeKm= -WwAt= -WwLook= -WwHour=` (Godot's yaw and pitch are radians; Unreal yaw = atan2(-cos yaw, -sin yaw) in degrees). Those dumps also record Tom's settings: Noor's ground textures, ground variety, the rock kit, plant populations, "Fantasy" grading at 0.6, 59 degrees vertical field of view. That is the look to match, not the shader's defaults. This game's own F9 writes to `Saved/Dumps`, never to Thornwake's folder.
