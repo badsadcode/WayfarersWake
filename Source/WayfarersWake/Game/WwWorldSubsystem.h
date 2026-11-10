@@ -58,6 +58,15 @@ public:
 	/// The sea's waves: one simulated sea for the whole game (the sea state and the wind are fixed until the weather is
 	/// ported: Thornwake's defaults, sea state 0.5, wind from the north-west).
 	std::shared_ptr<ww::FOcean> GetOcean();
+	/// The sea of the moment, from the weather: its state (0 glassy .. 1 a storm) and the wind over it (where it blows
+	/// to, m/s). The simulated sea follows at the next safe moment (ApplySea).
+	void SetSea(double InState, double ToX, double ToZ, double Speed) { SeaWanted = FMath::Clamp(InState, 0.0, 1.0); SeaToX = ToX; SeaToZ = ToZ; SeaSpeed = Speed; }
+	double GetSeaState() const { return SeaWanted; }
+	double GetSeaToX() const { return SeaToX; }
+	double GetSeaToZ() const { return SeaToZ; }
+	double GetSeaSpeed() const { return SeaSpeed; }
+	/// Brings the simulated sea to the wanted state. Only while no update of the sea is running.
+	void ApplySea();
 	/// The placeholder mechanics of this world (null until the world is ready, or if the content files are damaged).
 	FWwGameplay* GetGameplay();
 	/// The sea's surface above its still level (m) at a world position (m) where the still water is Depth deep, at the
@@ -86,6 +95,7 @@ private:
 	EWwWorldState State = EWwWorldState::Idle;
 	std::shared_ptr<ww::FTerrainSampler> Sampler;
 	std::shared_ptr<ww::FOcean> Ocean;
+	double SeaWanted = 0.5, SeaToX = WindX, SeaToZ = WindZ, SeaSpeed = WindSpeed, SeaSet = -1, SeaAngleSet = 0;
 	std::unique_ptr<FWwGameplay> Gameplay;
 	std::shared_ptr<ww::FTerrainSampler> GameplayWorld; // the world the gameplay object was made for
 	TSharedPtr<std::atomic<int32>, ESPMode::ThreadSafe> Stage;

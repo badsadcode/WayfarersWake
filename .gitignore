@@ -16,3 +16,5 @@ Dist/
 # Source art too large for the repository (kept beside the concept art; see ASSET_MANIFEST.md)
 docs/ConceptArt/*.blend
 docs/ConceptArt/*.blend1
+# Reference pictures from other games (not ours to publish)
+docs/ConceptArt/Water_shader*.jpg

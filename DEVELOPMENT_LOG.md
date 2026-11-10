@@ -161,3 +161,10 @@
 * Tom tried the menu, the map and the world page: all working. He added `docs/ConceptArt/ThornwakeBaseChars.blend` (eleven unrigged low-poly bodies in an A-pose: human, goblin, orc, dwarf, each male and female, and three elf-like) and asked for Unreal's graphics now, to the standard of Sea of Thieves and Windrose, and for Thornwake's digging with flowing water. Order left to me: air, water, characters, digging.
 * Air: volumetric fog, mist that follows the ground at dawn and in rain, sun shafts, cloud shading, glow; leaves and grass that light up from behind. One frame a second at dawn.
 * The blend file is 51 MB and sits in `docs/`, which is the devlog's folder; it is not committed until Tom says where it should live.
+
+## 2026-11-10, session 1 (continued): water, rebuilt
+
+* Tom, away from the keyboard and trusting me to carry on: do not treat Thornwake's effects as the goal where they can be done better; water matters most, sailing is coming, think of storms and calms. He added a concept sheet for the sea (`docs/ConceptArt/Water_ocean_concept.png`) and three reference pictures (not committed: they are other people's screenshots).
+* Switching on reflections for the old translucent water changed nothing. Rebuilt the surface on the engine's single layer water, keeping the ported waves and foam. First result an opaque teal; with the scattering cut to a third, clear water, a visible lake bed and a mirrored cliff.
+* The sea now follows the wind, from glassy to storm, in the shader and in the simulated waves alike.
+* Two test pictures were taken from under the water by mistake (my camera sat 4 m above the sea bed and the bigger waves covered it), and one "sunset" was after dark.

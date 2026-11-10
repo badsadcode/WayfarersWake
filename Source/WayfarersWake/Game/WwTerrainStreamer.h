@@ -221,6 +221,7 @@ private:
 	TSet<int32> FallsBuilding;
 	bool bPlantShadows = true;
 	int32 DrawnSeen[5] = { -1, -1, -1, -1, -1 };
+	FLinearColor WeatherShown = FLinearColor(0.496f, 0.868f, 0.69f, 0.5f);
 
 	TMap<FWwTileKey, FTile> Tiles;
 	TSet<FWwTileKey> Pending, Desired;

@@ -145,8 +145,12 @@ def with_sea(filename):
 
 def water(mat):
     """The water surface (Tools/WwWater.hlsl, WwSeaVertex.hlsl, WwSea.hlsl): a port of Thornwake's water."""
-    mat.set_editor_property('blend_mode', unreal.BlendMode.BLEND_TRANSLUCENT)
-    mat.set_editor_property('translucency_lighting_mode', unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
+    # The engine's single layer water: it mirrors the land and the sky, bends and tints what lies under the surface by
+    # depth, and takes the sun's glitter; the shader supplies waves, foam and the water's colour (Tom, 2026-11-10: use
+    # Unreal's own where it does better than the Thornwake port).
+    mat.set_editor_property('blend_mode', unreal.BlendMode.BLEND_OPAQUE)
+    mat.set_editor_property('shading_model', unreal.MaterialShadingModel.MSM_SINGLE_LAYER_WATER)
+    mat.set_editor_property('two_sided', True)
     mat.set_editor_property('tangent_space_normal', False)
     code = with_sea('WwWater.hlsl')
     cascades = ['D0', 'G0', 'D1', 'G1', 'D2', 'G2']
@@ -163,14 +167,15 @@ def water(mat):
         n.set_editor_property('inputs', inputs)
         return n
 
-    node = custom('WwWater', ['TileUv', 'Col', 'ColA', 'Flow', 'Shore', 'Shore2', 'Rel', 'RestRel', 'Tile', 'Cells', 'FftX', 'FftZ', 'Debug', 'T', 'Behind',
+    node = custom('WwWater', ['TileUv', 'Col', 'ColA', 'Flow', 'Shore', 'Shore2', 'Rel', 'RestRel', 'Tile', 'Cells', 'FftX', 'FftZ', 'Debug', 'T', 'Behind', 'Weather',
                               'SunDir', 'SunLight', 'Patches', 'Streaks', 'Net'] + cascades, -500, 0)
     # The vertex stage: the waves move the sheet.
-    vertex = custom('WwSeaVertex', ['TileUv', 'Col', 'Shore', 'Shore2', 'Rel', 'Tile', 'FftX', 'FftZ', 'T'] + cascades, -500, 900)
+    vertex = custom('WwSeaVertex', ['TileUv', 'Col', 'Shore', 'Shore2', 'Rel', 'Tile', 'FftX', 'FftZ', 'T', 'Weather'] + cascades, -500, 900)
     vertex.set_editor_property('code', with_sea('WwSeaVertex.hlsl'))
     outputs = []
     for name, kind in (('Emissive', unreal.CustomMaterialOutputType.CMOT_FLOAT3), ('WorldNormal', unreal.CustomMaterialOutputType.CMOT_FLOAT3),
-                       ('Surface', unreal.CustomMaterialOutputType.CMOT_FLOAT3)):
+                       ('Surface', unreal.CustomMaterialOutputType.CMOT_FLOAT3), ('Scatter', unreal.CustomMaterialOutputType.CMOT_FLOAT3),
+                       ('Absorb', unreal.CustomMaterialOutputType.CMOT_FLOAT3)):
         o = unreal.CustomOutput()
         o.set_editor_property('output_name', name)
         o.set_editor_property('output_type', kind)
@@ -209,6 +214,8 @@ def water(mat):
     wire(expr(unreal.MaterialExpressionVectorParameter, 450, parameter_name='FftX', default_value=unreal.LinearColor(0, 0, 0, 0)), '', 'FftX', True)
     wire(expr(unreal.MaterialExpressionVectorParameter, 500, parameter_name='FftZ', default_value=unreal.LinearColor(0, 0, 0, 0)), '', 'FftZ', True)
     wire(expr(unreal.MaterialExpressionTime, 550), '', 'T', True)
+    # (the wind's heading, its strength as a share of 8 m/s, the sea state: set by the game from its weather)
+    wire(expr(unreal.MaterialExpressionVectorParameter, 560, parameter_name='Weather', default_value=unreal.LinearColor(0.496, 0.868, 0.69, 0.5)), 'RGBA', 'Weather', True)
     wire(expr(unreal.MaterialExpressionScalarParameter, 530, parameter_name='Debug', default_value=0.0), '', 'Debug')
     wire(expr(unreal.MaterialExpressionSkyAtmosphereLightDirection, 580), '', 'SunDir')
     wire(expr(unreal.MaterialExpressionSkyAtmosphereLightIlluminance, 610), '', 'SunLight')
@@ -221,8 +228,8 @@ def water(mat):
                                (1600, 'D2', 'Disp2'), (1700, 'G2', 'Slope2')):
         wire(expr(unreal.MaterialExpressionTextureObjectParameter, y, parameter_name=parameter, texture=default,
                   sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR), '', name, name != 'Net')
-    # (the node makes the engine provide the scene behind the water; the shader reads it at its own, refracted place)
-    wire(expr(unreal.MaterialExpressionSceneColor, 650), '', 'Behind')
+    # (how far away the scene behind the water is: for the foam where water meets land and the depth of the bed)
+    wire(expr(unreal.MaterialExpressionSceneDepthWithoutWater, 650), '', 'Behind')
     for y, name, asset in ((750, 'Patches', 'river_foam_broken_patches_tiled'), (900, 'Streaks', 'river_foam_flowing_streaks_tiled')):
         texture = eal.load_asset('/Game/Water/' + asset)
         if texture is None:
@@ -243,6 +250,10 @@ def water(mat):
     mel.connect_material_property(part('Surface', False, True, False, 400), '', unreal.MaterialProperty.MP_ROUGHNESS)
     mel.connect_material_property(part('Surface', False, False, True, 500), '', unreal.MaterialProperty.MP_SPECULAR)
     mel.connect_material_property(vertex, '', unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+    slw = mel.create_material_expression(mat, unreal.MaterialExpressionSingleLayerWaterMaterialOutput, 200, 700)
+    for output, names in (('Scatter', ('ScatteringCoefficients', 'Scattering Coefficients')), ('Absorb', ('AbsorptionCoefficients', 'Absorption Coefficients'))):
+        if not any(mel.connect_material_expressions(node, output, slw, name) for name in names):
+            raise RuntimeError('WwAssets: cannot connect the water output ' + output)
 
 
 def waterfall(foam_disc):

@@ -127,6 +127,7 @@ AWwSky::AWwSky()
 	G.bOverride_ColorSaturation = true; G.ColorSaturation = FVector4(1.15, 1.15, 1.15, 1.0);
 	G.bOverride_ColorContrast = true; G.ColorContrast = FVector4(1.04, 1.04, 1.04, 1.0);
 	G.ColorSaturation = FVector4(Saturation, Saturation, Saturation, 1.0);
+	G.bOverride_LumenFrontLayerTranslucencyReflections = true; G.LumenFrontLayerTranslucencyReflections = true;
 	G.bOverride_BloomIntensity = true; G.BloomIntensity = 0.5f;
 	G.bOverride_VignetteIntensity = true; G.VignetteIntensity = 0.3f;
 	G.bOverride_AutoExposureSpeedUp = true; G.AutoExposureSpeedUp = 2.f;
@@ -303,6 +304,17 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 	}
 	// Rain hangs in the air as haze.
 	Fog->SetFogDensity(BaseHaze * (float)Set.Num(TEXT("view.haze")) * (1.f + 9.f * Weather.Precipitation + 1.5f * (float)FMath::SmoothStep(0.6, 1.0, (double)Weather.Cloudiness)));
+	// The sea follows the wind: glassy in a calm, a rough sea in a strong wind, a storm sea in a gale. It builds and
+	// dies down over a minute or so, not at once. (By hand from the menu, or the test switch -WwSea=.)
+	{
+		static const float FromSwitch = [] { float V = -1; FParse::Value(FCommandLine::Get(), TEXT("WwSea="), V); return V; }();
+		const float Raised = FMath::Clamp(Wind.SteadySpeed / 26.f, 0.03f, 1.f);
+		const bool bByHand = Set.On(TEXT("test.seaset")) || FromSwitch >= 0;
+		const float Wanted = Set.On(TEXT("test.seaset")) ? (float)Set.Num(TEXT("test.sea")) : FromSwitch >= 0 ? FromSwitch : Raised;
+		Sea = Sea < 0 || bByHand ? Wanted : FMath::FInterpConstantTo(Sea, Wanted, DeltaSeconds, 0.012f);
+		if (!Set.On(TEXT("test.seaset"))) Set.Show(TEXT("test.sea"), Sea);
+		if (WorldSystem) WorldSystem->SetSea(Sea, Wind.DirX, Wind.DirZ, Wind.SteadySpeed);
+	}
 	// Light in the air, and mist. Mist lies low on calm mornings (from first light until the sun is well up), more
 	// thinly in the evening, and hangs about in rain; wind clears it.
 	{
@@ -322,6 +334,7 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 		Sun->SetVolumetricScatteringIntensity(Rays * (1.f + 1.5f * Mist));
 		Sun->SetEnableLightShaftBloom(Rays > 0.01f);
 		Grade->Settings.BloomIntensity = 0.5f * (float)Set.Num(TEXT("view.bloom"));
+		Grade->Settings.LumenFrontLayerTranslucencyReflections = Set.On(TEXT("view.reflect"));
 	}
 	// Lightning: a flash now and then in a thunderstorm.
 	FlashSeconds -= DeltaSeconds;
@@ -529,9 +542,9 @@ void AWwSky::UpdateUnderwater(const FVector& View)
 FString AWwSky::DebugInfo() const
 {
 	return FString::Printf(TEXT("Time: %s (a game day lasts %.0f real minutes; season %d; latitude %.1f; %.1f h of daylight) · sun %.1f degrees up, intensity %.2f · moon %.1f degrees up, phase %.2f")
-		LINE_TERMINATOR TEXT("Weather: cloud %.2f, rain %.2f%s%s, mist %.2f · wind toward (%.2f, %.2f), %.1f m/s steady, gust %.2f · exposure limits: shade %.2f, sun %.2f stops · haze (fog density) %.5f"),
+		LINE_TERMINATOR TEXT("Weather: cloud %.2f, rain %.2f%s%s, mist %.2f, sea state %.2f · wind toward (%.2f, %.2f), %.1f m/s steady, gust %.2f · exposure limits: shade %.2f, sun %.2f stops · haze (fog density) %.5f"),
 		*WeatherLine(), Clock.DayLengthMinutes, Clock.Season, Latitude, SkyNow.DaylightHours, SkyNow.SunElevation, Sun->Intensity, SkyNow.MoonElevation, SkyNow.MoonPhase,
-		Weather.Cloudiness, Weather.Precipitation, Weather.bSnow ? TEXT(" (snow)") : TEXT(""), Weather.bThunder ? TEXT(" (thunder)") : TEXT(""), Mist,
+		Weather.Cloudiness, Weather.Precipitation, Weather.bSnow ? TEXT(" (snow)") : TEXT(""), Weather.bThunder ? TEXT(" (thunder)") : TEXT(""), Mist, Sea,
 		Wind.DirX, Wind.DirZ, Wind.SteadySpeed, Wind.Gust, ShadeEv, SunEv, Fog->FogDensity)
 		+ LINE_TERMINATOR + FString::Printf(TEXT("Sound: %.1f s handed to the sound card, level %.3f (rain %.2f, wind %.1f m/s, water near %.2f%s)"),
 			SoundSeconds, SoundLevel, Soundscape.Precipitation, Soundscape.WindSpeed, Soundscape.Water, Soundscape.bUnderwater ? TEXT(", under water") : TEXT(""));

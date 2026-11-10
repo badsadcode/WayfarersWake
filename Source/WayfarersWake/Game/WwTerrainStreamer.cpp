@@ -910,6 +910,7 @@ void AWwTerrainStreamer::ApplyOcean(UMaterialInstanceDynamic* Water, double Corn
 	Water->SetVectorParameterValue(TEXT("FftZ"), FLinearColor(Wrap(CornerZ, 0), Wrap(CornerZ, 1), Wrap(CornerZ, 2), 0));
 	static const TCHAR* Names[6] = { TEXT("Disp0"), TEXT("Slope0"), TEXT("Disp1"), TEXT("Slope1"), TEXT("Disp2"), TEXT("Slope2") };
 	for (int32 i = 0; i < 6; i++) Water->SetTextureParameterValue(Names[i], OceanTextures[i]);
+	Water->SetVectorParameterValue(TEXT("Weather"), WeatherShown);
 	Water->SetTextureParameterValue(TEXT("FoamNet"), FoamNet);
 	Water->SetScalarParameterValue(TEXT("Debug"), (float)FWwSettings::Get().Num(TEXT("test.waterview"))); // (a test view: see WwWater.hlsl)
 }
@@ -940,9 +941,17 @@ void AWwTerrainStreamer::UpdateOcean(float DeltaSeconds)
 			}
 	}
 	// The next moment, for when it will be shown (about a frame from now). Foam drifts at 3 % of the wind (Thornwake).
+	WorldSystem->ApplySea(); // (the last update is done and the next not begun: the sea may change now)
 	const std::shared_ptr<ww::FOcean> Ocean = WorldSystem->GetOcean();
 	const double Time = GetWorld()->GetTimeSeconds() + DeltaSeconds;
-	const double DriftX = UWwWorldSubsystem::WindX * UWwWorldSubsystem::WindSpeed * .03, DriftZ = UWwWorldSubsystem::WindZ * UWwWorldSubsystem::WindSpeed * .03;
+	const double DriftX = WorldSystem->GetSeaToX() * WorldSystem->GetSeaSpeed() * .03, DriftZ = WorldSystem->GetSeaToZ() * WorldSystem->GetSeaSpeed() * .03;
+	// The water's material hears of the wind and the sea state.
+	const FLinearColor WeatherNow((float)WorldSystem->GetSeaToX(), (float)WorldSystem->GetSeaToZ(), (float)(WorldSystem->GetSeaSpeed() / 8.0), (float)WorldSystem->GetSeaState());
+	if (!WeatherNow.Equals(WeatherShown, 0.002f))
+	{
+		WeatherShown = WeatherNow;
+		for (FWwTileSlot& Slot : Slots) if (Slot.Water) Slot.Water->SetVectorParameterValue(TEXT("Weather"), WeatherNow);
+	}
 	TWeakObjectPtr<AWwTerrainStreamer> Self(this);
 	OceanTask = Async(EAsyncExecution::ThreadPool, [Ocean, Time, DriftX, DriftZ, Self]()
 	{

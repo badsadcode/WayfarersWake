@@ -89,7 +89,7 @@ private:
 	ww::FSkyState SkyNow;
 	double HoursStep = 0, LastHours = -1, Latitude = 45;
 	bool bClockSet = false, bWeatherTried = false, bSnowFalling = false;
-	float FlashSeconds = 0, NextFlash = 8, BaseHaze = 0.0002f, Mist = 0;
+	float FlashSeconds = 0, NextFlash = 8, BaseHaze = 0.0002f, Mist = 0, Sea = -1;
 	int32 HourSeen = -1, StrikeSeen[4] = { -1, -1, -1, -1 };
 	TArray<FVector> Drops;
 	void UpdateUnderwater(const FVector& View);

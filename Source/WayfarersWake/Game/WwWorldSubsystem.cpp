@@ -199,9 +199,20 @@ std::shared_ptr<ww::FOcean> UWwWorldSubsystem::GetOcean()
 	if (!Ocean)
 	{
 		Ocean = std::make_shared<ww::FOcean>(77); // (Thornwake's seed for the sea)
-		Ocean->Configure(0.5, FMath::Atan2(WindZ, WindX));
+		SeaSet = SeaWanted; SeaAngleSet = FMath::Atan2(SeaToZ, SeaToX);
+		Ocean->Configure(SeaSet, SeaAngleSet);
 	}
 	return Ocean;
+}
+
+void UWwWorldSubsystem::ApplySea()
+{
+	if (!Ocean) return;
+	const double Angle = FMath::Atan2(SeaToZ, SeaToX);
+	// (a new spectrum for the same random phases: the waves grow or turn, they do not jump)
+	if (FMath::Abs(SeaWanted - SeaSet) < 0.01 && FMath::Abs(FMath::FindDeltaAngleRadians(Angle, SeaAngleSet)) < 0.04) return;
+	SeaSet = SeaWanted; SeaAngleSet = Angle;
+	Ocean->Configure(SeaSet, SeaAngleSet);
 }
 
 double UWwWorldSubsystem::SeaSurface(double X, double Z, double Depth, double Time)

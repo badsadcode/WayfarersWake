@@ -64,6 +64,9 @@ FWwSettings::FWwSettings()
 	WindSpeed.bSaved = false; WindSpeed.Needs = TEXT("test.windset");
 	FWwSetting& WindDir = Slider(TEXT("test.winddir"), Test, TEXT("Weather"), TEXT("Wind blows from"), 0, 360, 5, 315, TEXT("degrees"), TEXT("0 north, 90 east, 180 south, 270 west."));
 	WindDir.bSaved = false; WindDir.Needs = TEXT("test.windset");
+	Add(TEXT("test.seaset"), Test, TEXT("Weather"), TEXT("Set the sea by hand"), Toggle, 0, TEXT("The sea state below replaces the one the wind raises.")).bSaved = false;
+	FWwSetting& Sea = Slider(TEXT("test.sea"), Test, TEXT("Weather"), TEXT("Sea state"), 0, 1, 0.01, 0.5, TEXT(""), TEXT("0 glassy calm, 0.25 a breeze (waves under a metre), 0.5 rough (3 to 4 m), 0.8 and more a storm (9 m and over)."));
+	Sea.bSaved = false; Sea.Needs = TEXT("test.seaset");
 	Add(TEXT("test.strike150"), Test, TEXT("Lightning"), TEXT("Strike 150 m away"), Button, 0, TEXT("A flash now, and its thunder after the sound's travel time (under half a second)."));
 	Add(TEXT("test.strike1k"), Test, TEXT("Lightning"), TEXT("Strike 1 km away"), Button, 0, TEXT("Thunder after 3 seconds."));
 	Add(TEXT("test.strike5k"), Test, TEXT("Lightning"), TEXT("Strike 5 km away"), Button, 0, TEXT("Thunder after 15 seconds, duller."));
@@ -104,6 +107,7 @@ FWwSettings::FWwSettings()
 	Slider(TEXT("view.rays"), View, TEXT("Air"), TEXT("Light rays"), 0, 3, 0.05, 1, TEXT("x"), TEXT("How strongly the sun shows in the air.")).Needs = TEXT("view.volfog");
 	Slider(TEXT("view.mist"), View, TEXT("Air"), TEXT("Mist"), 0, 2, 0.05, 1, TEXT("x"), TEXT("Low mist on calm mornings, in the evening and in rain. 0 turns it off."));
 	Slider(TEXT("view.bloom"), View, TEXT("Air"), TEXT("Glow of bright things"), 0, 2, 0.05, 1, TEXT("x"), TEXT(""));
+	Add(TEXT("view.reflect"), View, TEXT("Water"), TEXT("Water mirrors its surroundings"), Toggle, 1, TEXT("The land, the trees and the clouds reflected in the water. Costs some speed."));
 	Add(TEXT("view.stars"), View, TEXT("Light"), TEXT("Stars"), Toggle, 1, TEXT(""));
 	Add(TEXT("view.moon"), View, TEXT("Light"), TEXT("Moon"), Toggle, 1, TEXT(""));
 	Choice(TEXT("map.style"), View, TEXT("Map (M)"), TEXT("Map drawn as"), { TEXT("A plain map"), TEXT("An old chart on parchment") }, 0, TEXT("P on the map changes it too."));

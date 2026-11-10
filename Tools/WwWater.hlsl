@@ -10,15 +10,16 @@
 //   colour, stirred-up water, contact foam, rapids and streak foam through Tom's foam textures, sun-independent
 //   composition (albedo / emission split, fresnel, opacity film and edge fade), rough water reflecting less.
 // Not ported: standing waves, rocks in the current, wakes, caustics, rain rings, the shader's own sky and screen-space
-//   reflections (the engine's reflections are used, so are its sun glints), biome water tints, storms. The wind and the
-//   sea state are fixed (Thornwake's defaults: 5.5 m/s from the north-west, sea state 0.5).
+//   reflections (the engine's reflections are used, so are its sun glints), biome water tints. The wind and the sea state
+//   come from the game's weather (Weather).
 // Inputs: TileUv, Col (depth / 20 m, kind code, river share), ColA (edge fade), Flow (current, m/s), Shore (the bed's
 //   uphill gradient), Shore2 (exposure, fetch), Rel (position relative to the camera, cm), RestRel (the same before the
 //   waves moved it), Tile (noise position of the tile's corner, tile size), Cells, FftX, FftZ (the tile's corner modulo
-//   each cascade's size), Debug (a test view, 0 = none), T (seconds), Behind (unused value; makes the scene behind the water available), SunDir (to the
+//   each cascade's size), Debug (a test view, 0 = none), T (seconds), Behind (the scene depth behind the water, cm), SunDir (to the
 //   sun), SunLight (its light on the ground), Patches and Streaks (foam textures), Net (the foam net), D0..D2 / G0..G2
 //   (the cascades' displacement and slope textures).
-// Returns the base colour; outputs Emissive, WorldNormal, Surface (opacity, roughness, specular).
+// Returns the base colour of what covers the water (foam); outputs Emissive, WorldNormal, Surface (cover, roughness,
+// specular), Scatter and Absorb (the water's scattering and absorption per cm, for the engine's single layer water).
 struct FWwWater
 {
 //#include WwSea
@@ -181,10 +182,11 @@ FWwWater fn;
 // engine needs most of them for lighting.)
 const float3 sea_scatter = float3(0.05, 0.22, 0.30), lake_scatter = float3(0.06, 0.20, 0.17), river_scatter = float3(0.07, 0.15, 0.12);
 const float3 absorption = float3(0.55, 0.16, 0.12), foam_color = float3(0.93, 0.95, 0.95), sss_color = float3(0.06, 0.62, 0.56);
-const float2 wdir = normalize(float2(0.496, 0.868));
-const float wind_speed = 0.69, sea_state = 0.5, refraction = 0.03;
-const float wave_hs = 0.15 + 14.1 * sea_state * sea_state, swell_hs = 0.5 + 2.0 * sea_state; // significant wave heights (m)
-const float crest_scale = wave_hs / sqrt(wave_hs * wave_hs + swell_hs * swell_hs);
+// The weather of the moment (Weather: where the wind blows to, its strength as a share of 8 m/s, the sea state 0..1).
+float2 wdir = normalize(Weather.xy + float2(1e-5, 0.0));
+float wind_speed = Weather.z, sea_state = Weather.w;
+float wave_hs = 0.15 + 14.1 * sea_state * sea_state, swell_hs = 0.5 + 2.0 * sea_state; // significant wave heights (m)
+float crest_scale = wave_hs / sqrt(wave_hs * wave_hs + swell_hs * swell_hs);
 
 float2 local = TileUv * Tile.z;
 float2 p = Tile.xy + local;
@@ -203,9 +205,9 @@ float footprint = dist * 0.0012 / graze;
 
 // The scene behind this pixel: how much water lies along the view (m), and the bed's depth below the water's rest level
 // (so shore waves follow the real bed's contours, and the breaker's own height does not feed back into its phase).
-float2 screen_uv = SvPositionToBufferUV(Parameters.SvPosition);
+// (Behind: how far away the scene behind the water is, from the engine's own water pass)
 float pixel_depth = Parameters.ScreenPosition.w;
-float behind_ratio = CalcSceneDepth(screen_uv) / pixel_depth;
+float behind_ratio = max(1.0, Behind / pixel_depth);
 float straight_path = max(0.0, (behind_ratio - 1.0) * dist);
 float bed_depth = max(0.0, (RestRel.z - Rel.z * behind_ratio) / 100.0);
 float contact_depth = max(max(0.0, (Rel.z - Rel.z * behind_ratio) / 100.0), straight_path * abs(view_dir.z) * 0.5);
@@ -295,12 +297,9 @@ float2 soft = lerp(big_slope, slope, 0.7);
 float3 n_soft = normalize(float3(-soft.x, -soft.y, 1.0));
 float fresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(n_soft, to_eye)), 5.0);
 
-// Behind the surface, refracted; never pull in things above the water.
-float2 ruv = clamp(screen_uv + n_world.xy * refraction * saturate(straight_path * 0.5) * float2(1.0, -1.0), 0.001, 0.999);
-float rratio = CalcSceneDepth(ruv) / pixel_depth;
-if (rratio < 1.0) { ruv = screen_uv; rratio = behind_ratio; }
-float path = max(0.0, (rratio - 1.0) * dist);
-float3 ground = DecodeSceneColorForMaterialNode(ruv) + Behind * 0.0;
+// The bed behind the surface and the light through the water are the engine's work now (its single layer water:
+// refraction, absorption by depth and the water's own scattered colour); this shader gives it the coefficients.
+float path = straight_path;
 
 // Transmitted light: the bed through clear shallows, absorbed with depth; the water's own colour takes over.
 float3 transmittance = exp(-absorption * path * lerp(1.0, 2.2, river) * lerp(1.0, 0.8, sea));
@@ -408,7 +407,6 @@ float aerated = (sea + lake * 0.4) * smoothstep(0.15, 1.0, crest + 0.4 * (fn.noi
 under_foam = max(under_foam, aerated * 1.3);
 under_foam *= smoothstep(0.1, 0.9, edge_fade);
 
-float3 transmitted = ground * transmittance * (1.0 - under_foam * 0.6); // milky water hides the bed
 // Rough water reflects less: from a fresh breeze up the spray-streaked surface breaks the mirror, and steep wave faces
 // (breakers, crests) are churned water, so the water's own colour and the light through it carry them.
 float face_r = clamp(1.0 - n_world.z, 0.0, 0.5) / 0.5;
@@ -426,20 +424,26 @@ float3 glow = sss_color * sun * (back_lit * 2.2 + 0.3 + face * 0.5) * thin * 0.8
 float3 milky = float3(0.55, 0.75, 0.74) * under_foam;
 float fo = foam * foam_opacity;
 float3 foam_col = foam_color * foam_shade * lerp(float3(0.82, 0.93, 0.96), float3(1.0, 1.0, 1.0), foam_opacity);
-float3 albedo = lerp(scatter * murk * (1.0 - fresnel) * 0.75 + milky * 0.45 * (1.0 - fresnel), foam_col, fo);
-Emissive = (transmitted * (1.0 - fresnel) + glow * (1.0 - fresnel) + sss_color * sun * under_foam * 0.12) * (1.0 - fo);
+// What the engine's water shading is given. On top: foam, as a covering layer (white, rough, not mirror-like). In the
+// water: how strongly each colour is absorbed and scattered per centimetre of path, by the kind of water (the open sea
+// clear and blue, lakes greener, rivers greener and murkier, ponds peaty), cloudier where it is stirred up or aerated.
+float3 albedo = foam_col;
+float cover = saturate(fo + under_foam * 0.25);
+Emissive = (glow * (1.0 - fresnel) + sss_color * sun * under_foam * 0.12) * (1.0 - fo);
 WorldNormal = n_world;
-// The swash film running up the beach thins out softly; the sheet fades over its extension under banks and beaches.
-float film = sea > 0.5 ? lerp(0.22, 0.04, smoothstep(0.3, 1.5, vertex_depth)) : 0.04;
-float alpha = smoothstep(0.0, film, contact_depth) * smoothstep(0.1, 0.9, edge_fade);
-float specular = 0.5 * (1.0 - fo) * lerp(1.0, 0.5, storm_r) * lerp(1.0, 0.65, face_r * sea) * lerp(1.0, 0.9, sea);
-Surface = float3(alpha, lerp(lerp(0.02, 0.08, sea_state), 0.6, fo), specular);
+float kind_murk = lerp(1.0, 2.2, river) * lerp(1.0, 0.8, sea) * lerp(1.0, 3.5, pond);
+float3 absorb_m = absorption * kind_murk;
+float3 scatter_m = scatter * (0.1 + 0.5 * pond) + float3(0.55, 0.75, 0.74) * (stirred * 0.5 + under_foam * 1.2 + plume * 0.2);
+Absorb = absorb_m * 0.01;
+Scatter = scatter_m * 0.01;
+float specular = 0.255 * (1.0 - fo) * lerp(1.0, 0.6, storm_r) * lerp(1.0, 0.7, face_r * sea);
+Surface = float3(cover, lerp(lerp(0.02, 0.1, sea_state), 0.7, fo), specular);
 // Test views (-WwWaterDebug=): 1 = foam amount, foam shown, breaking; 2 = bed slope x 5, exposure, depth / 20 m;
 // 3 = shore-wave phase, the simulated foam field, the fold.
 if (Debug > 0.5)
 {
 	float3 shown = Debug < 1.5 ? float3(amt, foam, breaking) : Debug < 2.5 ? float3(bed_slope * 5.0, exposure, vertex_depth / 20.0) : float3(since, field_foam, fold);
 	Emissive = shown * sun * 2.0; Surface = float3(1.0, 1.0, 0.0);
-	return float3(0.0, 0.0, 0.0);
+	return float3(0.0, 0.0, 0.0); // (a test view: the covering layer, lit by its emission)
 }
 return albedo;

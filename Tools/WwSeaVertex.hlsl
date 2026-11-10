@@ -12,8 +12,8 @@ struct FWwSeaVertex
 };
 FWwSeaVertex fn;
 
-const float sea_state = 0.5;
-const float wave_hs = 0.15 + 14.1 * sea_state * sea_state, swell_hs = 0.5 + 2.0 * sea_state;
+float sea_state = Weather.w;
+float wave_hs = 0.15 + 14.1 * sea_state * sea_state, swell_hs = 0.5 + 2.0 * sea_state;
 const float crest_scale = wave_hs / sqrt(wave_hs * wave_hs + swell_hs * swell_hs);
 float2 local = TileUv * Tile.z;
 float2 p = Tile.xy + local;
