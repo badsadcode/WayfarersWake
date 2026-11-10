@@ -57,6 +57,8 @@ static std::string Fingerprint(const FTerrainSampler& s)
 
 int OceanTest();
 int SoundTest(const std::string& root);
+int OptionsTest(const std::vector<FWorldProfile>& profiles, const FBiomeRegistry& biomes);
+int MapTest(const std::string& root, const std::vector<FWorldProfile>& profiles, const FBiomeRegistry& biomes);
 int WeatherTest();
 int RulesTest(const std::string& root);
 
@@ -64,7 +66,7 @@ int main(int argc, char** argv)
 {
 	if (argc < 2) { std::printf("usage: WorldGenTest <repo root> [--quick] [--sizes] [--bench]\n"); return 2; }
 	std::string root = argv[1];
-	bool quick = false, sizes = false, bench = false; std::string point, dump, dumpType; int only = 0; bool typesOnly = false;
+	bool quick = false, sizes = false, bench = false; std::string point, dump, dumpType; int only = 0; bool typesOnly = false, mapOnly = false, optionsOnly = false;
 	for (int i = 2; i < argc; i++)
 	{
 		std::string a = argv[i];
@@ -73,6 +75,8 @@ int main(int argc, char** argv)
 		else if (a.rfind("--rev=", 0) == 0) only = std::stoi(a.substr(6));
 		else if (a.rfind("--dump=", 0) == 0) dump = a.substr(7);
 		else if (a == "--types") typesOnly = true;
+		else if (a == "--map") mapOnly = true;
+		else if (a == "--options") optionsOnly = true;
 		else if (a == "--ocean") return OceanTest();
 		else if (a == "--sound") return SoundTest(root);
 		else if (a == "--weather") return WeatherTest();
@@ -90,6 +94,8 @@ int main(int argc, char** argv)
 	std::printf("%d profiles, %d biomes in the pool\n", (int)profiles.size(), (int)current.Pool.size());
 
 	if (!dump.empty()) return RunDump(profiles, current, dump);
+	if (mapOnly) return MapTest(root, profiles, current);
+	if (optionsOnly) return OptionsTest(profiles, current);
 	if (!dumpType.empty()) { std::printf("%s", DumpType(profiles, current, dumpType).c_str()); return 0; }
 	int failures = 0, checks = 0;
 	auto Check = [&](bool ok, const std::string& what) { checks++; if (!ok) { failures++; std::printf("  FAIL %s\n", what.c_str()); } };

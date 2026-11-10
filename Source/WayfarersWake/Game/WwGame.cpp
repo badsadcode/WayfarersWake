@@ -1,6 +1,7 @@
 #include "Game/WwGame.h"
 #include "Game/WwSettings.h"
 #include "Game/WwMenu.h"
+#include "Game/WwMapScreen.h"
 #include "Widgets/SWeakWidget.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Engine/GameViewportClient.h"
@@ -538,6 +539,7 @@ void AWwGameMode::InitGame(const FString& MapName, const FString& Options, FStri
 	Settings.Seed = Set.Int(TEXT("world.seed"));
 	Settings.WorldType = Set.Option(TEXT("world.type"));
 	Settings.SizeKm = Set.Int(TEXT("world.size")) == 0 ? 0.f : FCString::Atof(*Set.Option(TEXT("world.size")));
+	Settings.Custom = Set.WorldRecord();
 	FParse::Value(Cmd, TEXT("WwRevision="), Settings.TerrainRevision);
 	FParse::Value(Cmd, TEXT("WwAutoShot="), AutoShotSeconds);
 	bLogStats = FParse::Param(Cmd, TEXT("WwStats"));
@@ -598,16 +600,22 @@ void AWwGameMode::Tick(float DeltaSeconds)
 	// Test switch -WwEsc=<seconds>,<seconds>: the Esc key pressed at those moments, as from the keyboard (a scripted
 	// check that the menu opens from the game and closes from inside itself).
 	{
-		static const TArray<double> EscAt = [] { TArray<double> Out; FString Text; TArray<FString> Parts; if (FParse::Value(FCommandLine::Get(), TEXT("WwEsc="), Text, false)) { Text.ParseIntoArray(Parts, TEXT(",")); for (const FString& Part : Parts) Out.Add(FCString::Atod(*Part)); } return Out; }();
+		auto Times = [](const TCHAR* Switch) { TArray<double> Out; FString Text; TArray<FString> Parts; if (FParse::Value(FCommandLine::Get(), Switch, Text, false)) { Text.ParseIntoArray(Parts, TEXT(",")); for (const FString& Part : Parts) Out.Add(FCString::Atod(*Part)); } return Out; };
+		static const TArray<double> EscAt = Times(TEXT("WwEsc=")), MAt = Times(TEXT("WwM=")); // (-WwM=: the M key, the same way)
 		const double Now = Player->GetSecondsPlaced();
-		for (double At : EscAt)
-			if (Now >= At && Now - DeltaSeconds < At)
-			{
-				FSlateApplication& App = FSlateApplication::Get();
-				const FKeyEvent Down(EKeys::Escape, FModifierKeysState(), 0, false, 0x1B, 0x1B), Up(EKeys::Escape, FModifierKeysState(), 0, false, 0x1B, 0x1B);
-				App.ProcessKeyDownEvent(Down); App.ProcessKeyUpEvent(Up);
-				UE_LOG(LogWayfarer, Display, TEXT("-WwEsc: Esc pressed at %.1f s"), Now);
-			}
+		auto Press = [&](const TArray<double>& When, const FKey& Key, uint32 Code)
+		{
+			for (double At : When)
+				if (Now >= At && Now - DeltaSeconds < At)
+				{
+					FSlateApplication& App = FSlateApplication::Get();
+					const FKeyEvent Down(Key, FModifierKeysState(), 0, false, Code, Code), Up(Key, FModifierKeysState(), 0, false, Code, Code);
+					App.ProcessKeyDownEvent(Down); App.ProcessKeyUpEvent(Up);
+					UE_LOG(LogWayfarer, Display, TEXT("Test: %s pressed at %.1f s"), *Key.ToString(), Now);
+				}
+		};
+		Press(EscAt, EKeys::Escape, 0x1B);
+		Press(MAt, EKeys::M, 'M');
 	}
 	// Test switch -WwSet=key=value;key=value: three seconds in, these settings change as if set in the menu (a
 	// scripted check that the menu's settings reach the game). -WwPress=key;key presses buttons the same way.
@@ -684,8 +692,27 @@ void AWwHUD::DrawHUD()
 		bMenuSwitchDone = true;
 		FString Wanted;
 		if (FParse::Value(FCommandLine::Get(), TEXT("WwMenu="), Wanted)) { ToggleMenu(); if (Menu) Menu->ShowPage(Wanted); }
+		// Test switches -WwMap (the map open from the start) and -WwMapView=<x>,<z>,<metres across>.
+		if (FParse::Param(FCommandLine::Get(), TEXT("WwMap")) || FParse::Value(FCommandLine::Get(), TEXT("WwMapView="), Wanted, false))
+		{
+			ToggleMap();
+			TArray<FString> Parts;
+			if (Map && FParse::Value(FCommandLine::Get(), TEXT("WwMapView="), Wanted, false) && Wanted.ParseIntoArray(Parts, TEXT(",")) == 3)
+				Map->SetView(FCString::Atod(*Parts[0]), FCString::Atod(*Parts[1]), FCString::Atod(*Parts[2]));
+		}
 	}
-	if (!FWwSettings::Get().On(TEXT("view.hud"))) return;
+	// Test switch -WwMapGo=<x>,<z>: five seconds in, as a right click on that place of the map.
+	{
+		static bool bWent = false;
+		FString Where, Left, Right;
+		if (!bWent && Player->GetSecondsPlaced() > 5.0 && FParse::Value(FCommandLine::Get(), TEXT("WwMapGo="), Where, false) && Where.Split(TEXT(","), &Left, &Right))
+		{
+			bWent = true;
+			if (!bMapOpen) ToggleMap();
+			if (Map) { UE_LOG(LogWayfarer, Display, TEXT("-WwMapGo: map shows %s"), *Map->Describe()); Map->TeleportTo(FCString::Atod(*Left), FCString::Atod(*Right)); }
+		}
+	}
+	if (bMapOpen || !FWwSettings::Get().On(TEXT("view.hud"))) return;
 	const FVector P = Player->GetActorLocation();
 	const double X = P.X / 100.0, Z = P.Y / 100.0;
 	std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem->GetSampler();
@@ -703,7 +730,7 @@ void AWwHUD::DrawHUD()
 	if (const FString Status = Player->GetStatus(); !Status.IsEmpty()) { Line(Status, 16, Y, 1.0f); Y += 20; }
 	Line(Player->IsFlying() ? TEXT("FLYING  WASD move, E/Q up/down, Shift fast, Ctrl very fast, F walk, F9 debug dump, Esc menu")
 		: Player->IsSwimming() ? TEXT("SWIMMING  WASD swim, Shift faster, Space up, C dive, F fly, F9 debug dump, Esc menu")
-		: TEXT("WASD walk, Shift sprint, Space jump, I pack, E gather, left mouse axe, T eat, F fly, F9 dump, Esc menu"), 16, Canvas->SizeY - 30, 1.0f);
+		: TEXT("WASD walk, Shift sprint, Space jump, I pack, E gather, left mouse axe, T eat, M map, F fly, F9 dump, Esc menu"), 16, Canvas->SizeY - 30, 1.0f);
 	for (TActorIterator<AWwSky> It(GetWorld()); It; ++It) { Line(It->WeatherLine(), Canvas->SizeX - 430, 16, 1.0f); break; }
 	// The placeholder mechanics: needs, the last thing that happened, and the pack with what can be made.
 	if (FWwGameplay* Game = WorldSystem->GetGameplay())
@@ -728,6 +755,7 @@ void AWwHUD::ToggleMenu()
 	if (!PC || !GEngine || !GEngine->GameViewport) return;
 	if (!bMenuOpen)
 	{
+		if (bMapOpen) ToggleMap();
 		if (!Menu)
 		{
 			SAssignNew(Menu, SWwMenu)
@@ -764,8 +792,63 @@ void AWwHUD::ToggleMenu()
 	}
 }
 
+void AWwHUD::ToggleMap()
+{
+	APlayerController* PC = GetOwningPlayerController();
+	UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+	if (!PC || !GEngine || !GEngine->GameViewport || !WorldSystem || !WorldSystem->GetSampler()) return;
+	if (!bMapOpen)
+	{
+		if (bMenuOpen) ToggleMenu();
+		if (!Map)
+		{
+			SAssignNew(Map, SWwMapScreen)
+				.OnClose_Lambda([this] { if (bMapOpen) ToggleMap(); })
+				.OnTeleport_Lambda([this](double X, double Z)
+				{
+					if (bMapOpen) ToggleMap();
+					if (AWwCharacter* Walker = Cast<AWwCharacter>(GetOwningPawn())) Walker->GoTo(X, Z);
+				})
+				.OnPlayer_Lambda([this](double& X, double& Z, double& Yaw)
+				{
+					const APlayerController* Owner = GetOwningPlayerController();
+					const APawn* Walker = GetOwningPawn();
+					if (!Owner || !Walker) return false;
+					X = Walker->GetActorLocation().X / 100.0; Z = Walker->GetActorLocation().Y / 100.0;
+					Yaw = Owner->GetControlRotation().Yaw;
+					return true;
+				});
+		}
+		const AWwCharacter* Walker = Cast<AWwCharacter>(GetOwningPawn());
+		const FVector Home = Walker ? Walker->GetHome() : FVector::ZeroVector;
+		Map->Open(WorldSystem->GetSampler(), Home.X / 100.0, Home.Y / 100.0);
+		MapHolder = SNew(SWeakWidget).PossiblyNullContent(Map);
+		GEngine->GameViewport->AddViewportWidgetContent(MapHolder.ToSharedRef(), 40);
+		FInputModeGameAndUI Mode;
+		Mode.SetWidgetToFocus(Map);
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		Mode.SetHideCursorDuringCapture(false);
+		PC->SetInputMode(Mode);
+		PC->bShowMouseCursor = true;
+		bMapOpen = true;
+		UE_LOG(LogWayfarer, Display, TEXT("Map opened"));
+	}
+	else
+	{
+		UE_LOG(LogWayfarer, Display, TEXT("Map closed (%s)"), Map ? *Map->Describe() : TEXT(""));
+		if (MapHolder) GEngine->GameViewport->RemoveViewportWidgetContent(MapHolder.ToSharedRef());
+		MapHolder.Reset();
+		PC->SetInputMode(FInputModeGameOnly());
+		PC->bShowMouseCursor = false;
+		bMapOpen = false;
+		FWwSettings::Get().Save();
+	}
+}
+
 void AWwHUD::EndPlay(const EEndPlayReason::Type Reason)
 {
+	if (MapHolder && GEngine && GEngine->GameViewport) GEngine->GameViewport->RemoveViewportWidgetContent(MapHolder.ToSharedRef());
+	MapHolder.Reset(); Map.Reset(); bMapOpen = false;
 	if (MenuHolder && GEngine && GEngine->GameViewport) GEngine->GameViewport->RemoveViewportWidgetContent(MenuHolder.ToSharedRef());
 	MenuHolder.Reset(); Menu.Reset(); bMenuOpen = false;
 	Super::EndPlay(Reason);

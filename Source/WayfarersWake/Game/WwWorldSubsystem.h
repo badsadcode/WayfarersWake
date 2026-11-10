@@ -23,7 +23,10 @@ struct FWwWorldSettings
 	/// Terrain revision (versioned generation: a world keeps the revision it was created with).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World") int32 TerrainRevision = 44;
 
-	bool operator==(const FWwWorldSettings& O) const { return Seed == O.Seed && WorldType == O.WorldType && SizeKm == O.SizeKm && TerrainRevision == O.TerrainRevision; }
+	/// The world generation settings that differ from their defaults, as "key=value;key=value" (WwWorldOptions).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "World") FString Custom;
+
+	bool operator==(const FWwWorldSettings& O) const { return Seed == O.Seed && WorldType == O.WorldType && SizeKm == O.SizeKm && TerrainRevision == O.TerrainRevision && Custom == O.Custom; }
 	bool operator!=(const FWwWorldSettings& O) const { return !(*this == O); }
 };
 

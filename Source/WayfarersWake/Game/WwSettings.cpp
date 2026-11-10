@@ -1,5 +1,6 @@
 #include "Game/WwSettings.h"
 #include "Game/WwWorldSubsystem.h"
+#include "WorldGen/WwWorldOptions.h"
 #include "WayfarersWake.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/CommandLine.h"
@@ -101,6 +102,8 @@ FWwSettings::FWwSettings()
 	Slider(TEXT("view.haze"), View, TEXT("Light"), TEXT("Haze"), 0, 5, 0.1, 1, TEXT("x"), TEXT("How thick the air is in fair weather. Rain thickens it further."));
 	Add(TEXT("view.stars"), View, TEXT("Light"), TEXT("Stars"), Toggle, 1, TEXT(""));
 	Add(TEXT("view.moon"), View, TEXT("Light"), TEXT("Moon"), Toggle, 1, TEXT(""));
+	Choice(TEXT("map.style"), View, TEXT("Map (M)"), TEXT("Map drawn as"), { TEXT("A plain map"), TEXT("An old chart on parchment") }, 0, TEXT("P on the map changes it too."));
+	Add(TEXT("map.biomes"), View, TEXT("Map (M)"), TEXT("Plain map shows biomes"), Toggle, 0, TEXT("Each biome in its own colour instead of the height of the land. B on the map."));
 	Slider(TEXT("view.fov"), View, TEXT("Camera"), TEXT("Field of view"), 60, 110, 1, 90, TEXT("degrees"), TEXT("Across the screen. 90 is Thornwake's view at 16:9."));
 	Slider(TEXT("view.sens"), View, TEXT("Camera"), TEXT("Mouse speed"), 0.03, 0.4, 0.01, 0.12, TEXT(""), TEXT(""));
 
@@ -118,7 +121,21 @@ FWwSettings::FWwSettings()
 		Sizes.Add(TEXT("The type's own size"));
 		for (double Km : ww::FWorldRecipe::Sizes()) Sizes.Add(FString::Printf(TEXT("%.0f"), Km));
 		Choice(TEXT("world.size"), World, TEXT("A new world"), TEXT("Size (km across)"), Sizes, FMath::Max(0, Sizes.IndexOfByKey(FString(TEXT("64")))), TEXT("Width and length. Large worlds take longer to make."));
-		Add(TEXT("world.make"), World, TEXT("A new world"), TEXT("Make this world"), Button, 0, TEXT("Leaves the world you are in and makes the one chosen above. Nothing of the present world is kept."));
+		Add(TEXT("world.preview"), World, TEXT("A new world"), TEXT("Preview the map"), Button, 0, TEXT("Draws the map of the world these settings would make, without leaving the one you are in."));
+		Add(TEXT("world.make"), World, TEXT("A new world"), TEXT("Make this world"), Button, 0, TEXT("Leaves the world you are in and makes the one chosen here. Nothing of the present world is kept."));
+		// How the world is generated (Thornwake's New world settings; WwWorldOptions): taken when the world is made.
+		for (const ww::FGenSetting& G : ww::FWorldOptions::Catalog(ww::FWorldRecipe::Catalog(Profiles), Biomes))
+		{
+			const FString Key = UTF8_TO_TCHAR(G.Key.c_str()), Section = UTF8_TO_TCHAR(G.Section.c_str()), Name = UTF8_TO_TCHAR(G.Name.c_str()), Tip = UTF8_TO_TCHAR(G.Tip.c_str());
+			if (!G.Options.empty())
+			{
+				TArray<FString> Options;
+				for (const std::string& O : G.Options) Options.Add(UTF8_TO_TCHAR(O.c_str()));
+				Choice(*Key, World, *Section, *Name, Options, (int32)G.Default, *Tip);
+			}
+			else if (G.bToggle) Add(*Key, World, *Section, *Name, Toggle, G.Default, *Tip);
+			else Slider(*Key, World, *Section, *Name, G.Min, G.Max, G.Step, G.Default, UTF8_TO_TCHAR(G.Unit.c_str()), *Tip).AutoAt = G.AutoAt;
+		}
 	}
 
 	bUseFile = !FParse::Param(FCommandLine::Get(), TEXT("unattended")) && !FParse::Param(FCommandLine::Get(), TEXT("WwNoSettingsFile"));
@@ -191,6 +208,12 @@ void FWwSettings::ReadSwitches()
 	Number(TEXT("WwSeed="), TEXT("world.seed"));
 	Word(TEXT("WwType="), TEXT("world.type"));
 	Word(TEXT("WwSizeKm="), TEXT("world.size"));
+	// -WwGen=key=value;key=value: world generation settings (gen.rivers=2;gen.biome.desert=0 ...).
+	FString Gen;
+	if (FParse::Value(Cmd, TEXT("WwGen="), Gen, false))
+		for (const auto& Entry : ww::FWorldOptions::Read(TCHAR_TO_UTF8(*Gen)))
+			if (FWwSetting* S = FindMutable(FName(UTF8_TO_TCHAR(Entry.first.c_str())))) S->Value = Entry.second;
+			else UE_LOG(LogWayfarer, Warning, TEXT("-WwGen: no setting '%s'"), UTF8_TO_TCHAR(Entry.first.c_str()));
 }
 
 FWwSetting* FWwSettings::FindMutable(FName Key)
@@ -255,6 +278,14 @@ void FWwSettings::ResetPage(const FString& Page)
 {
 	for (FWwSetting& S : List)
 		if (S.Page == Page && S.bSaved && S.Kind != EWwSettingKind::Button && !S.Key.ToString().StartsWith(TEXT("world."))) Set(S.Key, S.Default);
+}
+
+FString FWwSettings::WorldRecord() const
+{
+	std::map<std::string, double> Values;
+	for (const FWwSetting& S : List)
+		if (S.Key.ToString().StartsWith(TEXT("gen.")) && S.Value != S.Default) Values[TCHAR_TO_UTF8(*S.Key.ToString())] = S.Value;
+	return UTF8_TO_TCHAR(ww::FWorldOptions::Write(Values).c_str());
 }
 
 TArray<FString> FWwSettings::Pages() const

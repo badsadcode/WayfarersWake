@@ -35,6 +35,10 @@ public:
 	/// F9: writes a text dump of where the player is and what the game is doing, with a screenshot beside it, to
 	/// Saved/Dumps (as Thornwake's F9, which writes to its own folder; the two never mix).
 	void DebugDump();
+	/// To a place in the world (metres): waits for the ground there, as at the start.
+	void GoTo(double X, double Z);
+	/// Where the world first put the player (Unreal units).
+	const FVector& GetHome() const { return Home; }
 
 	UPROPERTY(EditAnywhere, Category = "Movement") float WalkSpeed = 500;   // (Thornwake: 5 m/s)
 	UPROPERTY(EditAnywhere, Category = "Movement") float SprintSpeed = 1100; // (11 m/s)
@@ -46,8 +50,6 @@ public:
 
 private:
 	void TryPlace();
-	/// To a place in the world (metres): waits for the ground there, as at the start.
-	void GoTo(double X, double Z);
 	/// Keys as the game hears them: nothing while the menu is open.
 	bool KeyDown(const FKey& Key) const;
 	bool KeyPressed(const FKey& Key) const;

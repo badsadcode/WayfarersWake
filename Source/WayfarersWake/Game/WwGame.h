@@ -153,9 +153,14 @@ public:
 	/// The Esc menu (WwMenu): settings and things to try. The world keeps running behind it.
 	void ToggleMenu();
 	bool IsMenuOpen() const { return bMenuOpen; }
+	/// The world map (WwMapScreen), M.
+	void ToggleMap();
+	bool IsMapOpen() const { return bMapOpen; }
 private:
 	TSharedPtr<class SWwMenu> Menu;
 	TSharedPtr<class SWidget> MenuHolder;
-	bool bMenuOpen = false, bMenuSwitchDone = false;
+	bool bMenuOpen = false, bMenuSwitchDone = false, bMapOpen = false;
+	TSharedPtr<class SWwMapScreen> Map;
+	TSharedPtr<class SWidget> MapHolder;
 	double SmoothedFrame = 0.016;
 };

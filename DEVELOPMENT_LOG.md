@@ -147,3 +147,11 @@
 * Tom watched a test window sit on "Raising the ground under your feet" and said so. Cause: the new level's game mode saw the "Make this world" press as new and reopened the level, for ever. Watchers now start from the present count.
 * Two builds stalled in the compiler again (two idle processes); killed, run again, fine.
 * Checked by script, not by hand: Esc in and out, settings taking effect, going to a place, making a world, the file.
+
+## 2026-11-10, session 1 (continued): the map, and the world page
+
+* Tom asked for a map: nicer than Thornwake's if possible, his position and direction on it, zoom, pan, right click to teleport exactly, and two looks, Thornwake's and an old map on parchment.
+* The picture maker is engine-free and reads the real terrain when zoomed in; the first close view was black with shading (real slopes are far steeper than the plan's), so the shading now eases off with zoom and levels off on cliffs.
+* A scripted right click into the open sea put the player on the sea bed 427 m down. Arrivals over water are now at the surface.
+* Tom played while I built: he could not drag the time of day (he had to type it). The spin box I had used wants a mouse mode the game window does not give it; replaced with a plain bar and a number box. He also asked for a map preview before making a world and all of Thornwake's generation settings: 76 settings ported with their arithmetic and checked bit for bit against the old path, and a preview panel on the World page.
+* Tom then set a new direction for after this: Wayfarer's Wake as its own game, with proper data-driven gameplay, a jointed character with animations, no staff or pack on the base figure, and customisable characters by race from his reference sheets (`docs/ConceptArt/Thornwake_Race_Reference_Sheets`). Not started; a plan comes first.

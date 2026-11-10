@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include <limits>
 
 /// What the player can set and try from the Esc menu (after Thornwake's GameSettings, with only what does something
 /// here). One list: each setting has a page and a section, a plain name, a range and a default. The game's parts ask
@@ -28,6 +29,8 @@ struct FWwSetting
 	bool bRebuild = false;
 	/// Greyed out unless this other setting is on (a toggle, or a choice not at its first option).
 	FName Needs;
+	/// Shown as "auto" at this value (NaN: never).
+	double AutoAt = std::numeric_limits<double>::quiet_NaN();
 	/// Bumped on every change from the menu and every press of a button.
 	int32 Serial = 0;
 };
@@ -60,6 +63,8 @@ public:
 	/// Writes the file if something changed more than half a second ago (called every frame).
 	void SaveIfDue();
 	void Save();
+	/// The world generation settings that differ from their defaults, as a world records them ("key=value;...").
+	FString WorldRecord() const;
 	bool UsesFile() const { return bUseFile; }
 	static FString FilePath();
 

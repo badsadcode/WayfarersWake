@@ -42,6 +42,8 @@ Drawing the world (state on 2026-11-10; details in `MIGRATION_STATUS.md`):
 | Vegetation, GroundCover, rocks, rock kit, props, wind on plants | ported (`WwVegetation`, `WwFlora`, `WwRocks`) |
 | TreeField, impostors, far cards | 3D trees to 1.5 km and far cards ported; impostors and fades set aside (D25) |
 | Water: sheet, rivers, waterfalls, spray, FFT sea, shore waves, foam net, underwater view | ported; wakes, caustics from above, local water simulation not |
+| World map (`WorldMap.cs`, `WorldPreview.cs`) | `WwMap`, `WwMapScreen`: ported, plus real terrain when zoomed in and a parchment look (D30); other players not shown |
+| New world tab (`WorldGenOptions.cs`, preview) | `WwWorldOptions` and the menu's World page: ported (D31); four landforms' settings and saved world types not ported |
 | Esc menu, settings (`WorldLab.cs` menu, `GameSettings.cs`, `SettingsUi.cs`, `WorldLab.WeatherTest.cs`) | `WwMenu`, `WwSettings`: built new on the same idea (D29); presets, save/load, hosting, benchmark and display pages not ported |
 | Sound (`Lightning.cs` ambience and thunder, `Soundscape.cs`) | `WwSound`, played by `AWwSky`: ported (D28); not placed in the world |
 | Atmosphere 2.0, Weather, Lightning, clouds, light profiles, mist, light rays | `AWwSky`: engine sky, fixed weather and wind; not ported (look round, D25) |

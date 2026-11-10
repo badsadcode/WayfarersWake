@@ -3,6 +3,10 @@
 #include "CoreMinimal.h"
 #include "Game/WwSettings.h"
 #include "Widgets/SCompoundWidget.h"
+#include "Styling/SlateBrush.h"
+#include "Async/Future.h"
+#include "UObject/StrongObjectPtr.h"
+#include "WorldGen/WwMap.h"
 
 class SScrollBox;
 class SHorizontalBox;
@@ -23,11 +27,22 @@ public:
 	void Construct(const FArguments& Args);
 	virtual bool SupportsKeyboardFocus() const override { return true; }
 	virtual FReply OnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
+	virtual void Tick(const FGeometry& Geometry, const double CurrentTime, const float DeltaTime) override;
 	void ShowPage(const FString& InPage);
 	const FString& GetPage() const { return Page; }
 
 private:
 	void Fill();
+	/// The World page's map of the world the settings would make, drawn off the game thread (the plan of a world takes
+	/// seconds to build).
+	struct FPreview { ww::FMapImage Image; FString Text; };
+	TSharedRef<SWidget> PreviewPanel();
+	void StartPreview();
+	TStrongObjectPtr<class UTexture2D> PreviewTexture;
+	FSlateBrush PreviewBrush;
+	FString PreviewText = TEXT("Choose a world type, a size and a seed, set what you like below, and preview the map before making the world.");
+	TFuture<FPreview> Previewing;
+	int32 PreviewSeen = -1;
 	TSharedRef<SWidget> Row(const FWwSetting& Setting);
 	TSharedRef<SWidget> Control(const FWwSetting& Setting);
 

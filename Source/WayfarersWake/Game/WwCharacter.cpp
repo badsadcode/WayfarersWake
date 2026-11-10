@@ -171,6 +171,13 @@ void AWwCharacter::TryPlace()
 	if (!GetWorld()->LineTraceSingleByChannel(Hit, SpawnPoint + FVector(0, 0, 5000), SpawnPoint - FVector(0, 0, 5000), ECC_WorldStatic, Params)) return;
 	SetActorLocation(Hit.ImpactPoint + FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5), false, nullptr, ETeleportType::TeleportPhysics);
 	bPlaced = true;
+	// (arriving over water, by the map or the menu: at the surface, not on the bed far below)
+	if (bMoved)
+	{
+		const ww::FTerrainSample There = WorldSystem->GetSampler()->Sample(SpawnPoint.X / 100.0, SpawnPoint.Y / 100.0, 2);
+		if (There.Water != ww::EWaterKind::None && There.WaterLevel * 100.0 > Hit.ImpactPoint.Z + 150.0)
+			SetActorLocation(FVector(SpawnPoint.X, SpawnPoint.Y, There.WaterLevel * 100.0 - 40.0), false, nullptr, ETeleportType::TeleportPhysics);
+	}
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 		if (PC->IsLocalController() && !bMoved) { PC->SetInputMode(FInputModeGameOnly()); PC->bShowMouseCursor = false; PC->SetControlRotation(FRotator(-12, 35, 0));
 			FString Look, Pitch, Yaw; // test switch -WwLook=pitch,yaw (degrees)
@@ -236,7 +243,7 @@ void AWwCharacter::Tick(float DeltaSeconds)
 	// The menu (WwMenu): while it is open the game hears no keys and the view does not turn; its settings and buttons.
 	AWwHUD* Hud = Cast<AWwHUD>(PC->GetHUD());
 	InputPC = PC;
-	bMenuOpen = Hud && Hud->IsMenuOpen();
+	bMenuOpen = Hud && (Hud->IsMenuOpen() || Hud->IsMapOpen());
 	FWwSettings& Set = FWwSettings::Get();
 	Camera->SetFieldOfView((float)Set.Num(TEXT("view.fov")));
 	MouseSensitivity = (float)Set.Num(TEXT("view.sens"));
@@ -251,7 +258,9 @@ void AWwCharacter::Tick(float DeltaSeconds)
 		else GoTo(Home.X / 100.0, Home.Y / 100.0);
 		return;
 	}
-	if (PC->WasInputKeyJustPressed(EKeys::Escape) && Hud && AutoFlySpeed <= 0) Hud->ToggleMenu();
+	// Esc: the menu (or out of the map); M: the map. (With the menu or the map open and in focus, they hear the key themselves.)
+	if (PC->WasInputKeyJustPressed(EKeys::Escape) && Hud && AutoFlySpeed <= 0) { if (Hud->IsMapOpen()) Hud->ToggleMap(); else Hud->ToggleMenu(); }
+	if (PC->WasInputKeyJustPressed(EKeys::M) && Hud && !Hud->IsMenuOpen()) Hud->ToggleMap();
 
 	if (AutoFlySpeed > 0)
 	{

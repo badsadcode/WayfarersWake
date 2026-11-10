@@ -1,4 +1,5 @@
 #include "Game/WwWorldSubsystem.h"
+#include "WorldGen/WwWorldOptions.h"
 #include "WayfarersWake.h"
 #include "Async/Async.h"
 #include "Async/ParallelFor.h"
@@ -47,7 +48,7 @@ void UWwWorldSubsystem::StartWorld(const FWwWorldSettings& Settings)
 	Stage->store(0);
 	const int32 Request = ++BuildRequest;
 	const double Started = FPlatformTime::Seconds();
-	UE_LOG(LogWayfarer, Log, TEXT("Building world: type=%s seed=%d size=%.0f km revision=%d"), *Settings.WorldType, Settings.Seed, Settings.SizeKm, Settings.TerrainRevision);
+	UE_LOG(LogWayfarer, Log, TEXT("Building world: type=%s seed=%d size=%.0f km revision=%d%s%s"), *Settings.WorldType, Settings.Seed, Settings.SizeKm, Settings.TerrainRevision, Settings.Custom.IsEmpty() ? TEXT("") : TEXT(" settings: "), *Settings.Custom);
 
 	TWeakObjectPtr<UWwWorldSubsystem> WeakThis(this);
 	TSharedPtr<std::atomic<int32>, ESPMode::ThreadSafe> StageRef = Stage;
@@ -66,15 +67,12 @@ void UWwWorldSubsystem::StartWorld(const FWwWorldSettings& Settings)
 			if (!Recipe) Error = FString::Printf(TEXT("Unknown world type '%s'"), *Settings.WorldType);
 			else
 			{
-				ww::FWorldChoices Choices;
-				Choices.SizeKm = Settings.SizeKm;
-				ww::FWorldProfile Profile = Recipe->Resolve(Choices);
+				// The profile and the style from the world type and the generation settings the world records.
+				ww::FWorldProfile Profile; ww::FTerrainStyle Style;
 				std::string Problem;
-				if (!Profile.Validate(Problem)) Error = UTF8_TO_TCHAR(Problem.c_str());
+				if (!ww::FWorldOptions::Build(Recipes, Biomes, Wanted, Settings.SizeKm, Settings.TerrainRevision, ww::FWorldOptions::Read(TCHAR_TO_UTF8(*Settings.Custom)), Profile, Style, Problem)) Error = UTF8_TO_TCHAR(Problem.c_str());
 				else
 				{
-					ww::FTerrainStyle Style = ww::FTerrainStyle::For(Profile);
-					Style.Revision = FMath::Clamp(Settings.TerrainRevision, 8, ww::FTerrainStyle::PortedRevision);
 					auto Plan = std::make_shared<ww::FWorldPlan>(ww::FWorldManifest::Create(Settings.Seed, Profile), Style, Biomes,
 						[StageRef](int S) { StageRef->store(S); });
 					Built = std::make_shared<ww::FTerrainSampler>(Plan);
