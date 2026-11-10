@@ -1,0 +1,73 @@
+{
+  "generator": "NoorMD NoorMaterial",
+  "kind": "material",
+  "name": "ground_03_sand",
+  "family": "Custom",
+  "recipe": "ground_03_sand.noortex.json",
+  "size": 1024,
+  "tileMetres": 2,
+  "pixelsPerMetre": 512,
+  "heightRangeCm": 4,
+  "albedoMeanLinear": [
+    0.6114,
+    0.2918,
+    0.0886
+  ],
+  "albedoLuminance": 0.345,
+  "maps": [
+    {
+      "file": "ground_03_sand_albedo.png",
+      "map": "albedo",
+      "colorSpace": "sRGB",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_03_sand_normal.png",
+      "map": "normal",
+      "colorSpace": "linear",
+      "convention": "OpenGL (green \u002BY)",
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_03_sand_roughness.png",
+      "map": "roughness",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_03_sand_ao.png",
+      "map": "ao",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_03_sand_metallic.png",
+      "map": "metallic",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "ground_03_sand_height.png",
+      "map": "height",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 16,
+      "range": "black 0 cm \u2026 white 4 cm (low is where water collects)",
+      "channels": null
+    }
+  ]
+}

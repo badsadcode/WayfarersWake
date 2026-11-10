@@ -35,11 +35,15 @@ public:
 	/// A blow from this place (cm) toward this heading (degrees): the nearest living animal within reach in front is
 	/// hit. True if something was hit; what happened in words.
 	bool Hit(const FVector& From, float YawDegrees, float ReachCm, float Damage, FString& Said);
+	/// An arrow's flight this frame, from A to B (cm): the first living animal it passes through is hit.
+	bool Shot(const FVector& A, const FVector& B, float Damage, FString& Said);
 	/// E beside a dead animal: its meat, hide and bone into the pack. True if there was one within reach.
 	bool Butcher(const FVector& From, FWwGameplay* Game, FString& Said);
 	/// A herd of this many, this far ahead of a place along a heading (tests and the debug page).
 	void SpawnHerd(const FVector& Near, float YawDegrees, float AheadCm, int32 Count);
 	int32 GetAlive() const;
+	/// The nearest living animal's chest (cm), if there is one.
+	bool NearestAlive(const FVector& From, FVector& Chest) const;
 	/// "3 deer near: 2 grazing, 1 watching" (the debug dump).
 	FString Describe() const;
 
@@ -55,6 +59,7 @@ private:
 		EMood Shown = EMood::Dead;
 	};
 	bool LoadAssets();
+	void Wound(FAnimal& Animal, float Damage, const FVector2D& From, FString& Said);
 	void Place(FAnimal& Animal);
 	void SetMood(FAnimal& Animal, EMood Mood, float Seconds);
 	bool Walkable(const FVector2D& At) const;

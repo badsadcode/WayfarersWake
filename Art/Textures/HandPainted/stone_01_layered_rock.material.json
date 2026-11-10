@@ -1,0 +1,73 @@
+{
+  "generator": "NoorMD NoorMaterial",
+  "kind": "material",
+  "name": "stone_01_layered_rock",
+  "family": "Custom",
+  "recipe": "stone_01_layered_rock.noortex.json",
+  "size": 1024,
+  "tileMetres": 2,
+  "pixelsPerMetre": 512,
+  "heightRangeCm": 4,
+  "albedoMeanLinear": [
+    0.2389,
+    0.1595,
+    0.1238
+  ],
+  "albedoLuminance": 0.1738,
+  "maps": [
+    {
+      "file": "stone_01_layered_rock_albedo.png",
+      "map": "albedo",
+      "colorSpace": "sRGB",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_01_layered_rock_normal.png",
+      "map": "normal",
+      "colorSpace": "linear",
+      "convention": "OpenGL (green \u002BY)",
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_01_layered_rock_roughness.png",
+      "map": "roughness",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_01_layered_rock_ao.png",
+      "map": "ao",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_01_layered_rock_metallic.png",
+      "map": "metallic",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_01_layered_rock_height.png",
+      "map": "height",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 16,
+      "range": "black 0 cm \u2026 white 4 cm (low is where water collects)",
+      "channels": null
+    }
+  ]
+}

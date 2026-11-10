@@ -210,3 +210,8 @@
 * The model has no bone called "head"; its front is found from its highest bone (an ear), rounded to the model's axis.
 * Tom on the new textures: the grass ground does not sit well with the grass tufts (still the old pixel sprites). He will try a hand-painted set in a Blizzard-like style, then a pixel-art set, and choose.
 * The packaged game would not start after the deer went in (exit at once, no log, no crash report): the deer code read the command line in a file-level constant, which runs before the engine has a command line. Harmless in the editor build, fatal in the packaged one. It now asks when first needed. Lesson kept: nothing at file level may touch the engine.
+
+## 2026-11-10, session 1 (continued): the bow
+
+* Hold to draw, release to loose; arrows that drop; a full draw kills a deer. Proved by a scripted shot at 73 m (the second of two arrows hit).
+* Tom added a second texture set (`Art/Textures/HandPainted`) and asked to switch between sets in the game.

@@ -143,6 +143,18 @@ int32 AWwWildlife::GetAlive() const
 	return Count;
 }
 
+bool AWwWildlife::NearestAlive(const FVector& From, FVector& Chest) const
+{
+	double Best = 1e18;
+	for (const FAnimal& Animal : Animals)
+	{
+		if (Animal.Mood == EMood::Dead || !Animal.Actor) continue;
+		const double D = FVector::DistSquared(Animal.Actor->GetActorLocation(), From);
+		if (D < Best) { Best = D; Chest = Animal.Actor->GetActorLocation() + FVector(0, 0, 90); }
+	}
+	return Best < 1e17;
+}
+
 FString AWwWildlife::Describe() const
 {
 	int32 Moods[5] = { 0, 0, 0, 0, 0 };
@@ -286,23 +298,42 @@ bool AWwWildlife::Hit(const FVector& From, float YawDegrees, float ReachCm, floa
 		if (Distance < BestDistance && (Distance < 60.f || FVector2D::DotProduct(To / Distance, Facing) > 0.5)) { Best = &Animal; BestDistance = Distance; }
 	}
 	if (!Best) return false;
-	Best->Health -= Damage;
-	if (Best->Health <= 0)
+	Wound(*Best, Damage, Me, Said);
+	return true;
+}
+
+void AWwWildlife::Wound(FAnimal& Animal, float Damage, const FVector2D& From, FString& Said)
+{
+	Animal.Health -= Damage;
+	if (Animal.Health <= 0)
 	{
-		SetMood(*Best, EMood::Dead, 0);
-		Place(*Best);
+		SetMood(Animal, EMood::Dead, 0);
+		Place(Animal);
 		Said = TEXT("The deer falls. (E beside it to butcher it.)");
 	}
 	else Said = TEXT("You wound the deer.");
 	// The rest of the herd, and the wounded one, are gone.
 	for (FAnimal& Other : Animals)
-		if (Other.Mood != EMood::Dead && Other.Herd == Best->Herd)
+		if (Other.Mood != EMood::Dead && Other.Herd == Animal.Herd)
 		{
 			SetMood(Other, EMood::Flee, FMath::FRandRange(6.f, 9.f));
-			const FVector2D Away = Other.At - Me;
+			const FVector2D Away = Other.At - From;
 			Other.Yaw = FMath::RadiansToDegrees(FMath::Atan2(Away.Y, Away.X)) + FMath::FRandRange(-25.f, 25.f);
 		}
-	return true;
+}
+
+bool AWwWildlife::Shot(const FVector& A, const FVector& B, float Damage, FString& Said)
+{
+	for (FAnimal& Animal : Animals)
+	{
+		if (Animal.Mood == EMood::Dead || !Animal.Actor) continue;
+		// (the body: a ball about the chest, 90 cm above the feet)
+		const FVector Chest = Animal.Actor->GetActorLocation() + FVector(0, 0, 90);
+		if (FMath::PointDistToSegment(Chest, A, B) > 60.f) continue;
+		Wound(Animal, Damage, FVector2D(A.X, A.Y), Said);
+		return true;
+	}
+	return false;
 }
 
 bool AWwWildlife::Butcher(const FVector& From, FWwGameplay* Game, FString& Said)

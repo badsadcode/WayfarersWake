@@ -180,6 +180,9 @@ FString FWwGameplay::Give(const FString& Item, int32 Count)
 	return FString::Printf(TEXT("Picked up %d x %s (debug)."), Count, *WwText(Found->second.Name));
 }
 
+int32 FWwGameplay::Count(const FString& Item) { return IsValid() ? Rules->Inventory(Player).Count(std::string(TCHAR_TO_UTF8(*Item))) : 0; }
+bool FWwGameplay::Take(const FString& Item, int32 Count) { return IsValid() && Rules->Inventory(Player).Take(std::string(TCHAR_TO_UTF8(*Item)), Count); }
+
 FString FWwGameplay::GiveAll()
 {
 	if (!IsValid()) return FString();

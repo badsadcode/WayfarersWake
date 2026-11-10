@@ -26,6 +26,9 @@ public:
 	bool IsSwimming() const { return bSwimming; }
 	/// Crouched (C): seen and heard from less far.
 	bool IsSneaking() const { return bCrouching; }
+	/// The bow: drawn while the right mouse button is held (0..1 as it comes to full draw), loosed on letting go.
+	bool IsAiming() const { return DrawSeconds > 0; }
+	float GetDraw() const { return FMath::Clamp(DrawSeconds / 1.1f, 0.f, 1.f); }
 	/// The placeholder mechanics on screen: the last thing that happened (for a few seconds) and whether the pack is open.
 	const FString& GetNotice() const { return Notice; }
 	bool IsPackOpen() const { return bPackOpen; }
@@ -59,6 +62,13 @@ private:
 	void SpawnCreature(int32 Which, float Size);
 	UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Spawned;
 	int32 HerdSeen = -1;
+	FString UpdateBow(float DeltaSeconds, class APlayerController* PC, class FWwGameplay* Game);
+	UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Arrows;
+	TArray<FVector> ArrowAt, ArrowVelocity;
+	TArray<float> ArrowLife, ArrowDamage;
+	TArray<bool> ArrowStuck;
+	float DrawSeconds = 0;
+	bool bBowRefused = false;
 	UPROPERTY(Transient) TObjectPtr<class AWwWildlife> Wildlife;
 	int32 GiveSeen = -1, GiveAllSeen = -1, HealSeen = -1, SpawnSeen = -1, ClearSeen = -1;
 	void UpdateBody(float DeltaSeconds, bool bSprinting);

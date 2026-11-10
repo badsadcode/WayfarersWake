@@ -41,6 +41,9 @@ public:
 	/// Debug (the menu's Debug page): items straight into the pack; needs held still; needs put right.
 	FString Give(const FString& Item, int32 Count);
 	FString GiveAll();
+	/// How many of an item are in the pack; take some out (false if there are too few).
+	int32 Count(const FString& Item);
+	bool Take(const FString& Item, int32 Count);
 	void SetNeedsRun(bool bRun) { bNeedsRun = bRun; }
 	void Restore() { Needs = wr::FNeeds(); }
 	/// The pack and the recipes, as lines for the screen.

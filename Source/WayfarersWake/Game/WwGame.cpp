@@ -829,6 +829,15 @@ void AWwHUD::DrawHUD()
 			if (Map) { UE_LOG(LogWayfarer, Display, TEXT("-WwMapGo: map shows %s"), *Map->Describe()); Map->TeleportTo(FCString::Atod(*Left), FCString::Atod(*Right)); }
 		}
 	}
+	// The bow drawn: a mark where the arrow will go, and a bar that fills as the draw comes to full.
+	if (Player->IsAiming() && !bMapOpen)
+	{
+		const float Cx = Canvas->SizeX * 0.5f, Cy = Canvas->SizeY * 0.5f, Draw = Player->GetDraw();
+		DrawRect(FLinearColor(0, 0, 0, 0.6f), Cx - 3, Cy - 3, 6, 6);
+		DrawRect(Ink, Cx - 1.5f, Cy - 1.5f, 3, 3);
+		DrawRect(FLinearColor(0, 0, 0, 0.5f), Cx - 41, Cy + 28, 82, 7);
+		DrawRect(Draw >= 1.f ? FLinearColor(0.95f, 0.72f, 0.25f) : Ink, Cx - 40, Cy + 29, 80 * Draw, 5);
+	}
 	if (bMapOpen || !FWwSettings::Get().On(TEXT("view.hud"))) return;
 	const FVector P = Player->GetActorLocation();
 	const double X = P.X / 100.0, Z = P.Y / 100.0;
@@ -847,7 +856,7 @@ void AWwHUD::DrawHUD()
 	if (const FString Status = Player->GetStatus(); !Status.IsEmpty()) { Line(Status, 16, Y, 1.0f); Y += 20; }
 	Line(Player->IsFlying() ? TEXT("FLYING  WASD move, E/Q up/down, Shift fast, Ctrl very fast, F walk, F9 debug dump, Esc menu")
 		: Player->IsSwimming() ? TEXT("SWIMMING  WASD swim, Shift faster, Space up, C dive, F fly, F9 debug dump, Esc menu")
-		: TEXT("WASD walk, Shift sprint, Space jump, I pack, E gather, left mouse axe, T eat, M map, F fly, F9 dump, Esc menu"), 16, Canvas->SizeY - 30, 1.0f);
+		: TEXT("WASD walk, Shift sprint, Space jump, I pack, E gather, left mouse axe, right mouse bow, C crouch, T eat, M map, F fly, Esc menu"), 16, Canvas->SizeY - 30, 1.0f);
 	for (TActorIterator<AWwSky> It(GetWorld()); It; ++It) { Line(It->WeatherLine(), Canvas->SizeX - 430, 16, 1.0f); break; }
 	// The placeholder mechanics: needs, the last thing that happened, and the pack with what can be made.
 	if (FWwGameplay* Game = WorldSystem->GetGameplay())

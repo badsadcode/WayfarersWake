@@ -1,0 +1,73 @@
+{
+  "generator": "NoorMD NoorMaterial",
+  "kind": "material",
+  "name": "stone_05_mossy_stone",
+  "family": "Custom",
+  "recipe": "stone_05_mossy_stone.noortex.json",
+  "size": 1024,
+  "tileMetres": 2,
+  "pixelsPerMetre": 512,
+  "heightRangeCm": 4,
+  "albedoMeanLinear": [
+    0.1953,
+    0.1365,
+    0.0972
+  ],
+  "albedoLuminance": 0.1461,
+  "maps": [
+    {
+      "file": "stone_05_mossy_stone_albedo.png",
+      "map": "albedo",
+      "colorSpace": "sRGB",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_05_mossy_stone_normal.png",
+      "map": "normal",
+      "colorSpace": "linear",
+      "convention": "OpenGL (green \u002BY)",
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_05_mossy_stone_roughness.png",
+      "map": "roughness",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_05_mossy_stone_ao.png",
+      "map": "ao",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_05_mossy_stone_metallic.png",
+      "map": "metallic",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 8,
+      "range": null,
+      "channels": null
+    },
+    {
+      "file": "stone_05_mossy_stone_height.png",
+      "map": "height",
+      "colorSpace": "linear",
+      "convention": null,
+      "bits": 16,
+      "range": "black 0 cm \u2026 white 4 cm (low is where water collects)",
+      "channels": null
+    }
+  ]
+}

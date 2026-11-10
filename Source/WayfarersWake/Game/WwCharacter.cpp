@@ -7,6 +7,7 @@
 #include "Game/WwWildlife.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/SkeletalMeshActor.h"
+#include "Engine/StaticMeshActor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "WorldGen/WwVegetation.h"
@@ -146,6 +147,96 @@ void AWwCharacter::LoadBody()
 	UE_LOG(LogWayfarer, Display, TEXT("Body: %s, %.0f cm tall (the file's %.0f), %d of 7 animations"), *Name, BodyHeight, Tall, Clips.FilterByPredicate([](const TObjectPtr<UAnimSequence>& A) { return A != nullptr; }).Num());
 }
 
+FString AWwCharacter::UpdateBow(float DeltaSeconds, APlayerController* PC, FWwGameplay* Game)
+{
+	// The bow (Thornwake has one among its items; this is its first use here). Hold the right mouse button to draw: it
+	// takes about a second to come to full draw. Let go to loose: the arrow flies where the middle of the screen
+	// points, faster and harder the fuller the draw, and falls as it goes. A full draw kills a deer; a half one wounds.
+	FString Said;
+	// Test switch -WwBowTest (with -WwDeerTest for a herd): eight seconds in, a bow and arrows, a full draw aimed at the
+	// nearest deer with the rise the distance needs, and the arrow loosed; again two seconds later.
+	static const bool bBowTest = FParse::Param(FCommandLine::Get(), TEXT("WwBowTest"));
+	static int32 TestShots = 0;
+	FVector Mark;
+	if (bBowTest && Wildlife && TestShots < 2 && SecondsPlaced > 8.0 + 2.5 * TestShots && DrawSeconds <= 0 && Wildlife->NearestAlive(GetActorLocation(), Mark))
+	{
+		TestShots++;
+		Game->Give(TEXT("bow"), 1); Game->Give(TEXT("arrow"), 3);
+		const FVector To = Mark - (GetActorLocation() + FVector(0, 0, 50));
+		const double Flat = To.Size2D(), Rise = 0.5 * FMath::RadiansToDegrees(FMath::Asin(FMath::Clamp(980.0 * Flat / FMath::Square(5500.0), 0.0, 1.0)));
+		PC->SetControlRotation(FRotator(FMath::RadiansToDegrees(FMath::Atan2(To.Z, Flat)) + Rise, FMath::RadiansToDegrees(FMath::Atan2(To.Y, To.X)), 0));
+		DrawSeconds = 1.2f;
+		UE_LOG(LogWayfarer, Display, TEXT("Bow test: a deer %.0f m off, aiming %.1f degrees over it"), Flat / 100, Rise);
+	}
+	const bool bHold = !bFly && !bSwimming && !bPackOpen && KeyDown(EKeys::RightMouseButton);
+	if (bHold && !bBowRefused)
+	{
+		if (DrawSeconds <= 0)
+		{
+			if (Game->Count(TEXT("bow")) < 1) { Said = TEXT("You have no bow."); bBowRefused = true; }
+			else if (Game->Count(TEXT("arrow")) < 1) { Said = TEXT("You have no arrows."); bBowRefused = true; }
+		}
+		if (!bBowRefused)
+		{
+			DrawSeconds += DeltaSeconds;
+			SetActorRotation(FRotator(0, PC->GetControlRotation().Yaw, 0)); // (the archer faces the shot)
+		}
+	}
+	else if (!bHold)
+	{
+		if (DrawSeconds > 0.25f && Game->Take(TEXT("arrow"), 1))
+		{
+			const float Power = FMath::Clamp(DrawSeconds / 1.1f, 0.3f, 1.f);
+			FVector Eye; FRotator Look;
+			PC->GetPlayerViewPoint(Eye, Look);
+			const FVector Right = FRotationMatrix(FRotator(0, Look.Yaw, 0)).GetUnitAxis(EAxis::Y);
+			const FVector Start = GetActorLocation() + FVector(0, 0, 50) + Right * 25.0;
+			const FVector Dir = (Eye + Look.Vector() * 6000.0 - Start).GetSafeNormal();
+			FActorSpawnParameters Params;
+			Params.ObjectFlags |= RF_Transient;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			if (AStaticMeshActor* Arrow = GetWorld()->SpawnActor<AStaticMeshActor>(Start, Dir.Rotation(), Params))
+			{
+				// (a thin shaft, 75 cm long: there is no arrow model yet)
+				UStaticMeshComponent* Shaft = Arrow->GetStaticMeshComponent();
+				Shaft->SetMobility(EComponentMobility::Movable);
+				Shaft->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+				Shaft->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				Arrow->SetActorScale3D(FVector(0.75, 0.018, 0.018));
+				Arrows.Add(Arrow); ArrowAt.Add(Start); ArrowVelocity.Add(Dir * 5500.0 * Power); ArrowLife.Add(0); ArrowDamage.Add(20.f + 45.f * Power); ArrowStuck.Add(false);
+			}
+			Said = FString::Printf(TEXT("Loosed (%d arrows left)."), Game->Count(TEXT("arrow")));
+			UE_LOG(LogWayfarer, Display, TEXT("Bow: an arrow at %.0f %% draw, %.0f m/s"), Power * 100, 55.0 * Power);
+		}
+		DrawSeconds = 0;
+		bBowRefused = false;
+	}
+	// The arrows in the air fall as they fly; one that meets an animal wounds or kills it, one that meets the ground stays there a while.
+	UWwWorldSubsystem* WorldSystem = GetGameInstance()->GetSubsystem<UWwWorldSubsystem>();
+	const std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem ? WorldSystem->GetSampler() : nullptr;
+	for (int32 i = Arrows.Num() - 1; i >= 0; i--)
+	{
+		ArrowLife[i] += DeltaSeconds;
+		bool bGone = !Arrows[i] || ArrowLife[i] > (ArrowStuck[i] ? 40.f : 8.f);
+		if (!bGone && !ArrowStuck[i])
+		{
+			ArrowVelocity[i].Z -= 980.0 * DeltaSeconds;
+			const FVector Next = ArrowAt[i] + ArrowVelocity[i] * DeltaSeconds;
+			FString Hit;
+			if (Wildlife && Wildlife->Shot(ArrowAt[i], Next, ArrowDamage[i], Hit)) { Said = Hit; bGone = true; UE_LOG(LogWayfarer, Display, TEXT("Bow: %s"), *Hit); }
+			else if (Sampler && Sampler->Height(Next.X / 100.0, Next.Y / 100.0, 2) * 100.0 > Next.Z) { ArrowStuck[i] = true; ArrowLife[i] = 0; }
+			ArrowAt[i] = Next;
+			if (!bGone) Arrows[i]->SetActorLocationAndRotation(Next, ArrowVelocity[i].Rotation());
+		}
+		if (bGone)
+		{
+			if (Arrows[i]) Arrows[i]->Destroy();
+			Arrows.RemoveAt(i); ArrowAt.RemoveAt(i); ArrowVelocity.RemoveAt(i); ArrowLife.RemoveAt(i); ArrowDamage.RemoveAt(i); ArrowStuck.RemoveAt(i);
+		}
+	}
+	return Said;
+}
+
 FString AWwCharacter::UpdateDebug(FWwGameplay* Game)
 {
 	FWwSettings& Set = FWwSettings::Get();
@@ -237,7 +328,10 @@ void AWwCharacter::UpdateBody(float DeltaSeconds, bool bSprinting)
 {
 	FWwSettings& Set = FWwSettings::Get();
 	if (Set.Changed(TEXT("char.body"), BodySeen)) LoadBody();
-	Boom->TargetArmLength = (float)Set.Num(TEXT("char.camera")) * 100.f;
+	// (aiming: the camera comes in over the right shoulder)
+	const float Aim = IsAiming() ? 1.f : 0.f;
+	Boom->TargetArmLength = FMath::FInterpTo(Boom->TargetArmLength, FMath::Lerp((float)Set.Num(TEXT("char.camera")) * 100.f, 190.f, Aim), DeltaSeconds, 8.f);
+	Boom->SocketOffset = FMath::VInterpTo(Boom->SocketOffset, FVector(0, 55.f * Aim, 90.f - 30.f * Aim), DeltaSeconds, 8.f);
 	if (!bHasBody) return;
 	// Which animation: a swing of the arm while it lasts; treading water; crouched; else by how fast the feet move.
 	AttackSeconds -= DeltaSeconds;
@@ -500,7 +594,7 @@ void AWwCharacter::Tick(float DeltaSeconds)
 	}
 	else
 	{
-		Move->MaxWalkSpeed = bCrouching ? 160.f : bShift ? SprintSpeed : WalkSpeed;
+		Move->MaxWalkSpeed = bCrouching || IsAiming() ? 160.f : bShift ? SprintSpeed : WalkSpeed;
 		Move->MaxAcceleration = 2048;
 		AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::X), Forward);
 		AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y), Right);
@@ -621,6 +715,7 @@ void AWwCharacter::UpdateGameplay(float DeltaSeconds, APlayerController* PC, boo
 	if (!bFly) Game->Tick(Sky ? Sky->GetHoursStep() : 0.0, Sky ? Sky->Hour : 12.0, X, Z, Feet, bSwimming, bSprinting ? 1.0 : 0.0);
 	FString Said;
 	if (const FString Debugged = UpdateDebug(Game); !Debugged.IsEmpty()) Said = Debugged;
+	if (const FString Bowed = UpdateBow(DeltaSeconds, PC, Game); !Bowed.IsEmpty()) Said = Bowed;
 	if (KeyPressed(EKeys::I)) bPackOpen = !bPackOpen;
 	if (KeyPressed(EKeys::C) && !bSwimming && !bFly) bCrouching = !bCrouching;
 	// The wild animals: a dead one beside the player is butchered before anything else is picked up; a blow lands on an
