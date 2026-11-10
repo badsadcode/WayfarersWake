@@ -44,6 +44,8 @@ public:
 	void Strike(double Distance);
 	/// "Day 2, 14:30, light rain, wind 6 m/s from NW".
 	FString WeatherLine() const;
+	/// Low mist now, 0..1 and a little over (calm mornings, evenings, rain).
+	float GetMist() const { return Mist; }
 	/// How far the camera is below a water surface, m (0 or less: above water).
 	float GetCameraDepth() const { return CameraDepth; }
 
@@ -87,7 +89,7 @@ private:
 	ww::FSkyState SkyNow;
 	double HoursStep = 0, LastHours = -1, Latitude = 45;
 	bool bClockSet = false, bWeatherTried = false, bSnowFalling = false;
-	float FlashSeconds = 0, NextFlash = 8, BaseHaze = 0.0002f;
+	float FlashSeconds = 0, NextFlash = 8, BaseHaze = 0.0002f, Mist = 0;
 	int32 HourSeen = -1, StrikeSeen[4] = { -1, -1, -1, -1 };
 	TArray<FVector> Drops;
 	void UpdateUnderwater(const FVector& View);

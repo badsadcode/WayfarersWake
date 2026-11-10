@@ -12,3 +12,7 @@ DerivedDataCache/
 *.VC.opendb
 .vsconfig
 Dist/
+
+# Source art too large for the repository (kept beside the concept art; see ASSET_MANIFEST.md)
+docs/ConceptArt/*.blend
+docs/ConceptArt/*.blend1

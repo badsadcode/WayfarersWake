@@ -155,3 +155,9 @@
 * A scripted right click into the open sea put the player on the sea bed 427 m down. Arrivals over water are now at the surface.
 * Tom played while I built: he could not drag the time of day (he had to type it). The spin box I had used wants a mouse mode the game window does not give it; replaced with a plain bar and a number box. He also asked for a map preview before making a world and all of Thornwake's generation settings: 76 settings ported with their arithmetic and checked bit for bit against the old path, and a preview panel on the World page.
 * Tom then set a new direction for after this: Wayfarer's Wake as its own game, with proper data-driven gameplay, a jointed character with animations, no staff or pack on the base figure, and customisable characters by race from his reference sheets (`docs/ConceptArt/Thornwake_Race_Reference_Sheets`). Not started; a plan comes first.
+
+## 2026-11-10, session 1 (continued): light in the air
+
+* Tom tried the menu, the map and the world page: all working. He added `docs/ConceptArt/ThornwakeBaseChars.blend` (eleven unrigged low-poly bodies in an A-pose: human, goblin, orc, dwarf, each male and female, and three elf-like) and asked for Unreal's graphics now, to the standard of Sea of Thieves and Windrose, and for Thornwake's digging with flowing water. Order left to me: air, water, characters, digging.
+* Air: volumetric fog, mist that follows the ground at dawn and in rain, sun shafts, cloud shading, glow; leaves and grass that light up from behind. One frame a second at dawn.
+* The blend file is 51 MB and sits in `docs/`, which is the devlog's folder; it is not committed until Tom says where it should live.

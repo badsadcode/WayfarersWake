@@ -100,6 +100,10 @@ FWwSettings::FWwSettings()
 	Slider(TEXT("view.exposure"), View, TEXT("Light"), TEXT("Brightness"), -2, 1, 0.05, -0.7, TEXT("stops"), TEXT("How bright the picture is exposed. -0.7 was matched to Thornwake's pictures."));
 	Slider(TEXT("view.saturation"), View, TEXT("Light"), TEXT("Colour"), 0.5, 1.5, 0.01, 1.15, TEXT(""), TEXT("1 is plain; more is richer colour."));
 	Slider(TEXT("view.haze"), View, TEXT("Light"), TEXT("Haze"), 0, 5, 0.1, 1, TEXT("x"), TEXT("How thick the air is in fair weather. Rain thickens it further."));
+	Add(TEXT("view.volfog"), View, TEXT("Air"), TEXT("Light in the air"), Toggle, 1, TEXT("Fog and haze that catch the light: rays between the trees, mist that glows at dawn. Costs some speed."));
+	Slider(TEXT("view.rays"), View, TEXT("Air"), TEXT("Light rays"), 0, 3, 0.05, 1, TEXT("x"), TEXT("How strongly the sun shows in the air.")).Needs = TEXT("view.volfog");
+	Slider(TEXT("view.mist"), View, TEXT("Air"), TEXT("Mist"), 0, 2, 0.05, 1, TEXT("x"), TEXT("Low mist on calm mornings, in the evening and in rain. 0 turns it off."));
+	Slider(TEXT("view.bloom"), View, TEXT("Air"), TEXT("Glow of bright things"), 0, 2, 0.05, 1, TEXT("x"), TEXT(""));
 	Add(TEXT("view.stars"), View, TEXT("Light"), TEXT("Stars"), Toggle, 1, TEXT(""));
 	Add(TEXT("view.moon"), View, TEXT("Light"), TEXT("Moon"), Toggle, 1, TEXT(""));
 	Choice(TEXT("map.style"), View, TEXT("Map (M)"), TEXT("Map drawn as"), { TEXT("A plain map"), TEXT("An old chart on parchment") }, 0, TEXT("P on the map changes it too."));

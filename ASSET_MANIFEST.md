@@ -34,3 +34,5 @@
 Nothing from outside Thornwake and the engine has been imported.
 | All sound (rain, wind, water, thunder, steps, the axe) | Synthesised at run time by `WwSound` (ported from Thornwake's `Lightning.cs` and `Soundscape.cs`) | New code after Tom's; no sound files | `docs/audio/sound-demo.wav` is its own output |
 | The world map, both looks | Drawn at run time by `WwMap` from the generated world (terrain and biome looks ported from Thornwake's `WorldPreview.cs`; the parchment look is new) | New code after Tom's; no image files | |
+| `docs/ConceptArt/ThornwakeBaseChars.blend` (not in the repository: 51 MB) | Supplied by Tom, 2026-11-10 | Tom's | Eleven unrigged low-poly base bodies in an A-pose (human, goblin, orc, dwarf, male and female; three elf-like), about 1,100 triangles and one 2048 texture each. To be rigged for the characters |
+| `docs/ConceptArt/Thornwake_Race_Reference_Sheets/*` | Supplied by Tom | Tom's | Front and side reference sheets for seven races, male and female |

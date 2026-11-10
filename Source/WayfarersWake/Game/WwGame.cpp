@@ -90,8 +90,28 @@ AWwSky::AWwSky()
 	Fog->FogHeightFalloff = 0.02f;
 	FParse::Value(FCommandLine::Get(), TEXT("WwFog="), Fog->FogDensity);
 	BaseHaze = Fog->FogDensity;
+	// The air catches the light (the engine's volumetric fog): the sun's rays show between the trees and under cloud
+	// edges, and mist glows. The far haze stays thin; the air near the camera is given more to scatter with.
+	Fog->bEnableVolumetricFog = true;
+	Fog->VolumetricFogScatteringDistribution = 0.75f; // (mostly forward: brightest looking toward the sun)
+	Fog->VolumetricFogExtinctionScale = 2.5f;
+	Fog->VolumetricFogDistance = 60000.f;             // (600 m)
+	// A second, low layer for mist: thin, lying on the ground where the camera is (its height follows the ground).
+	Fog->SecondFogData.FogDensity = 0.f;
+	Fog->SecondFogData.FogHeightFalloff = 0.3f;
+	Sun->VolumetricScatteringIntensity = 1.f;
+	Sun->bCastVolumetricShadow = true;
+	Sun->bCastShadowsOnClouds = true;
+	Sun->bEnableLightShaftBloom = true;
+	Sun->BloomScale = 0.1f;
+	Sun->BloomThreshold = 0.25f;
+	SkyLight->bCloudAmbientOcclusion = true;
+	SkyLight->CloudAmbientOcclusionStrength = 0.7f;
 	Clouds = CreateDefaultSubobject<UVolumetricCloudComponent>(TEXT("Clouds"));
 	Clouds->SetupAttachment(RootComponent);
+	// (the clouds take the colour of the low sun through the air, and their undersides are darker)
+	Clouds->bUsePerSampleAtmosphericLightTransmittance = true;
+	Clouds->SkyLightCloudBottomOcclusion = 0.6f;
 	// Exposure adapts between open sun and deep shade (as Thornwake's does), within limits, so bright ground and snow
 	// do not grey out and a forest floor is not black; no motion blur.
 	Grade = CreateDefaultSubobject<UPostProcessComponent>(TEXT("Grade"));
@@ -107,6 +127,8 @@ AWwSky::AWwSky()
 	G.bOverride_ColorSaturation = true; G.ColorSaturation = FVector4(1.15, 1.15, 1.15, 1.0);
 	G.bOverride_ColorContrast = true; G.ColorContrast = FVector4(1.04, 1.04, 1.04, 1.0);
 	G.ColorSaturation = FVector4(Saturation, Saturation, Saturation, 1.0);
+	G.bOverride_BloomIntensity = true; G.BloomIntensity = 0.5f;
+	G.bOverride_VignetteIntensity = true; G.VignetteIntensity = 0.3f;
 	G.bOverride_AutoExposureSpeedUp = true; G.AutoExposureSpeedUp = 2.f;
 	G.bOverride_AutoExposureSpeedDown = true; G.AutoExposureSpeedDown = 1.5f;
 	FParse::Value(FCommandLine::Get(), TEXT("WwEv="), ShadeEv);
@@ -281,6 +303,26 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 	}
 	// Rain hangs in the air as haze.
 	Fog->SetFogDensity(BaseHaze * (float)Set.Num(TEXT("view.haze")) * (1.f + 9.f * Weather.Precipitation + 1.5f * (float)FMath::SmoothStep(0.6, 1.0, (double)Weather.Cloudiness)));
+	// Light in the air, and mist. Mist lies low on calm mornings (from first light until the sun is well up), more
+	// thinly in the evening, and hangs about in rain; wind clears it.
+	{
+		const bool bVolumetric = Set.On(TEXT("view.volfog"));
+		if (bVolumetric != (bool)Fog->bEnableVolumetricFog) Fog->SetVolumetricFog(bVolumetric);
+		const double SunUp = SkyNow.SunElevation;
+		const float Low = (float)(FMath::SmoothStep(-8.0, 1.0, SunUp) * (1.0 - FMath::SmoothStep(8.0, 22.0, SunUp)));
+		const float Calm = 1.f - FMath::Clamp((Wind.SteadySpeed - 2.f) / 8.f, 0.f, 1.f);
+		const float Wanted = (float)Set.Num(TEXT("view.mist")) * FMath::Clamp(Low * (Clock.Hour < 12 ? 1.f : 0.4f) * Calm + 0.4f * Weather.Precipitation, 0.f, 1.2f);
+		Mist = FMath::FInterpTo(Mist, Wanted, DeltaSeconds, 0.25f);
+		double Ground = 0;
+		if (Sampler) { const ww::FTerrainSample T = Sampler->Sample(View.X / 100.0, View.Y / 100.0, 32); Ground = FMath::Max(T.Height, T.Water != ww::EWaterKind::None ? T.WaterLevel : T.Height) * 100.0; }
+		Fog->SetSecondFogDensity(0.035f * Mist);
+		Fog->SetSecondFogHeightOffset((float)(Ground + 400.0 - GetActorLocation().Z));
+		// (rays show best in mist and with the sun low)
+		const float Rays = (float)Set.Num(TEXT("view.rays"));
+		Sun->SetVolumetricScatteringIntensity(Rays * (1.f + 1.5f * Mist));
+		Sun->SetEnableLightShaftBloom(Rays > 0.01f);
+		Grade->Settings.BloomIntensity = 0.5f * (float)Set.Num(TEXT("view.bloom"));
+	}
 	// Lightning: a flash now and then in a thunderstorm.
 	FlashSeconds -= DeltaSeconds;
 	if (Weather.bThunder && (NextFlash -= DeltaSeconds) <= 0)
@@ -487,9 +529,9 @@ void AWwSky::UpdateUnderwater(const FVector& View)
 FString AWwSky::DebugInfo() const
 {
 	return FString::Printf(TEXT("Time: %s (a game day lasts %.0f real minutes; season %d; latitude %.1f; %.1f h of daylight) · sun %.1f degrees up, intensity %.2f · moon %.1f degrees up, phase %.2f")
-		LINE_TERMINATOR TEXT("Weather: cloud %.2f, rain %.2f%s%s · wind toward (%.2f, %.2f), %.1f m/s steady, gust %.2f · exposure limits: shade %.2f, sun %.2f stops · haze (fog density) %.5f"),
+		LINE_TERMINATOR TEXT("Weather: cloud %.2f, rain %.2f%s%s, mist %.2f · wind toward (%.2f, %.2f), %.1f m/s steady, gust %.2f · exposure limits: shade %.2f, sun %.2f stops · haze (fog density) %.5f"),
 		*WeatherLine(), Clock.DayLengthMinutes, Clock.Season, Latitude, SkyNow.DaylightHours, SkyNow.SunElevation, Sun->Intensity, SkyNow.MoonElevation, SkyNow.MoonPhase,
-		Weather.Cloudiness, Weather.Precipitation, Weather.bSnow ? TEXT(" (snow)") : TEXT(""), Weather.bThunder ? TEXT(" (thunder)") : TEXT(""),
+		Weather.Cloudiness, Weather.Precipitation, Weather.bSnow ? TEXT(" (snow)") : TEXT(""), Weather.bThunder ? TEXT(" (thunder)") : TEXT(""), Mist,
 		Wind.DirX, Wind.DirZ, Wind.SteadySpeed, Wind.Gust, ShadeEv, SunEv, Fog->FogDensity)
 		+ LINE_TERMINATOR + FString::Printf(TEXT("Sound: %.1f s handed to the sound card, level %.3f (rain %.2f, wind %.1f m/s, water near %.2f%s)"),
 			SoundSeconds, SoundLevel, Soundscape.Precipitation, Soundscape.WindSpeed, Soundscape.Water, Soundscape.bUnderwater ? TEXT(", under water") : TEXT(""));
