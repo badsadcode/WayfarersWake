@@ -59,3 +59,15 @@
 * It looked right on the first launch: from above the lip the picture agrees with Tom's Godot dump of the same place; from below it is a wide streaked curtain with white water at its foot.
 * One build hung for over ten minutes: four compiler processes sat idle under the build accelerator. Killing them made the build tool retry without it, and that passed. Not a code fault; if it happens again, kill `cl.exe`.
 * Not done: spray and mist, the curtain's relief and back-light.
+
+## 2026-11-10, session 1 (continued): "everything that is not there yet", in order
+
+* Tom: continue with everything missing, in the planned order.
+* Waterfall spray and mist: a small emitter system in code; the first try drew solid white squares (the puff's shape never reached the opacity: a wrongly named pin). Fixed.
+* Stones, rocks, boulders, river and bank stones, cliff slabs, scree, rocky shores, bushes, stumps, logs: rules and shapes ported; meshes built at start-up.
+* Cliff rocks and the rock kit: surface nets, the worn cliff blocks and the four kinds of formation ported. First launch crashed on start: adding an array's own element to itself, the same mistake as on day one (`TreeMeshes.Add(TreeMeshes[i])`). Then the rebuild failed because the crashed process still held the game DLL; killed it.
+* Wind on grass and tree crowns. A failed run of the import script left all 86 tree materials without a parent (it deleted the parents before recreating them); the script now updates parents in place and can reattach instances from their own stored texture. The plant material then failed to compile (the wind read a value that exists only in the pixel stage): grey squares for grass. Fixed.
+* Collision for trunks, rocks and props on the nearest tiles; the F9 dump counts solid objects nearby.
+* Swimming: switched on correctly but the player stayed on the river bed; the engine's braking cancelled the swim velocity nearly every frame. Braking is off while swimming. Movement speeds set to Thornwake's.
+* Not reached: the sea's waves and shore, the underwater view, far tree cards, the middle tree model.
+* Frame rate at the river-shore scene, 1280x720, hovering: 90 fps before this round, 74 after (the wind's moving shadows cost most of that).
