@@ -305,6 +305,9 @@ struct FBiome
 	std::vector<std::pair<std::string, double>> Trees; // asset name, cumulative weight
 	double TreeSizeMin = .8, TreeSizeMax = 1.25, WaterTrees = 0;
 	double FloatingPlants = 0; // floating leaves on still water
+	double PropRocks = 1, PropLogs = 1; // multipliers for rocks; for bushes, stumps and logs
+	int RockLook = 0;                   // rock texture layer: layered, granite, basalt, sandstone, mossy, icy
+	bool bCold = false;                 // tagged "cold" (glacial erratics)
 	bool bHyacinth = false;    // AquaticPlants "Hyacinth" (bayou)
 	bool bClassic = false; // the single classic temperate biome (biomes off): species by elevation
 	bool ShapesTerrain() const { return Pools > 0 || Flatten > 0 || Dunes > 0 || Mesas > 0 || Spires > 0; }

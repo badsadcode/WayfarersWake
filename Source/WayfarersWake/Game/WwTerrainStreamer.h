@@ -54,6 +54,10 @@ struct FWwTileData
 	/// Grass and small plants of a nearest-level tile, ready for instancing: tile-local transforms and, per plant,
 	/// four numbers for the material (sprite layer, colour). Upright plants (crossed sprites) and floating leaves (flat).
 	TArray<FTransform> Plants, Leaves;
+	/// Rocks and props (stones, boulders, cliff slabs; bushes, stumps, logs): mesh (rock kind, or 100 + prop kind), place
+	/// in the world, and four numbers for the material (rock colour, rock look).
+	struct FScatter { int32 Mesh; FTransform Transform; FLinearColor Data; };
+	TArray<FScatter> Scatter;
 	TArray<float> PlantData, LeafData;
 	double BuildMs = 0;
 };
@@ -120,13 +124,14 @@ public:
 	void ResetStats() { MaxCommitMs = 0; }
 
 	static TSharedPtr<FWwTileData> BuildTile(const ww::FTerrainSampler& Sampler, const FWwTileKey& Key, double BaseTile, int32 Cells, bool bTrees, double Grass,
-		const ww::FFallSet* Falls = nullptr);
+		const ww::FFallSet* Falls = nullptr, bool bRocks = false);
+	int32 GetRockCount() const { return RocksShown; }
 	int32 GetFallCount() const { return FallsShown.Num(); }
 	int32 GetPuffCount() const { return PuffsShown; }
 
 private:
 	struct FTreeBatch { int32 Component; TArray<FPrimitiveInstanceId> Ids; };
-	struct FTile { int32 Slot = -1; int32 Plants = 0; bool bVisible = false; TArray<FWwTileData::FTree> Trees; TArray<FTreeBatch> Batches; };
+	struct FTile { int32 Slot = -1; int32 Plants = 0; bool bVisible = false; TArray<FWwTileData::FTree> Trees; TArray<FWwTileData::FScatter> Scatter; TArray<FTreeBatch> Batches; };
 	/// Tree instances live in components covering 16 km squares (instance positions are single precision).
 	struct FTreeKey
 	{
@@ -159,6 +164,8 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> TerrainMaterial;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> WaterMaterial;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> FallMaterial;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> RockMaterial;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> PropMaterial;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> FallFoamMaterial;
 	/// Falling water of the waterfalls within a few kilometres (by index into the fall set).
 	UPROPERTY(Transient) TMap<int32, TObjectPtr<UProceduralMeshComponent>> FallsShown;
@@ -174,7 +181,9 @@ private:
 	struct FTreeModel { int32 First = 0, Count = 0; };
 	TArray<FTreeModel> TreeModels;
 	TMap<FTreeKey, int32> TreeLookup;
-	int32 TreesShown = 0, PlantsShown = 0;
+	int32 TreesShown = 0, PlantsShown = 0, RocksShown = 0;
+	/// Rock and prop meshes (built in code) follow the tree meshes in TreeMeshes.
+	int32 RockMeshFirst = -1, PropMeshFirst = -1;
 	std::shared_ptr<ww::FFallSet> Falls;
 	/// Spray and mist of the falls shown (by fall index), drawn as one set of camera-facing instances.
 	TMap<int32, FWwFallSpray> FallSpray;

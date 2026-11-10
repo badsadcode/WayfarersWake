@@ -11,7 +11,7 @@ public class WayfarersWake : ModuleRules
 		FPSemantics = FPSemanticsMode.Precise;
 
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "ProceduralMeshComponent" });
-		PrivateDependencyModuleNames.AddRange(new string[] { "RenderCore", "RHI", "NetCore" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "RenderCore", "RHI", "NetCore", "MeshDescription", "StaticMeshDescription" });
 		PublicIncludePaths.Add(ModuleDirectory);
 	}
 }

@@ -72,6 +72,13 @@ bool FBiomeRegistry::Parse(const std::string& BiomesJson, const std::string& Set
 		o.Grass = HexColor(ground->StringOr("Grass", "566b3f")); o.Dry = HexColor(ground->StringOr("Dry", "7b8059"));
 		o.Soil = HexColor(ground->StringOr("Soil", "5c4a35")); o.ForestFloor = HexColor(ground->StringOr("ForestFloor", "3c4b2b"));
 		o.Rock = HexColor(ground->StringOr("Rock", "77766a")); o.Snow = ground->NumberOr("Snow", 0);
+		{
+			static const char* Looks[] = { "layered", "granite", "basalt", "sandstone", "mossy", "icy" };
+			std::string rockLook = ground->StringOr("RockTexture", "layered");
+			for (int i = 0; i < 6; i++) if (rockLook == Looks[i]) o.RockLook = i;
+		}
+		if (const FJson* props = b.Find("Props")) { o.PropRocks = props->NumberOr("Rocks", 1); o.PropLogs = props->NumberOr("Logs", 1); }
+		if (const FJson* tags = b.Find("Tags")) for (const FJson& tag : tags->Items) if (tag.Str == "cold") o.bCold = true;
 
 		const FJson& veg = b.Find("Vegetation") ? *b.Find("Vegetation") : Empty;
 		o.TreeDensity = veg.NumberOr("TreeDensity", 1); o.GrassAmount = veg.NumberOr("Grass", 1);

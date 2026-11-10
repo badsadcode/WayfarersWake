@@ -245,3 +245,12 @@ for name in foam:
     texture.set_editor_property('lod_group', unreal.TextureGroup.TEXTUREGROUP_WORLD)
     eal.save_loaded_asset(texture)
 unreal.log('WwAssets: %d river foam textures' % len(foam))
+
+# The six rock looks (layered, granite, basalt, sandstone, mossy, icy: the biome's "RockTexture") as one texture array for
+# rocks and boulders, in Thornwake's order.
+rock_array = existing_or_new('TA_WwRock', '/Game/Terrain', unreal.Texture2DArray, unreal.Texture2DArrayFactory())
+rock_array.set_editor_property('source_textures', [eal.load_asset('/Game/Terrain/' + name) for name in ROCKS])
+rock_array.set_editor_property('filter', unreal.TextureFilter.TF_NEAREST)
+rock_array.set_editor_property('lod_group', unreal.TextureGroup.TEXTUREGROUP_WORLD)
+eal.save_loaded_asset(rock_array)
+unreal.log('WwAssets: rock array with %d looks' % len(rock_array.get_editor_property('source_textures')))

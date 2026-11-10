@@ -334,5 +334,79 @@ def spray(mat):
 
 
 make('M_WwSpray', spray)
+ROCK = """
+// Rocks, boulders and cliff slabs (port of Thornwake Game/Rewrite/Rock.gdshader, the plain path): facets in the mesh's
+// own stone and moss colours, the tileable pixel rock texture projected from three sides, tinted per rock with the
+// biome's rock colour. Pos = world position wrapped (cm), N = world normal, Vc = mesh colour, Tint = (rock colour, look).
+// Not ported: the second texture layer and Tom's cliff textures on big rocks, lichen and streaks, rain.
+float3 p = Pos / 100.0;
+float3 w = pow(abs(N), 4.0);
+w /= w.x + w.y + w.z;
+float look = clamp(round(Tint.a), 0.0, 5.0);
+const float tile = 4.0;
+float3 tx = RockArr.Sample(RockArrSampler, float3(p.y / tile, -p.z / tile, look)).rgb;
+float3 ty = RockArr.Sample(RockArrSampler, float3(p.x / tile, p.y / tile, look)).rgb;
+float3 tz = RockArr.Sample(RockArrSampler, float3(p.x / tile, -p.z / tile, look)).rgb;
+float3 t = (tx * w.x + ty * w.z + tz * w.y) / 0.5;
+return pow(saturate(Vc * Tint.rgb * t), 2.2);
+"""
+
+
+def rock(mat):
+    node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
+    node.set_editor_property('description', 'WwRock')
+    node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    inputs = []
+    for name in ['Pos', 'N', 'Vc', 'Tint', 'RockArr']:
+        i = unreal.CustomInput()
+        i.set_editor_property('input_name', name)
+        inputs.append(i)
+    node.set_editor_property('inputs', inputs)
+    node.set_editor_property('code', ROCK)
+
+    def expr(kind, x, y, **props):
+        e = mel.create_material_expression(mat, kind, x, y)
+        for key, value in props.items():
+            e.set_editor_property(key, value)
+        return e
+
+    # (the world position wrapped every 4,096 m before it loses its precision, as Thornwake wraps it)
+    wrap = expr(unreal.MaterialExpressionFmod, -900, 0)
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionWorldPosition, -1200, 0), '', wrap, 'A')
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionConstant, -1200, 150, r=409600.0), '', wrap, 'B')
+    mel.connect_material_expressions(wrap, '', node, 'Pos')
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionVertexNormalWS, -900, 200), '', node, 'N')
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionVertexColor, -900, 300), '', node, 'Vc')
+    tint = expr(unreal.MaterialExpressionVertexInterpolator, -900, 450)
+    data = expr(unreal.MaterialExpressionAppendVector, -1100, 450)
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData3Vector, -1400, 420, data_index=0,
+                                          const_default_value=unreal.LinearColor(1, 1, 1, 1)), '', data, 'A')
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData, -1400, 560, data_index=3), '', data, 'B')
+    mel.connect_material_expressions(data, '', tint, '')
+    mel.connect_material_expressions(tint, '', node, 'Tint')
+    array = eal.load_asset('/Game/Terrain/TA_WwRock')
+    if array is None:
+        raise RuntimeError('WwAssets: /Game/Terrain/TA_WwRock missing: run Tools/ImportAssets.cmd first')
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionTextureObject, -900, 650, texture=array, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_COLOR), '', node, 'RockArr')
+    mel.connect_material_property(node, '', unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(constant(mat, 0.9, -150, 200), '', unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(constant(mat, 0.3, -150, 300), '', unreal.MaterialProperty.MP_SPECULAR)
+    mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
+
+
+def prop(mat):
+    """Bushes, stumps and logs: the mesh's own colours (display values), matte."""
+    colour = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -600, 0)
+    power = mel.create_material_expression(mat, unreal.MaterialExpressionPower, -350, 0)
+    power.set_editor_property('const_exponent', 2.2)
+    mel.connect_material_expressions(colour, '', power, 'Base')
+    mel.connect_material_property(power, '', unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(constant(mat, 0.95, -350, 200), '', unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(constant(mat, 0.2, -350, 300), '', unreal.MaterialProperty.MP_SPECULAR)
+    mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
+
+
+make('M_WwRock', rock)
+make('M_WwProp', prop)
 make('M_WwTerrain', terrain)
 make('M_WwWater', water)

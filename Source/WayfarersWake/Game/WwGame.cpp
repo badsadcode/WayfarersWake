@@ -241,8 +241,8 @@ void AWwHUD::DrawHUD()
 	if (const AWwGameState* State = GetWorld()->GetGameState<AWwGameState>())
 		if (const AWwTerrainStreamer* Streamer = State->GetStreamer())
 		{
-			Line(FString::Printf(TEXT("%.0f fps   tiles %d  trees %d  plants %d  building %d  missing %d   tile build %.1f ms"), 1.0 / FMath::Max(SmoothedFrame, 1e-4), Streamer->GetTileCount(),
-				Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetPendingCount(), Streamer->GetMissingCount(), Streamer->GetAverageBuildMs()), 16, Y, 1.0f);
+			Line(FString::Printf(TEXT("%.0f fps   tiles %d  trees %d  plants %d  rocks %d  building %d  missing %d   tile build %.1f ms"), 1.0 / FMath::Max(SmoothedFrame, 1e-4), Streamer->GetTileCount(),
+				Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetRockCount(), Streamer->GetPendingCount(), Streamer->GetMissingCount(), Streamer->GetAverageBuildMs()), 16, Y, 1.0f);
 			Y += 20;
 		}
 	if (const FString Status = Player->GetStatus(); !Status.IsEmpty()) { Line(Status, 16, Y, 1.0f); Y += 20; }
