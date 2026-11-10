@@ -38,7 +38,10 @@ struct FWwTileData
 	/// waterline); Uv0 = rock exposure, scree; Uv1 = position within the tile (0..1).
 	TArray<FColor> Colors;
 	TArray<FVector2D> Uv0, Uv1;
-	TArray<FLinearColor> WaterColors;
+	/// Water sheet (Thornwake's): colour = depth / 20 m, kind code, river-water share, edge fade; UV0 = current (m/s east,
+	/// south); UV1 = position within the tile.
+	TArray<FColor> WaterColors;
+	TArray<FVector2D> WaterUv0, WaterUv1;
 	/// Biome ground colours per vertex, three squares side by side (GroundSide texels each): grass + snow,
 	/// dry ground + plant cover, rock + wetness. Colours are display (gamma) values, as Thornwake's shader expects.
 	TArray<FColor> Ground;
@@ -60,6 +63,7 @@ struct FWwTileSlot
 	GENERATED_BODY()
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> Mesh;
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> Material;
+	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> Water;
 	UPROPERTY() TObjectPtr<UTexture2D> Ground;
 	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> Plants;
 	UPROPERTY() TObjectPtr<UInstancedStaticMeshComponent> Leaves;

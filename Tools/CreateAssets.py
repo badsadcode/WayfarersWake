@@ -130,13 +130,73 @@ def terrain(mat):
 
 
 def water(mat):
+    """The water surface (Tools/WwWater.hlsl): a first port of Thornwake's inland water."""
     mat.set_editor_property('blend_mode', unreal.BlendMode.BLEND_TRANSLUCENT)
     mat.set_editor_property('translucency_lighting_mode', unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
-    colour = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -400, 0)
-    mel.connect_material_property(colour, '', unreal.MaterialProperty.MP_BASE_COLOR)
-    mel.connect_material_property(constant(mat, 0.06, -400, 200), '', unreal.MaterialProperty.MP_ROUGHNESS)
-    mel.connect_material_property(constant(mat, 0.9, -400, 300), '', unreal.MaterialProperty.MP_SPECULAR)
-    mel.connect_material_property(constant(mat, 0.86, -400, 400), '', unreal.MaterialProperty.MP_OPACITY)
+    mat.set_editor_property('tangent_space_normal', False)
+    with open(os.path.join(HERE, 'WwWater.hlsl'), 'r') as f:
+        code = f.read()
+    node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
+    node.set_editor_property('description', 'WwWater')
+    node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    names = ['TileUv', 'Col', 'ColA', 'Flow', 'Rel', 'Tile', 'Cells', 'T', 'Behind', 'Patches', 'Streaks']
+    inputs = []
+    for name in names:
+        i = unreal.CustomInput()
+        i.set_editor_property('input_name', name)
+        inputs.append(i)
+    node.set_editor_property('inputs', inputs)
+    outputs = []
+    for name, kind in (('Emissive', unreal.CustomMaterialOutputType.CMOT_FLOAT3), ('WorldNormal', unreal.CustomMaterialOutputType.CMOT_FLOAT3),
+                       ('Surface', unreal.CustomMaterialOutputType.CMOT_FLOAT3)):
+        o = unreal.CustomOutput()
+        o.set_editor_property('output_name', name)
+        o.set_editor_property('output_type', kind)
+        outputs.append(o)
+    node.set_editor_property('additional_outputs', outputs)
+    node.set_editor_property('code', code)
+
+    def wire(source, output, name):
+        if not mel.connect_material_expressions(source, output, node, name):
+            raise RuntimeError('WwAssets: cannot connect ' + name)
+
+    def expr(kind, y, **props):
+        e = mel.create_material_expression(mat, kind, -1000, y)
+        for key, value in props.items():
+            e.set_editor_property(key, value)
+        return e
+
+    wire(expr(unreal.MaterialExpressionTextureCoordinate, 0, coordinate_index=1), '', 'TileUv')
+    colour = expr(unreal.MaterialExpressionVertexColor, 100)
+    wire(colour, '', 'Col')
+    wire(colour, 'A', 'ColA')
+    wire(expr(unreal.MaterialExpressionTextureCoordinate, 200, coordinate_index=0), '', 'Flow')
+    wire(expr(unreal.MaterialExpressionWorldPosition, 300, world_position_shader_offset=unreal.WorldPositionIncludedOffsets.WPT_CAMERA_RELATIVE), '', 'Rel')
+    tile = expr(unreal.MaterialExpressionVectorParameter, 400, parameter_name='Tile', default_value=unreal.LinearColor(0, 0, 64, 32))
+    wire(tile, '', 'Tile')
+    wire(tile, 'A', 'Cells')
+    wire(expr(unreal.MaterialExpressionTime, 550), '', 'T')
+    # (the node makes the engine provide the scene behind the water; the shader reads it at its own, refracted place)
+    wire(expr(unreal.MaterialExpressionSceneColor, 650), '', 'Behind')
+    for y, name, asset in ((750, 'Patches', 'river_foam_broken_patches_tiled'), (900, 'Streaks', 'river_foam_flowing_streaks_tiled')):
+        texture = eal.load_asset('/Game/Water/' + asset)
+        if texture is None:
+            raise RuntimeError('WwAssets: /Game/Water/%s missing: run Tools/ImportAssets.cmd first' % asset)
+        wire(expr(unreal.MaterialExpressionTextureObject, y, texture=texture, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE), '', name)
+
+    def part(output, r, g, b, y):
+        mask = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -150, y)
+        for key, value in (('r', r), ('g', g), ('b', b), ('a', False)):
+            mask.set_editor_property(key, value)
+        mel.connect_material_expressions(node, output, mask, '')
+        return mask
+
+    mel.connect_material_property(node, '', unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(node, 'Emissive', unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.connect_material_property(node, 'WorldNormal', unreal.MaterialProperty.MP_NORMAL)
+    mel.connect_material_property(part('Surface', True, False, False, 300), '', unreal.MaterialProperty.MP_OPACITY)
+    mel.connect_material_property(part('Surface', False, True, False, 400), '', unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(part('Surface', False, False, True, 500), '', unreal.MaterialProperty.MP_SPECULAR)
 
 
 make('M_WwTerrain', terrain)

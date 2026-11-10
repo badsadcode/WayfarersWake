@@ -12,6 +12,7 @@
 #include "Misc/PackageName.h"
 #include "WorldGen/WwVegetation.h"
 #include "WorldGen/WwFlora.h"
+#include "WorldGen/WwWaterSheet.h"
 #include "Misc/CommandLine.h"
 #include "Tasks/Task.h"
 #include "Engine/World.h"
@@ -219,28 +220,34 @@ TSharedPtr<FWwTileData> AWwTerrainStreamer::BuildTile(const ww::FTerrainSampler&
 	};
 	Skirt(0, 1); Skirt(Cells * Side, 1); Skirt(0, Side); Skirt(Cells, Side);
 
-	// Water surface: sea, lakes, rivers and ponds at their own levels wherever a cell touches water.
-	static const FLinearColor WaterColour[5] = { FLinearColor(0, 0, 0, 1), FLinearColor(0.012f, 0.07f, 0.13f, 1), FLinearColor(0.02f, 0.10f, 0.14f, 1),
-		FLinearColor(0.03f, 0.12f, 0.15f, 1), FLinearColor(0.05f, 0.10f, 0.07f, 1) };
-	for (int32 j = 0; j < Cells; j++)
-		for (int32 i = 0; i < Cells; i++)
+	// Water surface: Thornwake's sheet on the tile's vertex grid (banks carried under the ground, an edge fade, currents).
+	{
+		TArray<ww::FTerrainSample> SheetSamples;
+		TArray<double> Heights;
+		SheetSamples.SetNumUninitialized(VertexCount); Heights.SetNumUninitialized(VertexCount);
+		for (int32 j = 0; j < Side; j++)
+			for (int32 i = 0; i < Side; i++) { SheetSamples[j * Side + i] = At(i, j); Heights[j * Side + i] = At(i, j).Height; }
+		ww::FWaterSheet Sheet;
+		Sheet.Build(SheetSamples.GetData(), Heights.GetData(), Side, Spacing, Sea, *Plan.Hydrology, X0, Z0);
+		if (Sheet.bAny && !Sheet.Indices.empty())
 		{
-			const ww::FTerrainSample* Corner[4] = { &At(i, j), &At(i + 1, j), &At(i, j + 1), &At(i + 1, j + 1) };
-			double LevelSum = 0; int32 Wet = 0; ww::EWaterKind Kind = ww::EWaterKind::None;
-			for (const ww::FTerrainSample* S : Corner)
-				if (S->Water != ww::EWaterKind::None) { LevelSum += S->WaterLevel; Wet++; if (Kind == ww::EWaterKind::None) Kind = S->Water; }
-			if (Wet == 0) continue;
-			const double Mean = LevelSum / Wet;
-			const int32 First = Data->WaterVertices.Num();
-			for (int32 c = 0; c < 4; c++)
-			{
-				const double Level = Corner[c]->Water != ww::EWaterKind::None ? Corner[c]->WaterLevel : Mean;
-				Data->WaterVertices.Add(FVector((i + (c & 1)) * Spacing * 100.0, (j + (c >> 1)) * Spacing * 100.0, Level * 100.0));
-				Data->WaterNormals.Add(FVector::UpVector);
-				Data->WaterColors.Add(WaterColour[(int32)Kind]);
-			}
-			Data->WaterTriangles.Append({ First, First + 2, First + 3, First, First + 3, First + 1 });
+			Data->WaterVertices.Reserve(VertexCount); Data->WaterNormals.Reserve(VertexCount); Data->WaterColors.Reserve(VertexCount);
+			Data->WaterUv0.Reserve(VertexCount); Data->WaterUv1.Reserve(VertexCount);
+			for (int32 j = 0; j < Side; j++)
+				for (int32 i = 0; i < Side; i++)
+				{
+					const int32 K = j * Side + i;
+					Data->WaterVertices.Add(FVector(i * Spacing * 100.0, j * Spacing * 100.0, Sheet.Level[K] * 100.0));
+					Data->WaterNormals.Add(FVector::UpVector);
+					Data->WaterColors.Add(Bytes(Sheet.Depth[K], Sheet.Kind[K], Sheet.Plume[K], Sheet.Edge[K]));
+					Data->WaterUv0.Add(FVector2D(Sheet.FlowX[K], Sheet.FlowZ[K]));
+					Data->WaterUv1.Add(FVector2D((double)i / Cells, (double)j / Cells));
+				}
+			Data->WaterTriangles.Reserve((int32)Sheet.Indices.size());
+			for (size_t T = 0; T + 2 < Sheet.Indices.size(); T += 3) // (Thornwake's a, b, c is clockwise seen from above here)
+				Data->WaterTriangles.Append({ Sheet.Indices[T], Sheet.Indices[T + 2], Sheet.Indices[T + 1] });
 		}
+	}
 	Data->BuildMs = (FPlatformTime::Seconds() - Started) * 1000.0;
 	return Data;
 }
@@ -388,8 +395,10 @@ void AWwTerrainStreamer::Commit(const TSharedPtr<FWwTileData>& Data)
 	Mesh->SetMaterial(0, Slot.Material);
 	if (Data->WaterTriangles.Num() > 0)
 	{
-		Mesh->CreateMeshSection_LinearColor(1, Data->WaterVertices, Data->WaterTriangles, Data->WaterNormals, NoUvs, Data->WaterColors, NoTangents, false, false);
-		Mesh->SetMaterial(1, WaterMaterial);
+		Mesh->CreateMeshSection(1, Data->WaterVertices, Data->WaterTriangles, Data->WaterNormals, Data->WaterUv0, Data->WaterUv1, NoUvs, NoUvs, Data->WaterColors, NoTangents, false);
+		if (!Slot.Water) Slot.Water = UMaterialInstanceDynamic::Create(WaterMaterial, this);
+		Slot.Water->SetVectorParameterValue(TEXT("Tile"), FLinearColor(Fold(Data->Key.X * Size), Fold(Data->Key.Y * Size), (float)Size, (float)TileCells));
+		Mesh->SetMaterial(1, Slot.Water);
 	}
 	Mesh->SetVisibility(false);
 	const FVector Origin(Data->Key.X * Size * 100.0, Data->Key.Y * Size * 100.0, 0.0);

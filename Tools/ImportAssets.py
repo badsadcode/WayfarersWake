@@ -233,3 +233,15 @@ for path in eal.list_assets('/Game/Plants/Import', recursive=True, include_folde
         found += 1
 eal.delete_directory('/Game/Plants/Import')
 unreal.log('WwAssets: plant array with %d sprites, %d plant meshes' % (len(plants.get_editor_property('source_textures')), found))
+
+# River foam (Thornwake Assets/Water: Tom's tiling foam textures; the water material reads their red channel).
+WATER = os.path.join(SOURCE, 'Assets', 'Water')
+foam = ['river_foam_broken_patches_tiled', 'river_foam_flowing_streaks_tiled']
+tools.import_asset_tasks([task(os.path.join(WATER, name + '.png'), '/Game/Water') for name in foam])
+for name in foam:
+    texture = eal.load_asset('/Game/Water/' + name)
+    texture.set_editor_property('srgb', False)
+    texture.set_editor_property('compression_settings', unreal.TextureCompressionSettings.TC_GRAYSCALE)
+    texture.set_editor_property('lod_group', unreal.TextureGroup.TEXTUREGROUP_WORLD)
+    eal.save_loaded_asset(texture)
+unreal.log('WwAssets: %d river foam textures' % len(foam))
