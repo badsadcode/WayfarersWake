@@ -129,3 +129,13 @@
 * The star dome hid the real sky by day (a mesh drawn as sky stands in front of it); it now adds the sky's own light itself.
 * Night was black, then a blue day; settled on a dim blue night with moon shadows and faint stars.
 * Not done: wind in the plant, tree and water materials (still the fixed wind), rain sound, wet ground, the weather field Tom plays with.
+
+## 2026-11-10, session 1 (continued): sound
+
+* Tom: yes, sound next.
+* Thornwake has no sound files at all: rain and wind are a noise synthesiser, thunder is built from the bolt, and a handful of short sounds are a sine and noise. So there was nothing to copy and no licence to record; the synthesiser was ported as engine-free code with 10 checks and a file to listen to.
+* Added what Thornwake lacks and the place asks for: water sound near rivers, the sea and lakes, and a dull world under water.
+* In the game it is one procedural sound wave fed a third of a second ahead. Proof it plays: the seconds handed over keep pace with real time (the queue only takes more when the sound card has drained it), 25.4 s in 25 s.
+* I cannot hear. Whether it sounds right is for Tom's ears; the levels are his Thornwake settings.
+* Not done: sounds placed in the world, shelter under trees, birds (none in Thornwake).
+* Tom listened: the rain sounds exactly as in the Godot version.

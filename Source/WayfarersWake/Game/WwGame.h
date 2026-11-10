@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "WorldGen/WwWeather.h"
+#include "WorldGen/WwSound.h"
 #include "Components/SkyAtmosphereComponent.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
@@ -34,6 +35,11 @@ public:
 	/// Game hours that passed in the last frame (the clock runs day and night at their own speeds).
 	double GetHoursStep() const { return HoursStep; }
 	double GetLatitude() const { return Latitude; }
+	/// A short sound now (a footstep, the axe on wood ...).
+	void Blip(ww::FSoundscape::EBlip Kind) { Soundscape.Blip(Kind); }
+	/// Seconds of sound handed to the sound card so far, and its recent loudness (0..1): proof that sound is playing.
+	double GetSoundSeconds() const { return SoundSeconds; }
+	double GetSoundLevel() const { return SoundLevel; }
 	/// "Day 2, 14:30, light rain, wind 6 m/s from NW".
 	FString WeatherLine() const;
 	/// How far the camera is below a water surface, m (0 or less: above water).
@@ -65,6 +71,14 @@ private:
 	UPROPERTY(Transient) TObjectPtr<class UMaterialInstanceDynamic> StarMaterial;
 	void UpdateWeather(float DeltaSeconds, const FVector& View, float Day);
 	void UpdateRain(float DeltaSeconds, const FVector& View);
+	/// The sound of the weather and the world (WwSound), synthesised and queued a third of a second ahead.
+	void UpdateSound(float DeltaSeconds, const FVector& View);
+	UPROPERTY(Transient) TObjectPtr<class USoundWaveProcedural> SoundWave;
+	UPROPERTY(Transient) TObjectPtr<class UAudioComponent> SoundPlayer;
+	ww::FSoundscape Soundscape;
+	double SoundSeconds = 0, SoundLevel = 0;
+	float WaterTimer = 0, WaterNear = 0;
+	bool bSoundTried = false;
 	ww::FGameClock Clock;
 	ww::FWeather Weather;
 	ww::FWind Wind;

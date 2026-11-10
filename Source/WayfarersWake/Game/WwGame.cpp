@@ -1,4 +1,6 @@
 #include "Game/WwGame.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundWaveProcedural.h"
 #include "Rules/WrRules.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
@@ -261,9 +263,73 @@ void AWwSky::UpdateWeather(float DeltaSeconds, const FVector& View, float Day)
 		NextFlash = FMath::FRandRange(4.f, 16.f);
 		FlashSeconds = FMath::FRandRange(0.08f, 0.22f);
 		Flash->SetWorldRotation(FRotator(FMath::FRandRange(-80.f, -40.f), FMath::FRandRange(0.f, 360.f), 0.f));
+		// (the strike is somewhere between close and far: its thunder follows after the sound's travel time)
+		Soundscape.Thunder(FMath::FRandRange(500.f, 9000.f), FMath::FRand() < 0.6f, FMath::Rand());
 	}
 	Flash->SetVisibility(FlashSeconds > 0);
 	UpdateRain(DeltaSeconds, View);
+	UpdateSound(DeltaSeconds, View);
+}
+
+void AWwSky::UpdateSound(float DeltaSeconds, const FVector& View)
+{
+	if (!bSoundTried)
+	{
+		bSoundTried = true;
+		if (FParse::Param(FCommandLine::Get(), TEXT("WwNoSound"))) return; // (test switch)
+		SoundWave = NewObject<USoundWaveProcedural>(this);
+		SoundWave->SetSampleRate(ww::FSoundscape::Rate);
+		SoundWave->NumChannels = 2;
+		SoundWave->Duration = INDEFINITELY_LOOPING_DURATION;
+		SoundWave->SoundGroup = SOUNDGROUP_Default;
+		SoundWave->bLooping = false;
+		SoundPlayer = NewObject<UAudioComponent>(this);
+		SoundPlayer->SetSound(SoundWave);
+		SoundPlayer->bIsUISound = true;          // (heard the same wherever the camera is: it is the air around the listener)
+		SoundPlayer->bAllowSpatialization = false;
+		SoundPlayer->SetupAttachment(RootComponent);
+		SoundPlayer->RegisterComponent();
+		SoundPlayer->Play();
+	}
+	if (!SoundWave) return;
+	Soundscape.Precipitation = Weather.Precipitation;
+	Soundscape.bSnowing = Weather.bSnow;
+	Soundscape.WindSpeed = Wind.Speed;
+	Soundscape.Gust = Wind.Gust;
+	Soundscape.bUnderwater = CameraDepth > .02f;
+	// Water close by, twice a second: the nearest water on rings out to 45 m; rivers and the sea are loud, lakes lap, ponds are still.
+	if ((WaterTimer -= DeltaSeconds) <= 0)
+	{
+		WaterTimer = 0.5f;
+		WaterNear = 0;
+		UWwWorldSubsystem* WorldSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UWwWorldSubsystem>() : nullptr;
+		if (const std::shared_ptr<ww::FTerrainSampler> Sampler = WorldSystem ? WorldSystem->GetSampler() : nullptr)
+		{
+			const double X = View.X / 100.0, Z = View.Y / 100.0;
+			for (double R = 0; R <= 45 && WaterNear <= 0; R += 5)
+				for (int32 K = 0; K < (R == 0 ? 1 : 12); K++)
+				{
+					const double A = K * UE_DOUBLE_TWO_PI / 12;
+					const ww::EWaterKind Kind = Sampler->Sample(X + FMath::Cos(A) * R, Z + FMath::Sin(A) * R, 8).Water;
+					if (Kind == ww::EWaterKind::None) continue;
+					const float Loud = Kind == ww::EWaterKind::River ? 0.8f : Kind == ww::EWaterKind::Ocean ? 0.9f : Kind == ww::EWaterKind::Lake ? 0.2f : 0.05f;
+					WaterNear = FMath::Max(WaterNear, Loud * (float)FMath::Square(1.0 - R / 50.0));
+				}
+		}
+	}
+	Soundscape.Water = WaterNear;
+	// Keep a third of a second queued ahead of the sound card.
+	const int32 Wanted = ww::FSoundscape::Rate * 4 * 3 / 10, Queued = SoundWave->GetAvailableAudioByteCount();
+	if (Queued >= Wanted) return;
+	const int32 Frames = (Wanted - Queued) / 4;
+	TArray<float> Samples; Samples.SetNumUninitialized(Frames * 2);
+	Soundscape.Render(Frames, Samples.GetData());
+	TArray<int16> Pcm; Pcm.SetNumUninitialized(Frames * 2);
+	double Sum = 0;
+	for (int32 i = 0; i < Frames * 2; i++) { Pcm[i] = (int16)FMath::Clamp(FMath::RoundToInt(Samples[i] * 32767.f), -32767, 32767); Sum += (double)Samples[i] * Samples[i]; }
+	SoundWave->QueueAudio((const uint8*)Pcm.GetData(), Frames * 4);
+	SoundSeconds += (double)Frames / ww::FSoundscape::Rate;
+	SoundLevel = FMath::Lerp(SoundLevel, FMath::Sqrt(Sum / FMath::Max(1, Frames * 2)), 0.2);
 }
 
 void AWwSky::UpdateRain(float DeltaSeconds, const FVector& View)
@@ -380,7 +446,9 @@ FString AWwSky::DebugInfo() const
 		LINE_TERMINATOR TEXT("Weather: cloud %.2f, rain %.2f%s%s · wind toward (%.2f, %.2f), %.1f m/s steady, gust %.2f · exposure limits: shade %.2f, sun %.2f stops · haze (fog density) %.5f"),
 		*WeatherLine(), Clock.DayLengthMinutes, Clock.Season, Latitude, SkyNow.DaylightHours, SkyNow.SunElevation, Sun->Intensity, SkyNow.MoonElevation, SkyNow.MoonPhase,
 		Weather.Cloudiness, Weather.Precipitation, Weather.bSnow ? TEXT(" (snow)") : TEXT(""), Weather.bThunder ? TEXT(" (thunder)") : TEXT(""),
-		Wind.DirX, Wind.DirZ, Wind.SteadySpeed, Wind.Gust, ShadeEv, SunEv, Fog->FogDensity);
+		Wind.DirX, Wind.DirZ, Wind.SteadySpeed, Wind.Gust, ShadeEv, SunEv, Fog->FogDensity)
+		+ LINE_TERMINATOR + FString::Printf(TEXT("Sound: %.1f s handed to the sound card, level %.3f (rain %.2f, wind %.1f m/s, water near %.2f%s)"),
+			SoundSeconds, SoundLevel, Soundscape.Precipitation, Soundscape.WindSpeed, Soundscape.Water, Soundscape.bUnderwater ? TEXT(", under water") : TEXT(""));
 }
 
 // ---------------------------------------------------------------------------------------------------- game state
@@ -455,10 +523,12 @@ void AWwGameMode::LogStats(const TCHAR* Why)
 	const double Average = Frames > 0 ? FrameTimeSum / Frames : 0;
 	const double P99 = FrameTimes.Num() > 0 ? FrameTimes[FMath::Min(FrameTimes.Num() - 1, (int32)(FrameTimes.Num() * 0.99))] : 0;
 	const FVector P = Player->GetActorLocation();
-	UE_LOG(LogWayfarer, Display, TEXT("WwStats[%s] pos=(%.0f, %.0f) m alt=%.0f m travelled=%.1f km tiles=%d trees=%d plants=%d desired=%d missing=%d pending=%d built=%lld avgBuild=%.2f ms maxCommit=%.2f ms fps=%.1f worstFrame=%.1f ms p99=%.1f ms sea=%.1f ms mem=%.0f MB (start %.0f MB)"),
+	AWwSky* SkyForStats = nullptr;
+	for (TActorIterator<AWwSky> It(GetWorld()); It; ++It) { SkyForStats = *It; break; }
+	UE_LOG(LogWayfarer, Display, TEXT("WwStats[%s] pos=(%.0f, %.0f) m alt=%.0f m travelled=%.1f km tiles=%d trees=%d plants=%d desired=%d missing=%d pending=%d built=%lld avgBuild=%.2f ms maxCommit=%.2f ms fps=%.1f worstFrame=%.1f ms p99=%.1f ms sea=%.1f ms sound=%.1f s level=%.3f mem=%.0f MB (start %.0f MB)"),
 		Why, P.X / 100, P.Y / 100, P.Z / 100, Player->GetDistanceTravelled() / 1000, Streamer->GetTileCount(), Streamer->GetTreeCount(), Streamer->GetPlantCount(), Streamer->GetDesiredCount(), Streamer->GetMissingCount(),
 		Streamer->GetPendingCount(), Streamer->GetTilesBuilt(), Streamer->GetAverageBuildMs(), Streamer->GetMaxCommitMs(),
-		Average > 0 ? 1.0 / Average : 0.0, WorstFrame * 1000, P99 * 1000, Streamer->GetOceanMs(), FPlatformMemory::GetStats().UsedPhysical / 1048576.0, StartMemoryMb);
+		Average > 0 ? 1.0 / Average : 0.0, WorstFrame * 1000, P99 * 1000, Streamer->GetOceanMs(), SkyForStats ? SkyForStats->GetSoundSeconds() : 0.0, SkyForStats ? SkyForStats->GetSoundLevel() : 0.0, FPlatformMemory::GetStats().UsedPhysical / 1048576.0, StartMemoryMb);
 	Frames = 0; FrameTimeSum = 0; WorstFrame = 0; FrameTimes.Reset();
 	Streamer->ResetStats();
 }

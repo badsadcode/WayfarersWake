@@ -32,3 +32,4 @@
 **Provenance of the imported Thornwake art.** Tom confirmed on 10 November 2026 that everything in Thornwake was made by him, so its art is the project's own and carries no third-party licence (Thornwake's `Licenses/` folder covers only Godot and .NET). The woodland models were authored in `VegetationPack/Blender/Thornwake_Woodland.blend`, with textures "made with built-in image generation" (`Assets/Vegetation/README.md`). The ground textures in `Assets/Terrain/Noor` are the work of Noor, an AI and a friend of Tom's, made for Thornwake.
 
 Nothing from outside Thornwake and the engine has been imported.
+| All sound (rain, wind, water, thunder, steps, the axe) | Synthesised at run time by `WwSound` (ported from Thornwake's `Lightning.cs` and `Soundscape.cs`) | New code after Tom's; no sound files | `docs/audio/sound-demo.wav` is its own output |

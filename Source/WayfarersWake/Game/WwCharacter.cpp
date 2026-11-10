@@ -466,6 +466,22 @@ void AWwCharacter::UpdateGameplay(float DeltaSeconds, APlayerController* PC, boo
 		SetActorLocation(SpawnPoint + FVector(0, 0, 300), false, nullptr, ETeleportType::TeleportPhysics);
 		bPlaced = false; // (stand on the ground at the start place again)
 	}
+	if (Sky)
+	{
+		// Footsteps while walking on the ground (faster when sprinting), and a sound for what was just done.
+		if (!bFly && !bSwimming && GetCharacterMovement()->IsMovingOnGround() && GetVelocity().SizeSquared2D() > 100.0 * 100.0)
+		{
+			if ((StepSeconds -= DeltaSeconds) <= 0) { StepSeconds = bSprinting ? 0.29f : 0.46f; Sky->Blip(ww::FSoundscape::Step); }
+		}
+		else StepSeconds = 0.1f;
+		// (only what worked makes a sound: a refusal is just words)
+		const bool bWood = Said.StartsWith(TEXT("Chop")) || Said.StartsWith(TEXT("It creaks")) || Said.StartsWith(TEXT("Timber")) || Said.StartsWith(TEXT("The trunk splits"));
+		const bool bTook = Said.StartsWith(TEXT("Picked up")) || Said.StartsWith(TEXT("Plant fibre")) || Said.StartsWith(TEXT("You eat"));
+		if (bWood) Sky->Blip(ww::FSoundscape::Wood);
+		else if (Said.StartsWith(TEXT("Made"))) Sky->Blip(ww::FSoundscape::Craft);
+		else if (Said.StartsWith(TEXT("You died"))) Sky->Blip(ww::FSoundscape::Hurt);
+		else if (bTook) Sky->Blip(ww::FSoundscape::Other);
+	}
 	if (!Said.IsEmpty()) { Notice = Said; NoticeSeconds = 5.f; UE_LOG(LogWayfarer, Display, TEXT("Game: %s"), *Said); }
 	else if ((NoticeSeconds -= DeltaSeconds) <= 0) Notice.Reset();
 }

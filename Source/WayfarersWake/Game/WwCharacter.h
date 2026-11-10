@@ -57,7 +57,7 @@ private:
 	bool bPlaced = false, bHaveSpawn = false, bFly = false, bSwimming = false, bPackOpen = false;
 	void UpdateGameplay(float DeltaSeconds, class APlayerController* PC, bool bSprinting);
 	FString Notice;
-	float NoticeSeconds = 0;
+	float NoticeSeconds = 0, StepSeconds = 0;
 	FString Status;
 	double StatusUntil = 0;
 	double SecondsPlaced = 0, Travelled = 0;
