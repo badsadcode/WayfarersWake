@@ -2,8 +2,7 @@
 // Rocks, Props, RockyShore; the shapes of RockMeshes.cs, PropCatalog.cs and Visuals.Stump). Placement comes from
 // world-aligned cells hashed with the world's seed, so the same stone lies in the same place for everyone.
 // Engine-free and thread-safe.
-// Not ported here: the rocks of tall cliffs and the rock kit's formations (their shapes are a later step), greenery on
-// cliff rocks, picked-up stones and berries (removals), collision.
+// Not ported here: greenery on cliff rocks, picked-up stones and berries (removals), collision.
 #pragma once
 
 #include "WwFlora.h"
@@ -35,7 +34,9 @@ struct FRockGrid
 class FRocks
 {
 public:
-	enum { Stone = 0, Rock = 1, Boulder = 2, CliffSlab = 3, BigBoulder = 4, RockKinds = 5 };
+	/// Kinds as in Thornwake: the five small shapes; then six shapes of worn cliff block, near, coarse (middle distance)
+	/// and for the lip of a cliff; then the formations of the rock kit (columns, slabs, tiered, tor; four variants each).
+	enum { Stone = 0, Rock = 1, Boulder = 2, CliffSlab = 3, BigBoulder = 4, CliffShapes = 6, CliffRock = 5, CliffCoarse = 11, CliffLip = 17, Formation = 23, RockKinds = 39 };
 	enum { Bush = 0, BerryBush = 1, Stump = 2, Log = 3, PropKinds = 4 };
 
 	/// 0..1: a rocky stretch of shore here (patches along the sea and lakes; bare rock instead of sand, blocky rocks).
@@ -59,6 +60,11 @@ class FPropShapes
 public:
 	/// A rock kind's mesh: a jittered, flattened icosphere, stone-coloured with a hint of moss on top, auto-smoothed.
 	static FSoup Rock(int Kind);
+	/// A block of worn cliff rock (unit size, centred): 0-1 blocks, 2 stepped in ledges, 3 wider at the top, 4 split by a
+	/// cleft, 5 rounded; coarse for the middle distance.
+	static FSoup CliffBlock(int Shape, bool bCoarse);
+	/// A rock kit formation (metres): kind 0 columns, 1 slab stack, 2 tiered pile, 3 tor; four variants each.
+	static FSoup Formation(int Kind, int Variant);
 	/// A prop's mesh: bush, berry bush, stump, log.
 	static FSoup Prop(int Kind);
 };

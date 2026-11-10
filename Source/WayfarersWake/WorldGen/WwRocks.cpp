@@ -1,6 +1,7 @@
 // Port of Thornwake Game/Rewrite/GroundCover.cs (Rocks, Props, RockyShore) and the shapes of RockMeshes.cs,
 // PropCatalog.cs and Visuals.Stump.
 #include "WwRocks.h"
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <functional>
@@ -234,6 +235,156 @@ void FRocks::Scatter(const FRockGrid& grid, int level, double size, double sea, 
 			for (int k = 0; k < 3; k++) { frame.X[k] = along[k] * wide; frame.Y[k] = UpAxis[k] * tall; frame.Z[k] = outward[k] * thick; }
 			FBasis b = tilt * frame;
 			Emit(out, CliffSlab, b, (float)x - ox * thick * .45f, height - tall * .2f, (float)z - oz * thick * .45f, grid, x, z);
+		});
+	// Rocks of tall cliffs: on a face, the wall is measured along the way down, from its lip to its foot, and where it stands
+	// 8 m or more, a rock sized to it (a third to two thirds of its height, 5-35 m across; several up a tall one) stands half
+	// out of the face, a block fallen at its foot now and then. Levels 0-1; level 1 has walls over 15 m only, in coarse blocks.
+	auto RiverAlong = [&](double x, double z, double ax, double az, double half)
+	{
+		for (double t = -half; t <= half; t += 3)
+		{
+			int i = (int)std::nearbyint((x + ax * t) / g.Spacing), j = (int)std::nearbyint((z + az * t) / g.Spacing);
+			if (i < 0 || j < 0 || i >= g.Side || j >= g.Side) continue;
+			EWaterKind w = g.Samples[j * g.Side + i].Water;
+			if (w == EWaterKind::River || w == EWaterKind::Pond) return true;
+		}
+		return false;
+	};
+	auto Tinted = [&](std::vector<FRockInstance>& list, float shade, float warm)
+	{
+		FRockInstance& r = list.back();
+		r.R *= shade * (1 + warm); r.G *= shade; r.B *= shade * (1 - warm);
+	};
+	if (level <= 1)
+		RkCells(g.X0, g.Z0, size, level == 0 ? 7 : 10, seed ^ 0xC1F2ULL, [&](double x, double z, u64 h)
+		{
+			// Near a face: the ground 4 m either way differs by over 6 m. Downhill is out from the face.
+			float height, ex, wx, sz, nz;
+			if (!HeightAt(g, x, z, height)) return;
+			float r4 = (float)Mx(4, g.Spacing * 2);
+			if (!HeightAt(g, x + r4, z, ex) || !HeightAt(g, x - r4, z, wx) || !HeightAt(g, x, z + r4, sz) || !HeightAt(g, x, z - r4, nz)) return;
+			float ox = wx - ex, oz = nz - sz, olen = std::sqrt(ox * ox + oz * oz);
+			if (olen < 6) return;
+			ox /= olen; oz /= olen;
+			float step = (float)Mx(1.5, g.Spacing);
+			float foot = height, lip = height, footAt = 0, lipAt = 0, probe;
+			for (float d = step; d <= 70; d += step)
+			{
+				if (!HeightAt(g, x + ox * d, z + oz * d, probe) || foot - probe < step * .5f) break;
+				foot = probe; footAt = d;
+			}
+			for (float d = step; d <= 70; d += step)
+			{
+				if (!HeightAt(g, x - ox * d, z - oz * d, probe) || probe - lip < step * .5f) break;
+				lip = probe; lipAt = d;
+			}
+			float wall = lip - foot;
+			// (a cliff, not a steep hillside: steeper than ~50 degrees from the lip to the foot)
+			if (wall < (level == 0 ? 8 : 15) || wall < 1.2f * (lipAt + footAt) || RkUnit(h, 1) > .9f * a0) return;
+			// along = up x outward
+			float along[3] = { oz, 0, -ox }, outward[3] = { ox, 0, oz };
+			// (none over a waterfall: no river on the lip, the face or the foot across the width a rock may span)
+			if (RiverAlong(x - ox * lipAt, z - oz * lipAt, along[0], along[2], 30) || RiverAlong(x, z, along[0], along[2], 30)
+				|| RiverAlong(x + ox * footAt, z + oz * footAt, along[0], along[2], 30)) return;
+			int count = 1 + (int)(wall / 25);
+			float cellSize = level == 0 ? 7.f : 10.f;
+			// How far the wall runs either way: no rock wider than that.
+			float extent = 40;
+			for (int sgn : { -1, 1 })
+				for (float d = 3; d <= 40; d += 3)
+				{
+					double px = x - ox * lipAt * .5f + along[0] * d * sgn, pz = z - oz * lipAt * .5f + along[2] * d * sgn;
+					if (!HeightAt(g, px, pz, probe) || probe < foot + wall * .55f) { if (d < extent) extent = d; break; }
+				}
+			float widest = 2 * extent * .85f + 2;
+			// A needle or a narrow spur: no rocks on it at all; only a block fallen at its foot now and then.
+			bool slender = extent < 12;
+			auto Frame = [&](float wide, float tall, float thick)
+			{
+				FBasis f;
+				for (int k = 0; k < 3; k++) { f.X[k] = along[k] * wide; f.Y[k] = UpAxis[k] * tall; f.Z[k] = outward[k] * thick; }
+				return f;
+			};
+			for (int i = 0; i < (slender ? 0 : count); i++)
+			{
+				u64 hh = Hashing::Mix(h + (u64)(i + 1) * 0x2F1BULL);
+				float tall = (float)Mn(wall * (.35f + .3f * RkUnit(hh, 2)), wall / count * 1.6f + 4);
+				float wide = tall * (.9f + .8f * RkUnit(hh, 3));
+				wide = wide < 5 ? 5 : wide > 35 ? 35 : wide;
+				if (wide > widest) wide = widest;
+				float thick = wide * (.5f + .25f * RkUnit(hh, 4));
+				if (tall > wide * 2.2f) tall = wide * 2.2f;
+				if (RkUnit(hh, 11) > cellSize * 2.4f / wide) continue;
+				// Where the face is at the rock's middle height (a straight face from the lip to the foot).
+				float y = foot + tall * .4f + (wall - tall * .8f) * ((i + RkUnit(hh, 5)) / count), share = (lip - y) / wall;
+				share = share < 0 ? 0 : share > 1 ? 1 : share;
+				float across = -lipAt + (lipAt + footAt) * share;
+				float slide = (RkUnit(hh, 6) - .5f) * 4, out2 = across - thick * .05f;
+				FBasis tilt = FBasis::Turn(along, (RkUnit(hh, 7) - .5f) * .35f) * FBasis::Turn(outward, (RkUnit(hh, 8) - .5f) * .3f) * FBasis::Turn(UpAxis, (RkUnit(hh, 9) - .5f) * .5f);
+				Emit(out, (level == 0 ? CliffRock : CliffCoarse) + (int)(RkUnit(hh, 10) * (CliffShapes - .001f)), tilt * Frame(wide, tall, thick),
+					(float)x + along[0] * slide + ox * out2, y, (float)z + along[2] * slide + oz * out2, grid, x, z);
+				Tinted(out, .82f + .36f * RkUnit(hh, 12), (RkUnit(hh, 13) - .5f) * .12f); // (each its own: all one tint was bland)
+			}
+			// The lip broken up: two or three small rocks along each cell's stretch of the edge, flat rather than tall, leaning
+			// out over the face, their tops only 0.4-1.5 m above the edge.
+			for (int n = 0, lips = slender ? 0 : 2 + (int)(RkUnit(h, 14) * 2); n < lips; n++)
+			{
+				u64 lh = Hashing::Mix(h + 0x11BULL + (u64)n * 0x9E3BULL);
+				if (RkUnit(lh, 12) > .85f) continue;
+				float lipTall = wall * .08f;
+				lipTall = (lipTall < 1.4f ? 1.4f : lipTall > 3.5f ? 3.5f : lipTall) * (.7f + .5f * RkUnit(lh, 1));
+				float lipWide = lipTall * (1.6f + 1.2f * RkUnit(lh, 2));
+				if (lipWide > widest) lipWide = widest;
+				float lipThick = lipWide * (.55f + .3f * RkUnit(lh, 3));
+				float top = lip + .4f + 1.1f * RkUnit(lh, 4); // (the block's top is 0.42 of its height above its middle)
+				float back = lipAt - lipThick * (.05f + .25f * RkUnit(lh, 5)), run = ((n + RkUnit(lh, 6)) / lips - .5f) * cellSize * 1.3f;
+				FBasis lipTilt = FBasis::Turn(along, (RkUnit(lh, 7) - .5f) * .25f) * FBasis::Turn(outward, .1f + .15f * RkUnit(lh, 8)) * FBasis::Turn(UpAxis, RkUnit(lh, 9) * 6.2831855f);
+				Emit(out, (level == 0 ? CliffLip : CliffCoarse) + (int)(RkUnit(lh, 11) * (CliffShapes - .001f)), lipTilt * Frame(lipWide, lipTall, lipThick),
+					(float)x - ox * back + along[0] * run, top - lipTall * .42f, (float)z - oz * back + along[2] * run, grid, x, z);
+				Tinted(out, .82f + .36f * RkUnit(lh, 10), 0);
+			}
+			if (RkUnit(h, 9) < .35f)
+			{
+				float block = (float)Mn(wall * .18f, 6) * (.6f + .6f * RkUnit(h, 10));
+				FBasis b = FBasis::Turn(UpAxis, RkUnit(h, 11) * 6.2831855f).Scaled(block, block * .7f, block);
+				Emit(out, Boulder, b, (float)x + ox * (footAt + block * .4f), foot - block * .3f, (float)z + oz * (footAt + block * .4f), grid, x, z);
+			}
+		});
+	// The rock kit's formations: in outcrops (patches of rocky ground a few hundred metres across, from a world noise), on
+	// crests and hilltops more than in hollows, more where the land is rocky and in the mountains, few in forest; a lone one
+	// now and then outside them. A group is one kind (by the land's rock), now and then another among them.
+	if (level <= 2 && grid.Normal)
+		RkCells(g.X0, g.Z0, size, 55, seed ^ 0xF0E3ULL, [&](double x, double z, u64 h)
+		{
+			// (not on slopes over ~35 degrees: set upright there, the downhill side stood on nothing)
+			float height, up, forest; bool wet;
+			if (!RkAt(g, x, z, height, up, forest, wet) || wet || up < .82f || height - sea < 1.5f) return;
+			double wx = g.X0 + x, wz = g.Z0 + z;
+			float outcrop = (float)DetMath::Smooth((Noise::Value(wx / 520, wz / 520, 0x0C7C0ULL) * .7 + Noise::Value(wx / 170, wz / 170, 0x0C7C1ULL) * .3 - .55) / .14);
+			// Crest or hollow: this point against the ground 35 m round it.
+			float round = 0, hr; int n = 0;
+			for (int q = 0; q < 4; q++)
+				if (HeightAt(g, x + 35 * std::cos(q * 3.141592653589793 / 2), z + 35 * std::sin(q * 3.141592653589793 / 2), hr)) { round += hr; n++; }
+			float crest = n > 0 ? (height - round / n) / 6 : 0;
+			crest = crest < -1 ? -1 : crest > 1 ? 1 : crest;
+			float mountain = Mountain(x, z), rocks = Prop(x, z);
+			float chance = (.025f + .6f * outcrop * (1 + .8f * crest)) * a0 * (rocks < 2.2f ? rocks : 2.2f) * (1 + mountain)
+				* (1 - .75f * (forest * 1.5f < 1 ? forest * 1.5f : 1)) * (crest < -.3f ? .3f : 1);
+			if (RkUnit(h, 1) > chance) return;
+			int look = grid.RockLook ? (int)std::nearbyint(grid.RockLook[RkNearest(g, x, z)]) : 0;
+			float roll = RkUnit(h, 9) < .82f ? (float)Noise::Value(wx / 520, wz / 520, 0x0C7C2ULL) : RkUnit(h, 10);
+			// columns where it is basalt or mountain, slab stacks in sandstone and layered country, tors in granite and mossy country
+			int kind = mountain > .45f || look == 2 ? (roll < .7f ? 0 : 2) : look == 3 || look == 0 ? (roll < .6f ? 1 : 2) : roll < .65f ? 3 : roll < .85f ? 2 : 0;
+			// (bigger in the outcrops' hearts and on crests, smaller at their edges)
+			float s = (.55f + .55f * RkUnit(h, 2) * RkUnit(h, 3)) * (.75f + .35f * outcrop + .15f * (crest > 0 ? crest : 0));
+			// (leaning a third of the way with the ground, sunk deeper on a slope, so no side stands on air)
+			const float* nrm = &grid.Normal[RkNearest(g, x, z) * 3];
+			// axis = up x normal
+			float axis[3] = { nrm[2], 0, -nrm[0] }, alen = std::sqrt(axis[0] * axis[0] + axis[2] * axis[2]);
+			if (alen > 1e-3f) { axis[0] /= alen; axis[2] /= alen; } else { axis[0] = 1; axis[2] = 0; }
+			float angle = std::acos(nrm[1] < -1 ? -1 : nrm[1] > 1 ? 1 : nrm[1]);
+			FBasis fb = (FBasis::Turn(axis, angle * .35f) * FBasis::Turn(UpAxis, RkUnit(h, 4) * 6.2831855f)).Scaled(s, s, s);
+			Emit(out, Formation + kind * 4 + (int)(RkUnit(h, 5) * (4 - .001f)), fb, (float)x, height - (.6f + 6.f * (1 - up)) * s, (float)z, grid, x, z);
 		});
 	// Scree: rubble over the talus under walls, rocks and boulders of every size, thickest where most has fallen.
 	if (level <= 1)
@@ -518,5 +669,430 @@ FSoup FPropShapes::Prop(int kind)
 		Cylinder(s, { 1.7f, .2f, 0 }, .23f, .23f, .02f, Hex(0xb39362), 8, true);
 	}
 	return s;
+}
+}
+
+// ---------------------------------------------------------------------------------------------------- big rocks
+// Port of Thornwake Game/Rewrite/SeaStackView.cs (Noise, SmoothMax, Surface, CliffBlock) and RockKit.cs.
+namespace ww
+{
+namespace
+{
+const float RockLight = 1.45f;
+
+/// Smooth value noise on a lattice (rock bulges a few metres across).
+float Noise3(u64 seed, float x, float y, float z)
+{
+	int ix = (int)std::floor(x), iy = (int)std::floor(y), iz = (int)std::floor(z);
+	float fx = x - ix, fy = y - iy, fz = z - iz;
+	fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy); fz = fz * fz * (3 - 2 * fz);
+	auto H = [&](int a, int b, int c) { return (float)Hashing::Unit(Hashing::Mix(seed ^ (u64)((i64)a * 73856093LL) ^ (u64)((i64)b * 19349663LL) ^ (u64)((i64)c * 83492791LL))); };
+	auto L = [](float a, float b, float t) { return a + (b - a) * t; };
+	float x00 = L(H(ix, iy, iz), H(ix + 1, iy, iz), fx), x10 = L(H(ix, iy + 1, iz), H(ix + 1, iy + 1, iz), fx);
+	float x01 = L(H(ix, iy, iz + 1), H(ix + 1, iy, iz + 1), fx), x11 = L(H(ix, iy + 1, iz + 1), H(ix + 1, iy + 1, iz + 1), fx);
+	return L(L(x00, x10, fy), L(x01, x11, fy), fz) * 2 - 1;
+}
+float KitSmoothMax(float a, float b, float k)
+{
+	if (k <= 1e-4f) return a > b ? a : b;
+	float d = a - b; if (d < 0) d = -d;
+	float h = (k - d > 0 ? k - d : 0) / k;
+	return (a > b ? a : b) + h * h * k * .25f;
+}
+float KitClamp(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
+float KitStep(float e0, float e1, float x) { float t = KitClamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+
+/// A solid's surface (signed distance in metres, below 0 inside), taken with surface nets on a grid and flat-shaded:
+/// a point in each cell the surface crosses, a quad across each crossed edge. The beds show as bands of paler and darker
+/// rock; moss on open tops; darker where rock lies close above (crevices, the undersides of ledges).
+FSoup KitSurface(const std::function<float(float, float, float)>& solid, FV3 lo, FV3 hi, float cell, u64 seed, float tilt, float aoStrength, float aoReach)
+{
+	int nx = (int)std::ceil((hi.X - lo.X) / cell) + 1, ny = (int)std::ceil((hi.Y - lo.Y) / cell) + 1, nz = (int)std::ceil((hi.Z - lo.Z) / cell) + 1;
+	std::vector<float> field((size_t)nx * ny * nz);
+	auto Idx = [&](int i, int j, int k) { return ((size_t)k * ny + j) * nx + i; };
+	auto Corner = [&](int i, int j, int k) { return FV3{ lo.X + i * cell, lo.Y + j * cell, lo.Z + k * cell }; };
+	for (int k = 0; k < nz; k++)
+		for (int j = 0; j < ny; j++)
+			for (int i = 0; i < nx; i++) { FV3 p = Corner(i, j, k); field[Idx(i, j, k)] = solid(p.X, p.Y, p.Z); }
+	std::vector<int> point(field.size(), -1);
+	std::vector<FV3> points;
+	for (int k = 0; k + 1 < nz; k++)
+		for (int j = 0; j + 1 < ny; j++)
+			for (int i = 0; i + 1 < nx; i++)
+			{
+				FV3 sum = { 0, 0, 0 }; int crossings = 0;
+				for (int e = 0; e < 8; e++)
+					for (int axis = 0; axis < 3; axis++)
+					{
+						if ((e >> axis & 1) != 0) continue;
+						int ai = i + (e & 1), aj = j + (e >> 1 & 1), ak = k + (e >> 2 & 1);
+						int bi = ai + (axis == 0 ? 1 : 0), bj = aj + (axis == 1 ? 1 : 0), bk = ak + (axis == 2 ? 1 : 0);
+						float da = field[Idx(ai, aj, ak)], db = field[Idx(bi, bj, bk)];
+						if ((da < 0) == (db < 0)) continue;
+						sum = sum + Lerp(Corner(ai, aj, ak), Corner(bi, bj, bk), da / (da - db)); crossings++;
+					}
+				if (crossings == 0) continue;
+				point[Idx(i, j, k)] = (int)points.size();
+				points.push_back(sum * (1.f / crossings));
+			}
+	FSoup s;
+	FRandomStream shadeRng(seed ^ 0x5EA5ULL);
+	FV3 stone = Hex(0x777a72), dark = Hex(0x5d605a), moss = Hex(0x66744f);
+	auto Occlusion = [&](FV3 p, FV3 n)
+	{
+		float occ = 0;
+		const float steps[3][2] = { { 1.f, .5f }, { 2.5f, .3f }, { 5.f, .2f } };
+		for (const float* st : steps)
+		{
+			float d = st[0] * aoReach;
+			occ += st[1] * KitClamp((d - solid(p.X + n.X * d, p.Y + n.Y * d, p.Z + n.Z * d)) / d, 0, 1);
+		}
+		return 1 - aoStrength * KitClamp(occ * 1.4f, 0, 1);
+	};
+	// (bands wider than the cells, one colour across a quad)
+	float bandHeight = 3 > cell * 2.6f ? 3 : cell * 2.6f;
+	auto Face = [&](FV3 a, FV3 b, FV3 c, float band, float shade)
+	{
+		FV3 normal = Cross(b - a, c - a);
+		if (Dot(normal, normal) < 1e-6f) return;
+		normal = Norm(normal);
+		FV3 mid = (a + b + c) * (1 / 3.f);
+		FV3 colour = Lerp(stone, dark, .05f + .4f * band + .1f * shade);
+		if (normal.Y > .72f) colour = Lerp(moss, colour, .5f);
+		float ao = Occlusion(mid, normal) * RockLight;
+		Tri(s, a, b, c, colour * ao);
+	};
+	// (facing from the grid: flipping a triangle by its own normal turned folded ones inside out)
+	auto Quad = [&](int a, int b, int c, int d, bool flip)
+	{
+		if (a < 0 || b < 0 || c < 0 || d < 0) return;
+		if (flip) { int swap = b; b = d; d = swap; }
+		FV3 mid = (points[a] + points[b] + points[c] + points[d]) * .25f;
+		float band = .5f + .5f * Noise3(seed + 11, 0, (mid.Y + tilt * mid.X) / bandHeight, 0), shade = (float)shadeRng.Unit();
+		Face(points[a], points[b], points[c], band, shade); Face(points[a], points[c], points[d], band, shade);
+	};
+	for (int k = 1; k + 1 < nz; k++)
+		for (int j = 1; j + 1 < ny; j++)
+			for (int i = 1; i + 1 < nx; i++)
+			{
+				float here = field[Idx(i, j, k)];
+				float x = field[Idx(i + 1, j, k)], y = field[Idx(i, j + 1, k)], z = field[Idx(i, j, k + 1)];
+				if ((here < 0) != (x < 0)) Quad(point[Idx(i, j - 1, k - 1)], point[Idx(i, j, k - 1)], point[Idx(i, j, k)], point[Idx(i, j - 1, k)], x < here);
+				if ((here < 0) != (y < 0)) Quad(point[Idx(i - 1, j, k - 1)], point[Idx(i, j, k - 1)], point[Idx(i, j, k)], point[Idx(i - 1, j, k)], y > here);
+				if ((here < 0) != (z < 0)) Quad(point[Idx(i - 1, j - 1, k)], point[Idx(i, j - 1, k)], point[Idx(i, j, k)], point[Idx(i - 1, j, k)], z < here);
+			}
+	return s;
+}
+
+// ---- the rock kit's pieces
+FV3 Apply(const FBasis& b, FV3 v) { return { b.X[0] * v.X + b.Y[0] * v.Y + b.Z[0] * v.Z, b.X[1] * v.X + b.Y[1] * v.Y + b.Z[1] * v.Z, b.X[2] * v.X + b.Y[2] * v.Y + b.Z[2] * v.Z }; }
+FV3 ApplyInverse(const FBasis& b, FV3 v) { return { b.X[0] * v.X + b.X[1] * v.Y + b.X[2] * v.Z, b.Y[0] * v.X + b.Y[1] * v.Y + b.Y[2] * v.Z, b.Z[0] * v.X + b.Z[1] * v.Y + b.Z[2] * v.Z }; }
+float Len(FV3 v) { return std::sqrt(Dot(v, v)); }
+FV3 TurnY(FV3 v, float angle) { float c = std::cos(angle), s = std::sin(angle); return { c * v.X + s * v.Z, v.Y, -s * v.X + c * v.Z }; }
+
+struct FPlane { FV3 N; float D; };
+/// One piece as a solid: a bevelled box with corners cut.
+struct FBlock
+{
+	FV3 Centre, Half;
+	FBasis Basis;
+	FPlane Faces[6];
+	std::vector<FPlane> Cuts;
+	float Bevel = 0, Reach = 0;
+	float Distance(FV3 p) const
+	{
+		FV3 q = ApplyInverse(Basis, p - Centre);
+		float d = Dot(q, Faces[0].N) - Faces[0].D;
+		for (int f = 1; f < 6; f++) d = KitSmoothMax(d, Dot(q, Faces[f].N) - Faces[f].D, Bevel);
+		for (const FPlane& c : Cuts) d = KitSmoothMax(d, Dot(q, c.N) - c.D, Bevel * .7f);
+		return d;
+	}
+};
+
+/// The pieces as polyhedra: each the intersection of its half-spaces (the box's six faces, a chamfer along each of its
+/// twelve edges, the corner cuts), its vertices every three planes' meeting point inside all the rest, each face the
+/// points on its plane in order round them. Flat-shaded, each face its own shade, moss on open tops, darker by how much
+/// rock lies close above it.
+FSoup Polyhedra(const std::vector<FBlock>& blocks, const std::function<float(float, float, float)>& solid, u64 seed)
+{
+	FSoup s;
+	FRandomStream rng(seed ^ 0xFACEULL);
+	FV3 stone = Hex(0x777a72), dark = Hex(0x5d605a), moss = Hex(0x66744f);
+	for (const FBlock& b : blocks)
+	{
+		std::vector<FPlane> planes(b.Faces, b.Faces + 6);
+		float c = .15f > b.Bevel * .7f ? .15f : b.Bevel * .7f;
+		for (int i = 0; i < 6; i++)
+			for (int j = i + 1; j < 6; j++)
+			{
+				if (j == (i ^ 1)) continue; // (opposite faces)
+				FV3 sum = b.Faces[i].N + b.Faces[j].N; float len = Len(sum);
+				planes.push_back({ sum * (1 / len), (b.Faces[i].D + b.Faces[j].D) / len - c });
+			}
+		for (const FPlane& cut : b.Cuts) planes.push_back(cut);
+		// The corners: every three planes meeting inside all the others.
+		std::vector<FV3> points;
+		int count = (int)planes.size();
+		for (int i = 0; i < count; i++)
+			for (int j = i + 1; j < count; j++)
+				for (int k = j + 1; k < count; k++)
+				{
+					FV3 n1 = planes[i].N, n2 = planes[j].N, n3 = planes[k].N;
+					float det = Dot(n1, Cross(n2, n3));
+					if (std::fabs(det) < 1e-5f) continue;
+					FV3 q = (Cross(n2, n3) * planes[i].D + Cross(n3, n1) * planes[j].D + Cross(n1, n2) * planes[k].D) * (1 / det);
+					bool inside = true;
+					for (const FPlane& p : planes) if (Dot(p.N, q) > p.D + 1e-3f) { inside = false; break; }
+					if (inside) points.push_back(q);
+				}
+		for (const FPlane& plane : planes)
+		{
+			// This face's corners (no repeats), in order round its middle.
+			std::vector<FV3> face;
+			for (FV3 q : points)
+			{
+				if (std::fabs(Dot(plane.N, q) - plane.D) >= 2e-3f) continue;
+				bool repeat = false;
+				for (FV3 f : face) if (Dot(f - q, f - q) < 1e-6f) { repeat = true; break; }
+				if (!repeat) face.push_back(q);
+			}
+			if (face.size() < 3) continue;
+			FV3 mid = { 0, 0, 0 };
+			for (FV3 q : face) mid = mid + q;
+			mid = mid * (1.f / face.size());
+			FV3 n = plane.N;
+			FV3 u = Norm(Cross(std::fabs(n.Y) < .9f ? FV3{ 0, 1, 0 } : FV3{ 1, 0, 0 }, n)), v = Cross(n, u);
+			std::stable_sort(face.begin(), face.end(), [&](FV3 p1, FV3 p2)
+				{ return std::atan2(Dot(p1 - mid, v), Dot(p1 - mid, u)) < std::atan2(Dot(p2 - mid, v), Dot(p2 - mid, u)); });
+			// Into the formation's space.
+			FV3 wn = Norm(Apply(b.Basis, n));
+			std::vector<FV3> wp;
+			for (FV3 q : face) wp.push_back(b.Centre + Apply(b.Basis, q));
+			FV3 wmid = b.Centre + Apply(b.Basis, mid);
+			if (wmid.Y < -2.4f && wn.Y < -.5f) continue; // (a buried underside)
+			float shade = (float)rng.Unit();
+			float band = .5f + .5f * std::sin(wmid.Y * 1.3f + (float)rng.Unit() * .6f);
+			FV3 colour = Lerp(stone, dark, .08f + .3f * band + .2f * shade);
+			if (wn.Y > .72f) colour = Lerp(moss, colour, .45f + .2f * shade);
+			// Crevice shadow: how much rock lies close above the face.
+			float occ = 0;
+			const float steps[3][2] = { { .5f, .5f }, { 1.2f, .3f }, { 2.5f, .2f } };
+			for (const float* st : steps)
+			{
+				FV3 at = wmid + wn * st[0];
+				occ += st[1] * KitClamp((st[0] - solid(at.X, at.Y, at.Z)) / st[0], 0, 1);
+			}
+			float ao = 1 - .5f * KitClamp(occ * 1.4f, 0, 1);
+			// (the corners run counter-clockwise round n)
+			for (size_t t = 1; t + 1 < wp.size(); t++) Tri(s, wp[0], wp[t], wp[t + 1], colour * (RockLight * ao));
+			// (flat-shaded by the face's own normal)
+			for (size_t t = s.Normal.size() - (wp.size() - 2) * 9; t < s.Normal.size(); t += 3) { s.Normal[t] = wn.X; s.Normal[t + 1] = wn.Y; s.Normal[t + 2] = wn.Z; }
+		}
+	}
+	return s;
+}
+}
+
+FSoup FPropShapes::CliffBlock(int shape, bool coarse)
+{
+	u64 seed = 0xB10C1ULL + (u64)shape;
+	float cell = coarse ? 4.4f : 2.2f;
+	FRandomStream rng(seed);
+	float a = (float)rng.Between(8, 10), b = (float)rng.Between(6, 9), h = 20;
+	if (shape == 4) a = (float)rng.Between(9, 10.5);
+	float tilt = (float)rng.Between(-.2, .2), bed = (float)rng.Between(4.5, 6.5), taper = (float)rng.Between(.05, .2);
+	float turn = (float)rng.Unit() * 6.2831855f, ca = std::cos(turn), sa = std::sin(turn);
+	float power = shape == 5 ? 2.1f : 3.2f, cleft = (float)rng.Between(-2.5, 2.5);
+	int ledges = 2 + rng.Int(2);
+	auto Solid = [&](float x, float y, float z)
+	{
+		float px = x + 2.4f * Noise3(seed + 2, x / 14, y / 14, z / 14), pz = z + 2.4f * Noise3(seed + 3, x / 14 + 7, y / 14, z / 14);
+		float rx = ca * px + sa * pz, rz = ca * pz - sa * px;
+		float t = KitClamp(y / h, 0, 1), scale = 1 - taper * (t > .55f ? 1 : t / .55f * .3f);
+		if (shape == 2) { float v = t * ledges, step = std::floor(v); scale = 1 - .38f * (step + KitClamp((v - step - .75f) / .25f, 0, 1)) / ledges; }
+		if (shape == 3) scale = .82f + .3f * KitStep(.2f, .85f, t);
+		float plan = (std::pow(std::pow(std::fabs(rx) / (a * scale), power) + std::pow(std::fabs(rz) / (b * scale), power), 1 / power) - 1) * (a < b ? a : b) * scale;
+		float top = h * .92f + tilt * rx * .6f + 1.2f * Noise3(seed + 4, x / 8, 0, z / 8);
+		float d = KitSmoothMax(KitSmoothMax(plan, y - top, shape == 5 ? 6.f : 2.f), .5f - y, 2);
+		if (shape == 4) { float cut = (1.6f - std::fabs(rx - cleft)) * KitStep(4, 9, y); if (cut > d) d = cut; }
+		float joints = std::fabs(Noise3(seed + 7, x / 5, y / 25, z / 5)), sy = y + tilt * x;
+		d += 1.3f * (1 - (joints * 5 < 1 ? joints * 5 : 1)) - .25f + 1.1f * Noise3(seed + 8, x / 6, y / 6, z / 6) + .4f * Noise3(seed + 9, x / 2.5f, y / 2.5f, z / 2.5f);
+		float f = sy - bed * std::floor(sy / bed); f /= bed;
+		d += .6f * (-1 + 1.25f * KitStep(.2f, .42f, f) - 1.25f * KitStep(.84f, 1, f));
+		return d;
+	};
+	FSoup s = KitSurface(Solid, { -19, -3, -19 }, { 19, 26, 19 }, cell, seed, tilt, .7f, 1);
+	// Unit size and centred, to be scaled per rock.
+	for (size_t i = 0; i < s.Position.size(); i += 3) { s.Position[i] /= h; s.Position[i + 1] = (s.Position[i + 1] - h * .5f) / h; s.Position[i + 2] /= h; }
+	AutoSmooth(s, 50);
+	return s;
+}
+
+FSoup FPropShapes::Formation(int kind, int variant)
+{
+	u64 seed = 0x40C4C17ULL + (u64)kind * 7919 + (u64)variant * 104729;
+	FRandomStream rng(seed);
+	std::vector<FBlock> blocks;
+	const float Tau = 6.2831855f;
+	const float ForwardAxis[3] = { 0, 0, -1 };
+	// A piece: half extents, turned about y, tilted a little, corners cut by `cuts` planes.
+	auto Add = [&](FV3 centre, FV3 half, float turn, float tilt, int cuts, float bevel)
+	{
+		FBlock b;
+		float tx = (float)rng.Between(-tilt, tilt), tz = (float)rng.Between(-tilt, tilt);
+		b.Basis = FBasis::Turn(UpAxis, turn) * FBasis::Turn(RightAxis, tx) * FBasis::Turn(ForwardAxis, tz);
+		// The faces turned each their own way: sides leaning in toward the top (mostly), the top and bottom sloping.
+		const FV3 axes0[6] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		const float h0[6] = { half.X, half.X, half.Y, half.Y, half.Z, half.Z };
+		for (int f = 0; f < 6; f++)
+		{
+			FV3 n = axes0[f];
+			if (f == 2 || f == 3) { float jx = (float)rng.Between(-.22, .22), jz = (float)rng.Between(-.22, .22); n = n + FV3{ jx, 0, jz }; }
+			else
+			{
+				float up = (float)rng.Between(-.06, .3), sideways = (float)rng.Between(-.16, .16);
+				n = n + FV3{ 0, up, 0 } + (f < 2 ? FV3{ 0, 0, 1 } : FV3{ 1, 0, 0 }) * sideways;
+			}
+			b.Faces[f] = { Norm(n), h0[f] * (float)rng.Between(.88, 1.05) };
+		}
+		cuts += rng.Int(3);
+		for (int c = 0; c < cuts; c++)
+		{
+			// A plane cutting off a corner: pointing toward one, set inside it by a fifth to a half of the way.
+			float cx = rng.Unit() < .5 ? -1.f : 1.f, cy = rng.Unit() < .65 ? 1.f : -1.f, cz = rng.Unit() < .5 ? -1.f : 1.f;
+			float jx = (float)rng.Between(-.5, .5), jy = (float)rng.Between(-.4, .4), jz = (float)rng.Between(-.5, .5);
+			FV3 n = Norm(FV3{ cx + jx, cy + jy, cz + jz });
+			float full = std::fabs(n.X) * half.X + std::fabs(n.Y) * half.Y + std::fabs(n.Z) * half.Z;
+			b.Cuts.push_back({ n, full * (float)rng.Between(.48, .8) });
+		}
+		b.Centre = centre; b.Half = half; b.Bevel = bevel; b.Reach = Len(half) + bevel + 1;
+		blocks.push_back(b);
+	};
+	auto Rubble = [&](float spread, int count, float size)
+	{
+		for (int i = 0; i < count; i++)
+		{
+			float a = (float)rng.Unit() * Tau, r = spread * (float)rng.Between(.75, 1.15), s = size * (float)rng.Between(.5, 1.1);
+			float hy = s * (float)rng.Between(.4, .7), hz = s * (float)rng.Between(.6, 1);
+			float turn = (float)rng.Unit() * Tau;
+			Add({ std::cos(a) * r, s * .3f, std::sin(a) * r }, { s, hy, hz }, turn, .35f, 3, s * .25f);
+		}
+	};
+	if (kind == 0)
+	{
+		// Columns: tall prisms packed on a jittered grid in an ellipse, the tallest toward the middle, their tops cut at angles.
+		float rx = (float)rng.Between(5, 8), rz = (float)rng.Between(3.5, 6), top = (float)rng.Between(11, 17), step = (float)rng.Between(2.6, 3.4);
+		float turn = (float)rng.Unit() * Tau;
+		for (float gx = -rx; gx <= rx; gx += step)
+			for (float gz = -rz; gz <= rz; gz += step * .9f)
+			{
+				float u = (gx * gx) / (rx * rx) + (gz * gz) / (rz * rz);
+				if (u > 1 || rng.Unit() < .12) continue;
+				float hgt = top * (1 - .65f * u) * (float)rng.Between(.6, 1.05);
+				float w = step * (float)rng.Between(.45, .62);
+				float jx = (float)rng.Between(-.5, .5), jz = (float)rng.Between(-.5, .5);
+				FV3 at = { gx + jx, hgt * .5f - 2, gz + jz };
+				float wz = w * (float)rng.Between(.7, 1), own = turn + (float)rng.Between(-.4, .4);
+				Add(TurnY(at, turn), { w, hgt * .5f + 1, wz }, own, .07f, 3, w * .18f);
+			}
+		int rubble = 6 + rng.Int(5);
+		Rubble((rx > rz ? rx : rz) + 1.5f, rubble, 1.2f);
+	}
+	else if (kind == 1)
+	{
+		// Slabs: flat layers, each smaller and set off from the one below, a little tilted: a stack weathered from bedded rock.
+		int layers = 3 + rng.Int(4);
+		float w = (float)rng.Between(6, 9), d = (float)rng.Between(4, 6.5), y = -1.5f, turn = (float)rng.Unit() * Tau;
+		FV3 off = { 0, 0, 0 };
+		for (int i = 0; i < layers; i++)
+		{
+			float t = (float)rng.Between(.8, 1.5);
+			float ox = (float)rng.Between(-1, 1), oz = (float)rng.Between(-.8, .8);
+			off = { KitClamp(off.X + ox, -w * .3f, w * .3f), 0, KitClamp(off.Z + oz, -d * .3f, d * .3f) };
+			float own = turn + (float)rng.Between(-.25, .25);
+			Add(TurnY(off + FV3{ 0, y + t, 0 }, turn), { w, t, d }, own, .05f, 4, t * .35f);
+			y += t * 2 - .15f;
+			w *= (float)rng.Between(.72, .92); d *= (float)rng.Between(.72, .95);
+		}
+		// A slab fallen against the side.
+		if (rng.Unit() < .7)
+		{
+			float a = (float)rng.Unit() * Tau;
+			Add({ std::cos(a) * 7, 1.2f, std::sin(a) * 6 }, { 3, .8f, 2.2f }, a, .5f, 3, .3f);
+		}
+		int rubble = 3 + rng.Int(4);
+		Rubble(9, rubble, 1);
+	}
+	else if (kind == 2)
+	{
+		// Tiered: steps of blocks round a high middle, rubble at the foot.
+		int tiers = 3 + rng.Int(2);
+		float r = (float)rng.Between(7, 9.5), y = -1.5f;
+		for (int t = 0; t < tiers; t++)
+		{
+			int count = 7 - 2 * t + rng.Int(2);
+			if (count < 1) count = 1;
+			float ring = r * (1 - (float)t / tiers) * .75f, size = r * .32f * (1 - .12f * t), hgt = (float)rng.Between(1.6, 2.6) + t * .4f;
+			float a0 = (float)rng.Unit() * Tau;
+			for (int i = 0; i < count; i++)
+			{
+				float a = a0 + i * Tau / count + (float)rng.Between(-.25, .25), rr = count == 1 ? 0 : ring * (float)rng.Between(.7, 1);
+				float sx = size * (float)rng.Between(.7, 1.1), sz = size * (float)rng.Between(.6, 1), own = a + (float)rng.Between(-.3, .3);
+				Add({ std::cos(a) * rr, y + hgt, std::sin(a) * rr }, { sx, hgt, sz }, own, .08f, 3, size * .16f);
+			}
+			y += hgt * 1.6f;
+		}
+		int rubble = 8 + rng.Int(5);
+		Rubble(r + 1.5f, rubble, 1.1f);
+	}
+	else
+	{
+		// A tor: big rounded granite blocks, a few on the ground side by side and one or two resting on them, a slab split
+		// off and lying beside.
+		int ground = 2 + rng.Int(2);
+		std::vector<std::pair<FV3, FV3>> bases;
+		for (int i = 0; i < ground; i++)
+		{
+			float s = (float)rng.Between(2.8, 4.2);
+			float hx = s * (float)rng.Between(1, 1.4), hy = s * (float)rng.Between(.55, .8), hz = s * (float)rng.Between(.8, 1.15);
+			float jx = (float)rng.Between(-1, 1), jz = (float)rng.Between(-1.5, 1.5);
+			FV3 hh = { hx, hy, hz }, at = { i * 4.5f - (ground - 1) * 2.25f + jx, hh.Y * .75f - 1.3f, jz };
+			float turn = (float)rng.Unit() * Tau;
+			Add(at, hh, turn, .12f, 2, s * .5f);
+			bases.push_back({ at, hh });
+		}
+		for (int up = 0, n = 1 + rng.Int(2); up < n; up++)
+		{
+			std::pair<FV3, FV3> base = bases[rng.Int((int)bases.size())];
+			float s = (base.second.X < base.second.Z ? base.second.X : base.second.Z) * (float)rng.Between(.6, .85);
+			float hx = s * (float)rng.Between(1, 1.3), hy = s * (float)rng.Between(.5, .7), hz = s * (float)rng.Between(.8, 1.1);
+			float jx = (float)rng.Between(-.3, .3), jz = (float)rng.Between(-.3, .3);
+			FV3 hh = { hx, hy, hz }, at = base.first + FV3{ jx * base.second.X, base.second.Y + hh.Y * .8f, jz * base.second.Z };
+			float turn = (float)rng.Unit() * Tau;
+			Add(at, hh, turn, .1f, 2, s * .5f);
+			bases.push_back({ at, hh });
+		}
+		for (int i = 0, slabs = 1 + rng.Int(2); i < slabs; i++)
+		{
+			float a = (float)rng.Unit() * Tau;
+			Add({ std::cos(a) * 6.5f, .3f, std::sin(a) * 5.5f }, { 2.6f, .7f, 1.9f }, a, .35f, 3, .5f);
+		}
+		int rubble = 3 + rng.Int(3);
+		Rubble(8, rubble, 1);
+	}
+	// The solid: the nearest piece (each only near its own box); kept for the crevice shadow.
+	auto Solid = [&](float x, float y, float z)
+	{
+		FV3 p = { x, y, z };
+		float d = 3.4e38f;
+		for (const FBlock& b : blocks)
+		{
+			float far = Len(p - b.Centre) - b.Reach;
+			float own = far > 0 ? far + 1 : b.Distance(p);
+			if (own < d) d = own;
+		}
+		return KitSmoothMax(d, -2.5f - y, .5f); // (closed below their buried foot)
+	};
+	return Polyhedra(blocks, Solid, seed);
 }
 }

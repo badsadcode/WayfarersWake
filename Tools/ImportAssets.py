@@ -254,3 +254,22 @@ rock_array.set_editor_property('filter', unreal.TextureFilter.TF_NEAREST)
 rock_array.set_editor_property('lod_group', unreal.TextureGroup.TEXTUREGROUP_WORLD)
 eal.save_loaded_asset(rock_array)
 unreal.log('WwAssets: rock array with %d looks' % len(rock_array.get_editor_property('source_textures')))
+
+# Tom's six cliff rock textures (Thornwake Assets/Terrain/Cliff, 512 px, seamless) as one array for the sides of big
+# rocks: his cliff rock, alpine rock, blue-grey slate, grey granite, mossy stone, warm sandstone.
+CLIFF = os.path.join(SOURCE, 'Assets', 'Terrain', 'Cliff')
+cliffs = ['rock_tom', 'alpine_rock', 'blue_gray_slate', 'granite_gray', 'mossy_stone', 'warm_sandstone']
+tools.import_asset_tasks([task(os.path.join(CLIFF, 'cliff_%s_tiled.png' % name), '/Game/Terrain/Cliff') for name in cliffs])
+cliff_sources = []
+for name in cliffs:
+    texture = eal.load_asset('/Game/Terrain/Cliff/cliff_%s_tiled' % name)
+    texture.set_editor_property('filter', unreal.TextureFilter.TF_NEAREST)
+    texture.set_editor_property('lod_group', unreal.TextureGroup.TEXTUREGROUP_WORLD)
+    eal.save_loaded_asset(texture)
+    cliff_sources.append(texture)
+cliff_array = existing_or_new('TA_WwCliff', '/Game/Terrain', unreal.Texture2DArray, unreal.Texture2DArrayFactory())
+cliff_array.set_editor_property('source_textures', cliff_sources)
+cliff_array.set_editor_property('filter', unreal.TextureFilter.TF_NEAREST)
+cliff_array.set_editor_property('lod_group', unreal.TextureGroup.TEXTUREGROUP_WORLD)
+eal.save_loaded_asset(cliff_array)
+unreal.log('WwAssets: cliff array with %d textures' % len(cliff_array.get_editor_property('source_textures')))

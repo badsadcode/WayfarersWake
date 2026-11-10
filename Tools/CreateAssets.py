@@ -335,63 +335,121 @@ def spray(mat):
 
 make('M_WwSpray', spray)
 ROCK = """
-// Rocks, boulders and cliff slabs (port of Thornwake Game/Rewrite/Rock.gdshader, the plain path): facets in the mesh's
-// own stone and moss colours, the tileable pixel rock texture projected from three sides, tinted per rock with the
-// biome's rock colour. Pos = world position wrapped (cm), N = world normal, Vc = mesh colour, Tint = (rock colour, look).
-// Not ported: the second texture layer and Tom's cliff textures on big rocks, lichen and streaks, rain.
-float3 p = Pos / 100.0;
-float3 w = pow(abs(N), 4.0);
+// Rocks, boulders and cliff slabs (port of Thornwake Game/Rewrite/Rock.gdshader): facets in the mesh's own stone and
+// moss colours, the tileable pixel rock texture projected from three sides, tinted per rock with the biome's rock colour.
+// Pos = world position wrapped (cm), N = world normal, Vc = mesh colour, Tint = (rock colour, look).
+// BIG (rocks tens of metres tall: cliff blocks and formations): the texture every 19 m and, turned, every 5.9 m; Tom's
+// cliff rock textures on their sides every 14 m; most of the biome's tint taken out, pale lichen in patches, dark
+// streaks where water runs down.
+// Not ported: rain. One difference: Thornwake picks a rock's cliff texture by where the rock stands; here by where each
+// point of it is (the choice changes over hundreds of metres, so a rock is rarely cut by it).
+struct FWwRock
+{
+	float rock_hash(float2 p) { p = p - 997.0 * floor(p / 997.0); float3 q = frac(float3(p.x, p.y, p.x) * 0.1031); q += dot(q, q.yzx + 33.33); return frac((q.x + q.y) * q.z); }
+	float rock_noise(float2 p)
+	{
+		float2 i = floor(p), f = frac(p), u = f * f * (3.0 - 2.0 * f);
+		return lerp(lerp(rock_hash(i), rock_hash(i + float2(1.0, 0.0)), u.x), lerp(rock_hash(i + float2(0.0, 1.0)), rock_hash(i + float2(1.0, 1.0)), u.x), u.y);
+	}
+};
+FWwRock fn;
+// (Thornwake's axes: x, up, z)
+float3 p = float3(Pos.x, Pos.z, Pos.y) / 100.0;
+float3 n = float3(N.x, N.z, N.y);
+float3 w = pow(abs(n), 4.0);
 w /= w.x + w.y + w.z;
 float look = clamp(round(Tint.a), 0.0, 5.0);
+#if BIG
+const float tile = 19.0, second_tile = 5.9, cliff_tile = 14.0;
+#else
 const float tile = 4.0;
-float3 tx = RockArr.Sample(RockArrSampler, float3(p.y / tile, -p.z / tile, look)).rgb;
-float3 ty = RockArr.Sample(RockArrSampler, float3(p.x / tile, p.y / tile, look)).rgb;
-float3 tz = RockArr.Sample(RockArrSampler, float3(p.x / tile, -p.z / tile, look)).rgb;
-float3 t = (tx * w.x + ty * w.z + tz * w.y) / 0.5;
-return pow(saturate(Vc * Tint.rgb * t), 2.2);
+#endif
+float3 tx = RockArr.Sample(RockArrSampler, float3(p.z / tile, -p.y / tile, look)).rgb;
+float3 ty = RockArr.Sample(RockArrSampler, float3(p.x / tile, p.z / tile, look)).rgb;
+float3 tz = RockArr.Sample(RockArrSampler, float3(p.x / tile, -p.y / tile, look)).rgb;
+float3 t = (tx * w.x + ty * w.y + tz * w.z) / 0.5;
+float3 base = Vc * Tint.rgb;
+#if BIG
+{
+	// (turn = mat2((0.8, 0.6), (-0.6, 0.8)))
+	float2 qx = float2(0.8 * p.z - 0.6 * p.y, 0.6 * p.z + 0.8 * p.y) / second_tile;
+	float2 qy = float2(0.8 * p.x - 0.6 * p.z, 0.6 * p.x + 0.8 * p.z) / second_tile;
+	float2 qz = float2(0.8 * p.x - 0.6 * p.y, 0.6 * p.x + 0.8 * p.y) / second_tile;
+	float3 sx = RockArr.Sample(RockArrSampler, float3(qx, look)).rgb, sy = RockArr.Sample(RockArrSampler, float3(qy, look)).rgb, sz = RockArr.Sample(RockArrSampler, float3(qz, look)).rgb;
+	t = lerp(t, (sx * w.x + sy * w.y + sz * w.z) / 0.5, 0.45);
+	// Tom's cliff rocks on the sides: per rock look a first and a second texture, one over whole stretches of cliff.
+	const int cliff_first[6] = { 0, 3, 2, 3, 4, 1 }, cliff_second[6] = { 1, 1, 4, 5, 0, 2 };
+	const float cliff_means[6] = { 0.275, 0.427, 0.395, 0.514, 0.269, 0.468 }, cliff_contrast[6] = { 0.55, 0.85, 0.85, 0.85, 0.7, 0.85 };
+	int lk = int(look);
+	int layer = fn.rock_noise(p.xz / 260.0) > 0.58 ? cliff_second[lk] : cliff_first[lk];
+	float sides = w.x + w.z;
+	float3 cx = CliffArr.Sample(CliffArrSampler, float3(p.z / cliff_tile, -p.y / cliff_tile, layer)).rgb;
+	float3 cz = CliffArr.Sample(CliffArrSampler, float3(p.x / cliff_tile, -p.y / cliff_tile, layer)).rgb;
+	float3 cliff = (cx * w.x + cz * w.z) / max(sides, 1e-4) / cliff_means[layer];
+	cliff = lerp(float3(1.0, 1.0, 1.0), cliff, cliff_contrast[layer]);
+	float cliff_grey = dot(cliff, float3(0.333, 0.333, 0.333));
+	cliff = lerp(float3(cliff_grey, cliff_grey, cliff_grey), cliff, 0.45); // (less colour: the sandstone at full came out a hot orange-red)
+	t = lerp(t, cliff, smoothstep(0.2, 0.6, sides));
+	// Less bland: most of the biome's tint taken out, a little lighter, pale lichen in patches (now and then orange),
+	// dark streaks where water runs down.
+	float grey = dot(base, float3(0.333, 0.333, 0.333));
+	base = lerp(base, float3(grey, grey, grey), 0.85) * 1.12;
+	float2 side = abs(n.x) > abs(n.z) ? p.zy : p.xy;
+	float patches = fn.rock_noise(side * 0.28 + p.y * 0.05) * 0.6 + fn.rock_noise(side * 0.9 + 7.0) * 0.4;
+	float lichen = smoothstep(0.6, 0.7, patches) * (0.55 + 0.45 * max(n.y, 0.0));
+	float3 lichen_col = fn.rock_noise(side * 0.05 + 3.0) > 0.78 ? float3(0.78, 0.55, 0.3) : float3(0.68, 0.7, 0.6);
+	base = lerp(base, lichen_col, lichen * 0.65);
+	float streak = smoothstep(0.55, 0.8, fn.rock_noise(float2(side.x * 0.45, p.y * 0.012))) * (1.0 - max(n.y, 0.0));
+	base *= 1.0 - 0.3 * streak;
+}
+#endif
+return pow(saturate(base * t), 2.2);
 """
 
 
-def rock(mat):
-    node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
-    node.set_editor_property('description', 'WwRock')
-    node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
-    inputs = []
-    for name in ['Pos', 'N', 'Vc', 'Tint', 'RockArr']:
-        i = unreal.CustomInput()
-        i.set_editor_property('input_name', name)
-        inputs.append(i)
-    node.set_editor_property('inputs', inputs)
-    node.set_editor_property('code', ROCK)
+def rock(big):
+    def build(mat):
+        node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
+        node.set_editor_property('description', 'WwRock')
+        node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+        inputs = []
+        for name in ['Pos', 'N', 'Vc', 'Tint', 'RockArr'] + (['CliffArr'] if big else []):
+            i = unreal.CustomInput()
+            i.set_editor_property('input_name', name)
+            inputs.append(i)
+        node.set_editor_property('inputs', inputs)
+        node.set_editor_property('code', ROCK.replace('#if BIG', '#if %d' % (1 if big else 0)))
 
-    def expr(kind, x, y, **props):
-        e = mel.create_material_expression(mat, kind, x, y)
-        for key, value in props.items():
-            e.set_editor_property(key, value)
-        return e
+        def expr(kind, x, y, **props):
+            e = mel.create_material_expression(mat, kind, x, y)
+            for key, value in props.items():
+                e.set_editor_property(key, value)
+            return e
 
-    # (the world position wrapped every 4,096 m before it loses its precision, as Thornwake wraps it)
-    wrap = expr(unreal.MaterialExpressionFmod, -900, 0)
-    mel.connect_material_expressions(expr(unreal.MaterialExpressionWorldPosition, -1200, 0), '', wrap, 'A')
-    mel.connect_material_expressions(expr(unreal.MaterialExpressionConstant, -1200, 150, r=409600.0), '', wrap, 'B')
-    mel.connect_material_expressions(wrap, '', node, 'Pos')
-    mel.connect_material_expressions(expr(unreal.MaterialExpressionVertexNormalWS, -900, 200), '', node, 'N')
-    mel.connect_material_expressions(expr(unreal.MaterialExpressionVertexColor, -900, 300), '', node, 'Vc')
-    tint = expr(unreal.MaterialExpressionVertexInterpolator, -900, 450)
-    data = expr(unreal.MaterialExpressionAppendVector, -1100, 450)
-    mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData3Vector, -1400, 420, data_index=0,
-                                          const_default_value=unreal.LinearColor(1, 1, 1, 1)), '', data, 'A')
-    mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData, -1400, 560, data_index=3), '', data, 'B')
-    mel.connect_material_expressions(data, '', tint, '')
-    mel.connect_material_expressions(tint, '', node, 'Tint')
-    array = eal.load_asset('/Game/Terrain/TA_WwRock')
-    if array is None:
-        raise RuntimeError('WwAssets: /Game/Terrain/TA_WwRock missing: run Tools/ImportAssets.cmd first')
-    mel.connect_material_expressions(expr(unreal.MaterialExpressionTextureObject, -900, 650, texture=array, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_COLOR), '', node, 'RockArr')
-    mel.connect_material_property(node, '', unreal.MaterialProperty.MP_BASE_COLOR)
-    mel.connect_material_property(constant(mat, 0.9, -150, 200), '', unreal.MaterialProperty.MP_ROUGHNESS)
-    mel.connect_material_property(constant(mat, 0.3, -150, 300), '', unreal.MaterialProperty.MP_SPECULAR)
-    mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
+        # (the world position wrapped every 4,096 m before it loses its precision, as Thornwake wraps it)
+        wrap = expr(unreal.MaterialExpressionFmod, -900, 0)
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionWorldPosition, -1200, 0), '', wrap, 'A')
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionConstant, -1200, 150, r=409600.0), '', wrap, 'B')
+        mel.connect_material_expressions(wrap, '', node, 'Pos')
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionVertexNormalWS, -900, 200), '', node, 'N')
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionVertexColor, -900, 300), '', node, 'Vc')
+        tint = expr(unreal.MaterialExpressionVertexInterpolator, -900, 450)
+        data = expr(unreal.MaterialExpressionAppendVector, -1100, 450)
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData3Vector, -1400, 420, data_index=0,
+                                              const_default_value=unreal.LinearColor(1, 1, 1, 1)), '', data, 'A')
+        mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData, -1400, 560, data_index=3), '', data, 'B')
+        mel.connect_material_expressions(data, '', tint, '')
+        mel.connect_material_expressions(tint, '', node, 'Tint')
+        for y, name, asset in ((650, 'RockArr', 'TA_WwRock'),) + (((800, 'CliffArr', 'TA_WwCliff'),) if big else ()):
+            array = eal.load_asset('/Game/Terrain/' + asset)
+            if array is None:
+                raise RuntimeError('WwAssets: /Game/Terrain/%s missing: run Tools/ImportAssets.cmd first' % asset)
+            mel.connect_material_expressions(expr(unreal.MaterialExpressionTextureObject, -900, y, texture=array, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_COLOR), '', node, name)
+        mel.connect_material_property(node, '', unreal.MaterialProperty.MP_BASE_COLOR)
+        mel.connect_material_property(constant(mat, 0.9, -150, 200), '', unreal.MaterialProperty.MP_ROUGHNESS)
+        mel.connect_material_property(constant(mat, 0.3, -150, 300), '', unreal.MaterialProperty.MP_SPECULAR)
+        mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
+    return build
 
 
 def prop(mat):
@@ -406,7 +464,8 @@ def prop(mat):
     mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
 
 
-make('M_WwRock', rock)
+make('M_WwRock', rock(False))
+make('M_WwRockBig', rock(True))
 make('M_WwProp', prop)
 make('M_WwTerrain', terrain)
 make('M_WwWater', water)

@@ -599,8 +599,21 @@ void AWwTerrainStreamer::LoadTreeMeshes()
 	if (RockMaterial && PropMaterial)
 	{
 		RockMeshFirst = TreeMeshes.Num();
-		for (int32 Kind = 0; Kind < ww::FRocks::RockKinds; Kind++)
+		UMaterialInterface* Big = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwRockBig.M_WwRockBig"));
+		if (!Big) Big = RockMaterial;
+		for (int32 Kind = 0; Kind < ww::FRocks::CliffRock; Kind++)
 			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Rock(Kind), RockMaterial, *FString::Printf(TEXT("WwRock%d"), Kind)));
+		// Worn cliff blocks: six shapes near, the same coarse for the middle distance, the near ones again for a cliff's lip.
+		for (int32 Shape = 0; Shape < ww::FRocks::CliffShapes; Shape++)
+			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::CliffBlock(Shape, false), Big, *FString::Printf(TEXT("WwCliff%d"), Shape)));
+		for (int32 Shape = 0; Shape < ww::FRocks::CliffShapes; Shape++)
+			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::CliffBlock(Shape, true), Big, *FString::Printf(TEXT("WwCliffCoarse%d"), Shape)));
+		for (int32 Shape = 0; Shape < ww::FRocks::CliffShapes; Shape++) { UStaticMesh* Near = TreeMeshes[RockMeshFirst + ww::FRocks::CliffRock + Shape]; TreeMeshes.Add(Near); } // (a copy first: Add may move the array)
+		// The rock kit's formations: columns, slab stacks, tiered piles, tors; four variants each.
+		for (int32 Kind = 0; Kind < 4; Kind++)
+			for (int32 Variant = 0; Variant < 4; Variant++)
+				TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Formation(Kind, Variant), Big, *FString::Printf(TEXT("WwFormation%d_%d"), Kind, Variant)));
+		check(TreeMeshes.Num() - RockMeshFirst == ww::FRocks::RockKinds);
 		PropMeshFirst = TreeMeshes.Num();
 		for (int32 Kind = 0; Kind < ww::FRocks::PropKinds; Kind++)
 			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Prop(Kind), PropMaterial, *FString::Printf(TEXT("WwProp%d"), Kind)));
