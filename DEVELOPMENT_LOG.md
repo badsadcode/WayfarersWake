@@ -202,3 +202,11 @@
 * Within the hour of my giving him the list, Tom delivered all 28 world textures: albedos from his other AI friend, the remaining maps made in his own NoorMaterial. One consistent painted style, 1024 px.
 * Sorted into Ground, Stone and Cliff; metallic maps deleted at his word; swapped into the existing texture arrays so no shader input changed. Colour maps only for now.
 * The pictures themselves stay out of the repository (224 MB); the imported copies and his NoorMaterial project files go in.
+
+## 2026-11-10, session 1 (continued): deer
+
+* Deer from the free animal pack, with Thornwake's numbers: herds that graze, notice by sight, sound and scent, watch, bolt together; a blow, a kill, butchering.
+* My first test could not work: the test player flies, and I had told the deer to ignore a flying player. The second ended before the blow. The third showed the blow and the butchering.
+* The model has no bone called "head"; its front is found from its highest bone (an ear), rounded to the model's axis.
+* Tom on the new textures: the grass ground does not sit well with the grass tufts (still the old pixel sprites). He will try a hand-painted set in a Blizzard-like style, then a pixel-art set, and choose.
+* The packaged game would not start after the deer went in (exit at once, no log, no crash report): the deer code read the command line in a file-level constant, which runs before the engine has a command line. Harmless in the editor build, fatal in the packaged one. It now asks when first needed. Lesson kept: nothing at file level may touch the engine.

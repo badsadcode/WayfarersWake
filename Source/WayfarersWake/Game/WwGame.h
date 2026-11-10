@@ -123,6 +123,7 @@ private:
 	void ApplyWorld();
 	UPROPERTY(Transient) TObjectPtr<AWwTerrainStreamer> Streamer;
 	UPROPERTY(Transient) TObjectPtr<AWwSky> Sky;
+	UPROPERTY(Transient) TObjectPtr<class AWwWildlife> Wildlife;
 };
 
 /// Server rules: chooses the world (command line: -WwSeed= -WwType= -WwSizeKm= -WwRevision=) and hosts it.

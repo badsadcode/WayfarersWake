@@ -4,6 +4,7 @@
 #include "Game/WwTerrainStreamer.h"
 #include "Game/WwGame.h"
 #include "Game/WwSettings.h"
+#include "Game/WwWildlife.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/SkeletalMeshActor.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -154,6 +155,12 @@ FString AWwCharacter::UpdateDebug(FWwGameplay* Game)
 	if (Set.Changed(TEXT("debug.giveall"), GiveAllSeen)) Said = Game->GiveAll();
 	if (Set.Changed(TEXT("debug.heal"), HealSeen)) { Game->Restore(); Said = TEXT("Fed, warm, dry and well (debug)."); }
 	if (Set.Changed(TEXT("debug.spawn"), SpawnSeen)) SpawnCreature(Set.Int(TEXT("debug.creature")), (float)Set.Num(TEXT("debug.size")));
+	if (Set.Changed(TEXT("debug.herd"), HerdSeen) && Wildlife)
+	{
+		const APlayerController* Looking = Cast<APlayerController>(GetController());
+		Wildlife->SpawnHerd(GetActorLocation(), Looking ? Looking->GetControlRotation().Yaw : 0.f, 5000.f, 4);
+		Said = TEXT("A herd of deer, 50 m ahead (debug).");
+	}
 	if (Set.Changed(TEXT("debug.clear"), ClearSeen))
 	{
 		for (AActor* Creature : Spawned) if (Creature) Creature->Destroy();
@@ -563,6 +570,7 @@ void AWwCharacter::DebugDump()
 	Out += FString::Printf(TEXT("Camera: pitch %.2f, yaw %.2f (degrees; yaw 0 looks east, 90 south) · field of view %.0f · at (%.2f, %.2f, %.2f) m\n"), Pitch, Yaw, Camera->FieldOfView,
 		CameraAt.X / 100, CameraAt.Y / 100, CameraAt.Z / 100);
 	if (Sky) Out += Sky->DebugInfo() + TEXT("\n");
+	for (TActorIterator<AWwWildlife> It(GetWorld()); It; ++It) { Out += TEXT("Wildlife: ") + It->Describe() + TEXT("\n"); break; }
 	if (FWwGameplay* Game = GetGameInstance()->GetSubsystem<UWwWorldSubsystem>()->GetGameplay())
 	{
 		Out += FString::Printf(TEXT("Needs: %s (game time %.2f h)") LINE_TERMINATOR, *Game->NeedsLine(), Game->GetHours());
@@ -615,11 +623,14 @@ void AWwCharacter::UpdateGameplay(float DeltaSeconds, APlayerController* PC, boo
 	if (const FString Debugged = UpdateDebug(Game); !Debugged.IsEmpty()) Said = Debugged;
 	if (KeyPressed(EKeys::I)) bPackOpen = !bPackOpen;
 	if (KeyPressed(EKeys::C) && !bSwimming && !bFly) bCrouching = !bCrouching;
-	if (!bFly && KeyPressed(EKeys::E)) Said = Game->Use(X, Z, Feet);
+	// The wild animals: a dead one beside the player is butchered before anything else is picked up; a blow lands on an
+	// animal within reach before it lands on a tree.
+	if (!Wildlife) for (TActorIterator<AWwWildlife> It(GetWorld()); It; ++It) { Wildlife = *It; break; }
+	if (!bFly && KeyPressed(EKeys::E) && !(Wildlife && Wildlife->Butcher(Here, Game, Said))) Said = Game->Use(X, Z, Feet);
 	if (!bFly && !bPackOpen && KeyPressed(EKeys::LeftMouseButton))
 	{
 		const FVector Look = FRotationMatrix(FRotator(0, PC->GetControlRotation().Yaw, 0)).GetUnitAxis(EAxis::X);
-		Said = Game->Strike(X, Z, Look.X, Look.Y);
+		if (!(Wildlife && Wildlife->Hit(Here, PC->GetControlRotation().Yaw, 280.f, 35.f, Said))) Said = Game->Strike(X, Z, Look.X, Look.Y);
 		AttackSeconds = 0.8f; Pose = EPose::None;
 		SetActorRotation(FRotator(0, PC->GetControlRotation().Yaw, 0)); // (the blow goes where the player looks)
 	}

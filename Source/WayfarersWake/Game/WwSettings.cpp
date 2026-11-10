@@ -111,6 +111,8 @@ FWwSettings::FWwSettings()
 		Slider(TEXT("debug.size"), Debug, TEXT("Creatures"), TEXT("Size"), 0.1, 5, 0.1, 1, TEXT("x"), TEXT("Times the size given above. The sea creatures are already giants at 1.")).bSaved = false;
 		Add(TEXT("debug.spawn"), Debug, TEXT("Creatures"), TEXT("Put one in front of me"), Button, 0, TEXT("On the ground, or in the water if that is where you look. Sea creatures want deep water."));
 		Add(TEXT("debug.clear"), Debug, TEXT("Creatures"), TEXT("Take them all away"), Button, 0, TEXT(""));
+		Add(TEXT("debug.wildlife"), Debug, TEXT("Wildlife"), TEXT("Wild deer in the world"), Toggle, 1, TEXT("Herds of deer round you that graze, notice you and run. Off: they stand as they are."));
+		Add(TEXT("debug.herd"), Debug, TEXT("Wildlife"), TEXT("A herd 50 m ahead"), Button, 0, TEXT("Four deer that behave as wild ones do, to try stalking on."));
 	}
 	// ------------------------------------------------------------------ Sound (defaults: Tom's Thornwake settings)
 	Add(TEXT("sound.on"), Sound, TEXT("Volume"), TEXT("Sound"), Toggle, 1, TEXT("All sound on or off."));

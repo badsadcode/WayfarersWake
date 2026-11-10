@@ -24,6 +24,8 @@ public:
 	bool IsPlaced() const { return bPlaced; }
 	bool IsFlying() const { return bFly; }
 	bool IsSwimming() const { return bSwimming; }
+	/// Crouched (C): seen and heard from less far.
+	bool IsSneaking() const { return bCrouching; }
 	/// The placeholder mechanics on screen: the last thing that happened (for a few seconds) and whether the pack is open.
 	const FString& GetNotice() const { return Notice; }
 	bool IsPackOpen() const { return bPackOpen; }
@@ -56,6 +58,8 @@ private:
 	FString UpdateDebug(class FWwGameplay* Game);
 	void SpawnCreature(int32 Which, float Size);
 	UPROPERTY(Transient) TArray<TObjectPtr<AActor>> Spawned;
+	int32 HerdSeen = -1;
+	UPROPERTY(Transient) TObjectPtr<class AWwWildlife> Wildlife;
 	int32 GiveSeen = -1, GiveAllSeen = -1, HealSeen = -1, SpawnSeen = -1, ClearSeen = -1;
 	void UpdateBody(float DeltaSeconds, bool bSprinting);
 	enum class EPose : uint8 { None, Idle, Walk, Run, Swim, Attack, Crouch, Climb };

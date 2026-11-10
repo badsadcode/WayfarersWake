@@ -1,6 +1,7 @@
 #include "Game/WwGame.h"
 #include "Game/WwSettings.h"
 #include "Game/WwMenu.h"
+#include "Game/WwWildlife.h"
 #include "Game/WwMapScreen.h"
 #include "Widgets/SWeakWidget.h"
 #include "Framework/Application/SlateApplication.h"
@@ -634,6 +635,7 @@ void AWwGameState::ApplyWorld()
 	Params.ObjectFlags |= RF_Transient;
 	if (!Streamer) Streamer = World->SpawnActor<AWwTerrainStreamer>(AWwTerrainStreamer::StaticClass(), FTransform::Identity, Params);
 	if (!Sky && World->GetNetMode() != NM_DedicatedServer) Sky = World->SpawnActor<AWwSky>(AWwSky::StaticClass(), FTransform::Identity, Params);
+	if (!Wildlife) Wildlife = World->SpawnActor<AWwWildlife>(AWwWildlife::StaticClass(), FTransform::Identity, Params);
 }
 
 // ---------------------------------------------------------------------------------------------------- game mode
