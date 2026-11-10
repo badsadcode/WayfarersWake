@@ -106,3 +106,10 @@
 * Tom, before a walk with the dog: the renderers differ too much; port the mechanics and features without digging deep into graphics; if it is not the same it does not matter much; the Unreal-native version could later be a branch or fork; first finish the port. Recorded as D25.
 * So distant forests went in the short way: Thornwake's card placement and drawn silhouettes on crossed quads, riding the rock batches. Its impostor bake and fades were read and set aside.
 * The build hung again, this time with the accelerator already off: two compiler processes idle for ten minutes. Killing them fails the build; running it again works.
+
+## 2026-11-10, session 1 (continued): the first game rules
+
+* With Tom away and features first (D25): the system audit's game side brought up to date and the gameplay port laid out in nine steps.
+* Thornwake keeps its rules in a small engine-free layer (`Game/Gameplay`, about 2,200 lines) that its game talks to as host and client, alone or networked, and it has tests for them. So the port starts there: step 1's rules as engine-free C++ beside the generator, and Thornwake's tests for them ported as checks. 84 pass.
+* The engine builds without exceptions, so the catalogue reports a damaged content file through an error text instead of throwing.
+* Not done: any of it in the game. Next: the game's side (who is host, the pack and needs on screen, E to gather, the axe), which also needs the gatherable stones and berry bushes of the ground cover and the removals to reach the tile builder.

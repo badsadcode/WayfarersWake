@@ -46,7 +46,7 @@ Drawing the world (state on 2026-11-10; details in `MIGRATION_STATUS.md`):
 | Character | `AWwCharacter`: block figure, Thornwake's speeds, swimming, flight |
 | SeaStacks, lava look, local water (pouring, springs) | not ported |
 
-Gameplay: nothing ported yet. Thornwake's parts, in the order planned here (each depends on the ones before):
+Gameplay: the rules of step 1 are ported and tested headless (`Source/WayfarersWake/Rules`, 2026-11-10: Thornwake's `Game/Gameplay` Catalog, Inventory, Needs, PlacedObjects, the core of GameRules, and `ObjectRemovals`); the game does not use them yet. Thornwake's parts, in the order planned here (each depends on the ones before):
 
 | Step | Thornwake | Lines | What it is |
 |---|---|---|---|

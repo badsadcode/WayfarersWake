@@ -1,0 +1,38 @@
+{
+  "_comment": "Step 1 placeholder recipes: one pipeline for everything made or done (GAMEPLAY_DESIGN.md §2; D110). inputs: an item or a tag with a count; tools: tags something in the pack must carry (not used up); station: a tag of a placed object within reach that must be working (a lit fire); seconds: how long it takes; outputs: items made; places: an object put into the world instead.",
+  "recipes": [
+    { "id": "fishing_rod", "name": "Rough fishing rod", "inputs": [ { "item": "branch", "count": 1 }, { "item": "plant_fibre", "count": 4 } ],
+      "seconds": 6, "outputs": [ { "item": "fishing_rod", "count": 1 } ],
+      "description": "A branch and a line twisted from plant fibre (E on grass)." },
+    { "id": "bait", "name": "Berry bait", "inputs": [ { "item": "berries", "count": 1 } ],
+      "seconds": 2, "outputs": [ { "item": "bait", "count": 3 } ],
+      "description": "Berries mashed into three baits (fish need bait to bite)." },
+    { "id": "cook_fish", "name": "Cook a fish", "inputs": [ { "item": "raw_fish", "count": 1 } ], "station": "fire",
+      "seconds": 12, "outputs": [ { "item": "cooked_fish", "count": 1 } ] },
+    { "id": "stone_knife", "name": "Stone knife", "inputs": [ { "item": "stone", "count": 1 }, { "item": "branch", "count": 1 }, { "item": "plant_fibre", "count": 2 } ],
+      "seconds": 6, "outputs": [ { "item": "stone_knife", "count": 1 } ],
+      "description": "A stone flaked to an edge, bound into a split branch. Butchers game quickly." },
+    { "id": "spear", "name": "Hunting spear", "inputs": [ { "item": "branch", "count": 2 }, { "item": "stone", "count": 1 }, { "item": "plant_fibre", "count": 3 } ],
+      "seconds": 8, "outputs": [ { "item": "spear", "count": 1 } ],
+      "description": "A straight pole with a stone point lashed on." },
+    { "id": "bow", "name": "Rough bow", "inputs": [ { "item": "branch", "count": 2 }, { "item": "plant_fibre", "count": 8 } ],
+      "seconds": 10, "outputs": [ { "item": "bow", "count": 1 } ],
+      "description": "A springy stave, bent and strung with twisted fibre." },
+    { "id": "arrows", "name": "Arrows (5)", "inputs": [ { "item": "branch", "count": 2 }, { "item": "stone", "count": 1 }, { "item": "plant_fibre", "count": 2 } ],
+      "seconds": 8, "outputs": [ { "item": "arrow", "count": 5 } ],
+      "description": "Five straight shoots with knapped stone tips." },
+    { "id": "bone_arrows", "name": "Bone arrows (5)", "inputs": [ { "item": "branch", "count": 2 }, { "item": "bone", "count": 1 }, { "item": "plant_fibre", "count": 2 } ],
+      "seconds": 8, "outputs": [ { "item": "arrow", "count": 5 } ],
+      "description": "Five arrows tipped with sharpened bone." },
+    { "id": "stone_sword", "name": "Stone-edged sword", "inputs": [ { "item": "log", "count": 1 }, { "item": "stone", "count": 4 }, { "item": "plant_fibre", "count": 4 } ],
+      "seconds": 14, "outputs": [ { "item": "stone_sword", "count": 1 } ],
+      "description": "A hardwood blade split from a log, its edges set with sharp stone flakes." },
+    { "id": "cook_meat", "name": "Roast meat", "inputs": [ { "item": "raw_meat", "count": 1 } ], "station": "fire",
+      "seconds": 14, "outputs": [ { "item": "cooked_meat", "count": 1 } ] }
+  ],
+  "_comment_objects": "Behaviour of placed objects; the campfire and the lean-to are built as pieces now (gameplay_pieces.json, D121).",
+  "objects": [
+    { "id": "campfire", "name": "Campfire", "tags": ["fire"], "fuel": 90, "max_fuel": 240, "warmth": 14, "reach": 4 },
+    { "id": "lean_to", "name": "Lean-to", "tags": ["shelter"], "reach": 2.2 }
+  ]
+}

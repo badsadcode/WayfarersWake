@@ -1,0 +1,23 @@
+{
+  "_comment": "Animals (D120; models: Quaternius Ultimate Animated Animals, CC0, Assets/Animals). height = metres the model is scaled to (top of the head or antlers); length and radius = the body for hits; health; walk / run m/s; sight / hearing = metres it notices a hunter (a sprinting one is heard twice as far, a still one half; sight is less at night); temper: shy (flees), proud (may turn on a hunter who hurt it), predator (hunts players at night or close by); group = how many together; biomes = biome tags it lives in, avoid = tags it never lives in; weight = how common among those that fit; damage, attack_range (m), attack_seconds = its bite or kick; yield = what butchering gives; butcher = seconds it takes (a knife: 60 %). Placeholder values to tune.",
+  "animals": [
+    { "id": "deer", "name": "Deer", "model": "res://Assets/Animals/Deer.gltf", "height": 1.55, "length": 1.6, "radius": 0.45,
+      "health": 60, "walk": 1.5, "run": 11, "sight": 34, "hearing": 16, "temper": "shy", "group": [2, 4],
+      "biomes": ["temperate", "forest", "open", "wet", "lowland"], "avoid": ["hot", "dry", "ice", "rock", "fire", "corrupted"], "weight": 1.0,
+      "yield": [ { "item": "raw_meat", "count": 4 }, { "item": "hide", "count": 1 }, { "item": "bone", "count": 2 } ], "butcher": 7 },
+    { "id": "stag", "name": "Stag", "model": "res://Assets/Animals/Stag.gltf", "height": 2.05, "length": 1.8, "radius": 0.5,
+      "health": 95, "walk": 1.5, "run": 10.5, "sight": 36, "hearing": 15, "temper": "proud", "group": [1, 1],
+      "damage": 22, "attack_range": 1.9, "attack_seconds": 1.6,
+      "biomes": ["temperate", "forest", "lowland"], "avoid": ["hot", "dry", "ice", "rock", "fire", "corrupted"], "weight": 0.45,
+      "yield": [ { "item": "raw_meat", "count": 6 }, { "item": "hide", "count": 2 }, { "item": "bone", "count": 3 } ], "butcher": 9 },
+    { "id": "fox", "name": "Fox", "model": "res://Assets/Animals/Fox.gltf", "height": 0.55, "length": 0.8, "radius": 0.22,
+      "health": 22, "walk": 1.3, "run": 9, "sight": 26, "hearing": 18, "temper": "shy", "group": [1, 1],
+      "biomes": ["temperate", "forest", "cold", "open", "wet"], "avoid": ["hot", "ice", "fire", "corrupted"], "weight": 0.5,
+      "yield": [ { "item": "raw_meat", "count": 1 }, { "item": "hide", "count": 1 } ], "butcher": 4 },
+    { "id": "wolf", "name": "Wolf", "model": "res://Assets/Animals/Wolf.gltf", "height": 0.95, "length": 1.3, "radius": 0.35,
+      "health": 70, "walk": 1.6, "run": 10, "sight": 40, "hearing": 22, "temper": "predator", "group": [2, 4],
+      "damage": 12, "attack_range": 1.6, "attack_seconds": 1.3,
+      "biomes": ["forest", "cold", "conifer", "mountain"], "avoid": ["hot", "fire", "farmland"], "weight": 0.35,
+      "yield": [ { "item": "raw_meat", "count": 3 }, { "item": "hide", "count": 1 }, { "item": "bone", "count": 2 } ], "butcher": 6 }
+  ]
+}
