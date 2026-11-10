@@ -87,7 +87,7 @@ struct FTerrainStyle
 	FClimateSettings Climate;
 	double MouthBlend = 1, ShoreSlope = 1, BankVariation = 1, MeanderStrength = 1, WanderStrength = 1, WidthVariation = 1;
 
-	static constexpr int PortedRevision = 23;
+	static constexpr int PortedRevision = 27;
 	static FTerrainStyle For(const FWorldProfile& Profile) { FTerrainStyle s; s.LowlandDetail = 20 + Profile.HillHeight * .05; return s; }
 };
 
@@ -344,6 +344,7 @@ public:
 	std::unique_ptr<FBiomeMap> Biomes;
 	std::unique_ptr<class FCanyons> Canyons;   // revision 21
 	std::unique_ptr<class FCirques> Cirques;   // revision 23
+	std::unique_ptr<class FTroughs> Troughs;   // revisions 24-27
 	/// Big landform modules applied before erosion (revision 17 on).
 	std::vector<std::unique_ptr<FPlanLandform>> PlanLandforms;
 	double BuildMilliseconds = 0;
@@ -456,6 +457,7 @@ private:
 	double PoolStd = 1, ChannelStd = 1, CoastBand = .25;
 	const class FCanyons* Canyons = nullptr;
 	const class FCirques* Cirques = nullptr;
+	const class FTroughs* Troughs = nullptr;
 	std::vector<double> CoastAlongCache; // computed up front (the source caches lazily)
 };
 }

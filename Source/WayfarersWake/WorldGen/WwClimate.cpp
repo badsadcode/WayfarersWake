@@ -756,6 +756,13 @@ FWorldPlan::FWorldPlan(const FWorldManifest& InManifest, const FTerrainStyle& In
 	// Canyons (revision 21): placed on the final rivers, before climate. Cirques (revision 23) read the rivers.
 	if (Style.Revision >= 21 && !Style.Landform("canyons").Off()) Canyons = std::make_unique<FCanyons>(*this, Style.Landform("canyons"));
 	if (Style.Revision >= 23 && !Style.Landform("cirques").Off()) Cirques = std::make_unique<FCirques>(*this, Style.Landform("cirques"));
+	// Troughs (revision 24) lower the rivers they take in: after the canyons and cirques, which read the rivers.
+	// Fjords (revision 26) are troughs reaching the sea, placed by the same module after them.
+	{
+		bool fjords = Style.Revision >= 26 && !Style.Landform("fjords").Off();
+		if (Style.Revision >= 24 && (!Style.Landform("troughs").Off() || fjords))
+			Troughs = std::make_unique<FTroughs>(*this, Style.Landform("troughs"), fjords, Style.Landform("fjords"));
+	}
 	if (Stage) Stage(3);
 	Climate = std::make_unique<FClimate>(*this, Style.Climate);
 	if (Stage) Stage(4);

@@ -115,6 +115,7 @@ FTerrainSampler::FTerrainSampler(std::shared_ptr<const FWorldPlan> InPlan)
 	PoolSeed = SeedOf("pools");
 	Canyons = Plan->Canyons && Plan->Canyons->Count() > 0 ? Plan->Canyons.get() : nullptr;
 	Cirques = Plan->Cirques && Plan->Cirques->Count() > 0 ? Plan->Cirques.get() : nullptr;
+	Troughs = Plan->Troughs && Plan->Troughs->Count() > 0 ? Plan->Troughs.get() : nullptr; // (as the source: fjords alone do not count)
 	LandformSeed = SeedOf("landforms");
 	DuneAngle = Hashing::Unit(Hashing::Mix(LandformSeed)) * 6.283185307179586; // prevailing sand-moving wind of this world
 	BuildQuantiles([this](double u, double v) { return PoolNoise(u, v, 1, 0); }, PoolQuantiles, PoolStd);
@@ -148,11 +149,34 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 	double baseHeight = Continent(land, rasterLand, macroHeight, coastDistance, mountainShare);
 	double canyon = Canyons ? Canyons->Uplift(x, z) : 0; // (revision 21: raised land a river has cut through)
 	baseHeight += canyon;
+	// Revision 26: a fjord's mountain walls, raised like a canyon's land (rivers crossing them cut gorges).
+	if (Troughs && Troughs->HasFjords())
+	{
+		double rocky;
+		double lift = Troughs->Raise(x, z, coastDistance, rocky);
+		baseHeight += lift; canyon += lift;
+		if (rocky > 0) mountainShare = Mx(mountainShare, .5 * rocky * rocky); // (rugged near the walls, easing out)
+	}
+	// Revision 24: glacial troughs, the ground taken down to a flat floor between steep walls.
+	double troughFlat = 0, troughRock = 0, scree = 0; bool fjord = false;
+	if (Troughs) baseHeight = Troughs->Carve(x, z, baseHeight, troughFlat, troughRock, fjord, scree);
 	double inland, detail, roughness;
 	Detail(lx, lz, minWavelength, land, mountainShare, inland, detail, roughness);
+	if (troughFlat > 0) detail *= 1 - .85 * troughFlat;
+	// Revision 26: a fjord's floor below the sea is the sea (the walk ends here, as at the coast).
+	if (fjord && baseHeight + detail < 0)
+	{
+		FTerrainSample sea;
+		sea.Height = P.SeaLevel + baseHeight + detail; sea.Land = land; sea.Mountain = Mx(mountainShare, troughRock); sea.Detail = detail;
+		sea.Water = EWaterKind::Ocean; sea.WaterLevel = P.SeaLevel; sea.WaterBody = -1;
+		return sea;
+	}
 
-	double bare = 0, scree = 0;
+	double bare = 0, pointRock = 0;
 	if (!Plan->PlanLandforms.empty()) { double planScree; detail += PlanGround(x, z, minWavelength, bare, planScree); scree = Mx(scree, planScree); }
+	bare = Mx(Mx(bare, troughRock), pointRock);
+	scree = Mx(scree, pointRock); // (a point's bare rock draws as loose rock)
+	double beforeBiome = detail;
 
 	// Stage 3, biome terrain: wetland flattening and pool settings, then the biome landforms (dunes, mesas, spires).
 	bool wetland = false;
@@ -168,6 +192,8 @@ FTerrainSample FTerrainSampler::Sample(double x, double z, double minWavelength)
 	}
 	if (Style.Revision >= 12 && wetland && mods.Dunes + mods.Mesas + mods.Spires > 0)
 		detail = BiomeLandforms(x, z, lx, lz, detail, inland, minWavelength, mods);
+	// Revision 34: a glacial trough's floor is scoured flat of the biome's landforms too.
+	if (troughFlat > 0 && Style.Revision >= 34) detail = beforeBiome + (detail - beforeBiome) * (1 - .85 * troughFlat);
 
 	// Revision 23: cirques, carved after the biome's landforms so their tarns win.
 	if (Cirques) detail += Cirques->Carve(x, z, baseHeight + detail, detail);
@@ -255,6 +281,9 @@ FTerrainSample FTerrainSampler::Sea(double x, double z, double land, double coas
 	double depth = P.OceanDepth * DetMath::Smooth(-land / .6);
 	if (shore > 0 && coastDistance < 1e7) depth = Mx(depth, 25 * (1 - DetMath::Exp(-coastDistance * .035 * shore / 25)));
 	double seabed = P.SeaLevel - depth, plume = 0;
+	// Revision 27: islands and skerries off a fjord coast.
+	double isle = Troughs && Troughs->HasCoasts() ? Troughs->Skerries(x, z, land) : 0;
+	seabed += isle;
 	if (Style.MouthBlend > 0) seabed = MouthChannel(x, z, seabed, -1, plume);
 	seabed += Edits.Delta(x, z);
 	FTerrainSample out;
@@ -271,7 +300,7 @@ FTerrainSample FTerrainSampler::Sea(double x, double z, double land, double coas
 		}
 	}
 	if (seabed < P.SeaLevel) { out.Water = EWaterKind::Ocean; out.WaterLevel = P.SeaLevel; out.Plume = plume; }
-	else { out.Water = EWaterKind::None; out.WaterLevel = NaNValue(); }
+	else { out.Water = EWaterKind::None; out.WaterLevel = NaNValue(); out.Mountain = isle > 0 ? .5 : 0; }
 	return out;
 }
 

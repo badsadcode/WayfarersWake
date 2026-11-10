@@ -96,11 +96,13 @@ int main(int argc, char** argv)
 	struct FFixture { const char* File; int Revision; const FBiomeRegistry* Biomes; };
 	const FFixture fixtures[] = { { "terrain-build114.json", 16, &current }, { "terrain-build52.json", 15, &build51 },
 		{ "terrain-build115.json", 17, &current }, { "terrain-build116.json", 18, &current }, { "terrain-build117.json", 19, &current },
-		{ "terrain-r20.json", 20, &current }, { "terrain-build118.json", 21, &current }, { "terrain-r22.json", 22, &current }, { "terrain-build119.json", 23, &current } };
+		{ "terrain-r20.json", 20, &current }, { "terrain-build118.json", 21, &current }, { "terrain-r22.json", 22, &current }, { "terrain-build119.json", 23, &current },
+		{ "terrain-build120.json", 24, &current }, { "terrain-r25.json", 25, &current }, { "terrain-r26.json", 26, &current }, { "terrain-build121.json", 27, &current } };
 	for (const FFixture& fx : fixtures)
 	{
 		FJson expected;
 		if (!FJson::Parse(ReadFile(root + "/Tools/WorldGenTest/Fixtures/" + fx.File), expected, error)) { std::printf("fixture: %s\n", error.c_str()); return 2; }
+		if (only > 0 && fx.Revision != only) continue;
 		std::printf("Fingerprints %s (terrain revision %d)\n", fx.File, fx.Revision);
 		for (const FWorldProfile& profile : profiles)
 		{

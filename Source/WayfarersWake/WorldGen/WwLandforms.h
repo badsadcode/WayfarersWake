@@ -63,6 +63,8 @@ public:
 	double Uplift(double x, double z) const;
 	/// How much a river's valley side here is a canyon wall (0..1).
 	static double Wall(double uplift) { return DetMath::Smooth((uplift - 8) / 25); }
+	/// The middle of each canyon's river.
+	template <class F> void Probes(F&& Visit) const { for (const FCanyon& c : Canyons) Visit(c.X[c.X.size() / 2], c.Z[c.Z.size() / 2]); }
 private:
 	struct FCanyon { std::vector<double> X, Z, Along; double Depth = 0, Band = 0, Fade = 0, Length = 0; u64 Seed = 0; double MinX = 0, MinZ = 0, MaxX = 0, MaxZ = 0; };
 	int Cell(double v, double min) const;
@@ -82,12 +84,53 @@ public:
 	double Carve(double x, double z, double ground, double detail) const;
 	/// The tarn here, if any (level absolute).
 	bool Tarn(double x, double z, double ground, double& level) const;
+	/// Each tarn's middle and the cirque's radius.
+	template <class F> void Probes(F&& Visit) const { for (const FBowl& b : Bowls) Visit(b.Fx, b.Fz, b.Radius); }
 private:
 	struct FBowl { double Fx, Fz, Dx, Dz, Radius, Floor, Depth, Back, Front; u64 Seed; };
 	int Cell(double v, double min) const;
 	std::vector<FBowl> Bowls;
 	double MinX = 0, MinZ = 0, Sea = 0;
 	int GridSize = 0;
+	std::vector<int> GridStart, GridItems;
+};
+
+/// Glacial troughs with hanging valleys (revision 24), fjords (26) and fjord coasts with skerries (27).
+/// Building it lowers the rivers it takes in and, for fjord coasts, raises a coastal range in the plan's raster.
+class FTroughs
+{
+public:
+	FTroughs(FWorldPlan& Plan, FLandformSetting Setting, bool bFjords, FLandformSetting FjordSetting);
+	~FTroughs();
+	/// Number of troughs (fjords not counted).
+	int Count() const;
+	int FjordCount() const { return (int)Troughs.size() - Count(); }
+	bool HasFjords() const { return FjordCount() > 0; }
+	bool HasCoasts() const { return !Coasts.empty(); }
+	double Skerries(double x, double z, double land) const;
+	double Raise(double x, double z, double coastDistance, double& share) const;
+	double Carve(double x, double z, double ground, double& flat, double& rock, bool& sea, double& scree) const;
+
+	/// A fall where a river drops into a trough.
+	struct FFall { double X, Z, Height; bool bSide; };
+	std::vector<FFall> Falls;
+
+private:
+	struct FTrough;
+	struct FBuild;
+	struct FCoast { double X, Z, Radius; u64 Seed; };
+	int Cell(double v, double min) const;
+	void PlaceFjordCoasts(FBuild& Build, FLandformSetting Setting);
+	void PlaceFjords(FBuild& Build, FLandformSetting Setting);
+	const FTrough* FjordLine(FBuild& Build, const FRiverReach* From, int Point, double Length, double HalfFloor, double Slope, double Depth,
+		double EndDepth, u64 Seed, FLandformSetting Setting, std::vector<int>& ChainOut);
+	static void RaiseCoast(FWorldPlan& Plan, double cx, double cz, double radius, double lift, u64 seed);
+	bool Lower(FBuild& Build, const FTrough& c, const std::vector<int>& Chain, double sea, FLandformSetting Setting);
+
+	std::vector<std::unique_ptr<FTrough>> Troughs;
+	std::vector<FCoast> Coasts;
+	double MinX = 0, MinZ = 0;
+	int Revision = 0, GridSize = 0;
 	std::vector<int> GridStart, GridItems;
 };
 }
