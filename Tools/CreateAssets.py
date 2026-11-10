@@ -1,9 +1,15 @@
-# Creates the project's code-defined material assets (run with Tools/CreateAssets.cmd; safe to run again).
-#   M_WwTerrain  - lit ground coloured by vertex colour (biome palette from the generator; placeholder look)
-#   M_WwWater    - translucent lit water coloured by vertex colour (sea, lake, river, pond tints)
+# Creates the project's code-defined assets (run with Tools/CreateAssets.cmd; safe to run again).
+#   M_WwTerrain       - the ground: a port of Thornwake's classic ground shader (Tools/WwTerrainGround.hlsl)
+#   M_WwWater         - translucent lit water coloured by vertex colour (sea, lake, river, pond tints)
+#   T_WwTileDefault   - a small linear texture: the default of the per-tile ground-colour texture
+# Run Tools/ImportAssets.cmd first (the ground uses the rock texture it imports).
+import os
+import struct
+import zlib
 import unreal
 
 PATH = '/Game/Materials'
+HERE = os.path.dirname(os.path.abspath(__file__))
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 mel = unreal.MaterialEditingLibrary
 eal = unreal.EditorAssetLibrary
@@ -26,11 +32,90 @@ def make(name, build):
     unreal.log('WwAssets: created ' + full)
 
 
+def default_tile_texture():
+    """A 4x4 mid-green linear texture (grass + no snow), written as a PNG and imported."""
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack('>I', len(data)) + body + struct.pack('>I', zlib.crc32(body) & 0xffffffff)
+    row = b'\x00' + bytes([110, 120, 80, 0]) * 4
+    png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 4, 4, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(row * 4)) + chunk(b'IEND', b'')
+    folder = os.path.join(unreal.Paths.project_saved_dir(), 'WwAssets')
+    os.makedirs(folder, exist_ok=True)
+    filename = os.path.join(folder, 'T_WwTileDefault.png')
+    with open(filename, 'wb') as f:
+        f.write(png)
+    task = unreal.AssetImportTask()
+    task.filename = filename
+    task.destination_path = PATH
+    task.automated = True
+    task.replace_existing = True
+    task.save = True
+    tools.import_asset_tasks([task])
+    texture = eal.load_asset(PATH + '/T_WwTileDefault')
+    texture.set_editor_property('srgb', False)
+    texture.set_editor_property('compression_settings', unreal.TextureCompressionSettings.TC_VECTOR_DISPLACEMENTMAP)
+    texture.set_editor_property('mip_gen_settings', unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+    eal.save_loaded_asset(texture)
+    return texture
+
+
 def terrain(mat):
-    colour = mel.create_material_expression(mat, unreal.MaterialExpressionVertexColor, -400, 0)
+    with open(os.path.join(HERE, 'WwTerrainGround.hlsl'), 'r') as f:
+        code = f.read()
+    node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
+    node.set_editor_property('description', 'WwGround')
+    node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT4)
+    names = ['TileUv', 'Col', 'ColA', 'Ex', 'N', 'Rel', 'AbsZ', 'Tile', 'Cells', 'Sea', 'GroundTex', 'RockTex']
+    inputs = []
+    for name in names:
+        i = unreal.CustomInput()
+        i.set_editor_property('input_name', name)
+        inputs.append(i)
+    node.set_editor_property('inputs', inputs)
+    node.set_editor_property('code', code)
+
+    def wire(source, output, name):
+        if not mel.connect_material_expressions(source, output, node, name):
+            raise RuntimeError('WwAssets: cannot connect ' + name)
+
+    def expr(kind, y, **props):
+        e = mel.create_material_expression(mat, kind, -1000, y)
+        for key, value in props.items():
+            e.set_editor_property(key, value)
+        return e
+
+    wire(expr(unreal.MaterialExpressionTextureCoordinate, 0, coordinate_index=1), '', 'TileUv')
+    vertex_colour = expr(unreal.MaterialExpressionVertexColor, 100)
+    wire(vertex_colour, '', 'Col')
+    wire(vertex_colour, 'A', 'ColA')
+    wire(expr(unreal.MaterialExpressionTextureCoordinate, 200, coordinate_index=0), '', 'Ex')
+    wire(expr(unreal.MaterialExpressionVertexNormalWS, 300), '', 'N')
+    wire(expr(unreal.MaterialExpressionWorldPosition, 400, world_position_shader_offset=unreal.WorldPositionIncludedOffsets.WPT_CAMERA_RELATIVE), '', 'Rel')
+    height = expr(unreal.MaterialExpressionComponentMask, 500, r=False, g=False, b=True, a=False)
+    mel.connect_material_expressions(expr(unreal.MaterialExpressionWorldPosition, 550), '', height, '')
+    wire(height, '', 'AbsZ')
+    tile = expr(unreal.MaterialExpressionVectorParameter, 650, parameter_name='Tile', default_value=unreal.LinearColor(0, 0, 64, 32))
+    wire(tile, '', 'Tile')
+    wire(tile, 'A', 'Cells')
+    wire(expr(unreal.MaterialExpressionScalarParameter, 800, parameter_name='SeaLevel', default_value=0.0), '', 'Sea')
+    wire(expr(unreal.MaterialExpressionTextureObjectParameter, 900, parameter_name='TileData', texture=default_tile_texture(),
+              sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR), '', 'GroundTex')
+    rock = eal.load_asset('/Game/Terrain/T_Cliff_Rock_128')
+    if rock is None:
+        raise RuntimeError('WwAssets: /Game/Terrain/T_Cliff_Rock_128 missing: run Tools/ImportAssets.cmd first')
+    wire(expr(unreal.MaterialExpressionTextureObject, 1050, texture=rock, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_COLOR), '', 'RockTex')
+
+    colour = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -150, 0)
+    for key, value in (('r', True), ('g', True), ('b', True), ('a', False)):
+        colour.set_editor_property(key, value)
+    mel.connect_material_expressions(node, '', colour, '')
+    rough = mel.create_material_expression(mat, unreal.MaterialExpressionComponentMask, -150, 150)
+    for key, value in (('r', False), ('g', False), ('b', False), ('a', True)):
+        rough.set_editor_property(key, value)
+    mel.connect_material_expressions(node, '', rough, '')
     mel.connect_material_property(colour, '', unreal.MaterialProperty.MP_BASE_COLOR)
-    mel.connect_material_property(constant(mat, 0.92, -400, 200), '', unreal.MaterialProperty.MP_ROUGHNESS)
-    mel.connect_material_property(constant(mat, 0.15, -400, 300), '', unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(rough, '', unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(constant(mat, 0.3, -150, 300), '', unreal.MaterialProperty.MP_SPECULAR)
 
 
 def water(mat):

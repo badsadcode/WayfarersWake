@@ -75,6 +75,8 @@ bool FBiomeRegistry::Parse(const std::string& BiomesJson, const std::string& Set
 
 		const FJson& veg = b.Find("Vegetation") ? *b.Find("Vegetation") : Empty;
 		o.TreeDensity = veg.NumberOr("TreeDensity", 1); o.GrassAmount = veg.NumberOr("Grass", 1);
+		o.WaterTrees = veg.NumberOr("WaterTrees", 0);
+		{ double size[2]; if (ReadRange(veg, "TreeSize", size)) { o.TreeSizeMin = size[0]; o.TreeSizeMax = size[1]; } }
 		std::vector<std::pair<std::string, double>> treeSets;
 		if (const FJson* trees = veg.Find("Trees")) for (const auto& m : trees->Members) treeSets.emplace_back(m.first, m.second.Num);
 		else treeSets.emplace_back("BroadleafTrees", 1.0);
@@ -102,6 +104,7 @@ FBiomeRegistry FBiomeRegistry::ClassicOnly()
 	FBiomeRegistry r;
 	FBiome b;
 	b.Id = "classic"; b.Name = "Classic temperate";
+	b.bClassic = true;
 	b.Grass = HexColor("566b3f"); b.Dry = HexColor("7b8059"); b.Soil = HexColor("5c4a35"); b.ForestFloor = HexColor("3c4b2b"); b.Rock = HexColor("77766a");
 	b.Map = HexColor("6e9a4e");
 	b.Trees.emplace_back("Oak_A", 1.0);

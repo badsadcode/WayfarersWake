@@ -303,6 +303,8 @@ struct FBiome
 	FColor3 Grass, Dry, Soil, ForestFloor, Rock, Map;
 	double Snow = 0;
 	std::vector<std::pair<std::string, double>> Trees; // asset name, cumulative weight
+	double TreeSizeMin = .8, TreeSizeMax = 1.25, WaterTrees = 0;
+	bool bClassic = false; // the single classic temperate biome (biomes off): species by elevation
 	bool ShapesTerrain() const { return Pools > 0 || Flatten > 0 || Dunes > 0 || Mesas > 0 || Spires > 0; }
 };
 

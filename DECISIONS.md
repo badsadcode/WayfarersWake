@@ -39,3 +39,15 @@ The default map is the engine's empty `Entry`; the game mode and game state spaw
 
 **D9. Coordinates.**
 Generator metres: X east, Z south, height up (Thornwake's). Unreal: X = east, Y = south, Z = up, centimetres. No mirroring.
+
+**D13. Phase order: a faithful remake first, Unreal's own strengths second.**
+Tom, 10 November 2026: first remake the game in Unreal as close to the original as possible; improving it with what UE 5.9 offers comes after. So the look is ported from Thornwake's shaders and rules, not rebuilt from Unreal features. Ideas for the second phase are noted, not acted on.
+
+**D14. Ground colours travel as a small texture per tile.**
+Thornwake gives every ground vertex sixteen extra numbers (four custom channels). Unreal's procedural mesh has four half-precision UV pairs and one 8-bit colour, which is not enough, so the three biome colour sets (grass + snow, dry ground + plant cover, rock + wetness) go into one small texture per tile (three squares side by side, one texel per vertex, bilinear), read by the material through a pooled material instance. The remaining values ride in the vertex colour and two UV pairs. The shader maths is Thornwake's, in display space, converted at the end.
+
+**D15. Trees are instances in 16 km squares, shown with their tile.**
+Each terrain tile carries its trees and adds them to shared instanced-mesh components when it becomes visible, removes them when it leaves; so a tree stands exactly once whatever mix of levels is on screen. Components cover 16 km squares because instance positions are single precision (about 2 mm at the far edge). Levels 0-1 use the full model, levels 2-3 the distant one.
+
+**D16. Exposure adapts within limits.**
+A fixed exposure could not serve both a shaded forest floor and open sunlit ground (either black or washed out). Thornwake adapts; so does this: Unreal's histogram exposure clamped between a shade limit and a sun limit, both falling at night. Motion blur is off. Haze is light (fog density 0.0002): the first value, 0.004, greyed out everything beyond a kilometre.

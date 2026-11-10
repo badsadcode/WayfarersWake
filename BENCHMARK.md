@@ -60,6 +60,19 @@ Before mesh components were pooled, the same run went from 4,599 MB to 8,538 MB.
 
 Standing still in the 64 km world: 330 tiles, 222-240 fps, 1.7 ms average tile build.
 
+## With the ground look and forests (10 November 2026)
+
+64 km balanced world, seed 7319, 1280x720 window, editor build run with `-game`, standing still unless noted. Single runs of 20-40 s; not a controlled benchmark.
+
+| Scene | Trees shown | fps | Tile build (average, worker threads) |
+|---|---|---|---|
+| On the ground under the canopy | 79,102 | 200-220 | 5.7-8.5 ms |
+| 150-250 m above the start place | 79,102 | 125-160 | 5.9 ms |
+| 1,000 m above, looking over the valley | 79,102 | 170 | 5.7 ms |
+| Flying at 60 m/s, 1,100 m up | 79,526 | 72-81 (worst frame 74 ms) | 6.3 ms |
+
+Tile builds cost two to three times what they did (1.7-3 ms before): each vertex now also gets forest cover, climate and biome colours, and near tiles place their trees. The flying figure is the one to work on: adding and removing thousands of tree instances as tiles change is done on the game thread in one go.
+
 ## Not measured yet
 
-GPU and CPU frame breakdown, 1 % lows over long runs, the scene types of `Content/WorldData/benchmarks.json` (forest, lake, coast, mountain, flight), packaged (non-editor) builds, anything with vegetation.
+GPU and CPU frame breakdown, 1 % lows over long runs, the scene types of `Content/WorldData/benchmarks.json` (forest, lake, coast, mountain, flight), packaged (non-editor) builds.

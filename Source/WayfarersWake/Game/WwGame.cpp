@@ -6,6 +6,7 @@
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/VolumetricCloudComponent.h"
+#include "Components/PostProcessComponent.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -42,10 +43,27 @@ AWwSky::AWwSky()
 	SkyLight->Intensity = 1.f;
 	Fog = CreateDefaultSubobject<UExponentialHeightFogComponent>(TEXT("Fog"));
 	Fog->SetupAttachment(RootComponent);
-	Fog->FogDensity = 0.004f;
-	Fog->FogHeightFalloff = 0.05f;
+	// Light haze only: the atmosphere already fades the distance (0.004 washed out everything beyond a kilometre).
+	Fog->FogDensity = 0.0002f;
+	Fog->FogHeightFalloff = 0.02f;
+	FParse::Value(FCommandLine::Get(), TEXT("WwFog="), Fog->FogDensity);
 	Clouds = CreateDefaultSubobject<UVolumetricCloudComponent>(TEXT("Clouds"));
 	Clouds->SetupAttachment(RootComponent);
+	// Exposure adapts between open sun and deep shade (as Thornwake's does), within limits, so bright ground and snow
+	// do not grey out and a forest floor is not black; no motion blur.
+	Grade = CreateDefaultSubobject<UPostProcessComponent>(TEXT("Grade"));
+	Grade->SetupAttachment(RootComponent);
+	Grade->bUnbound = true;
+	FPostProcessSettings& G = Grade->Settings;
+	G.bOverride_MotionBlurAmount = true; G.MotionBlurAmount = 0.f;
+	G.bOverride_AutoExposureMethod = true; G.AutoExposureMethod = AEM_Histogram;
+	G.bOverride_AutoExposureBias = true; G.AutoExposureBias = 0.f;
+	G.bOverride_AutoExposureMinBrightness = true; G.bOverride_AutoExposureMaxBrightness = true;
+	G.bOverride_AutoExposureSpeedUp = true; G.AutoExposureSpeedUp = 2.f;
+	G.bOverride_AutoExposureSpeedDown = true; G.AutoExposureSpeedDown = 1.5f;
+	FParse::Value(FCommandLine::Get(), TEXT("WwEv="), ShadeEv);
+	FParse::Value(FCommandLine::Get(), TEXT("WwEvSun="), SunEv);
+	FParse::Value(FCommandLine::Get(), TEXT("WwHour="), Hour);
 }
 
 void AWwSky::Tick(float DeltaSeconds)
@@ -59,6 +77,8 @@ void AWwSky::Tick(float DeltaSeconds)
 	const float Day = (float)FMath::SmoothStep(-0.08, 0.12, ToSun.Z);
 	Sun->SetIntensity(8.f * Day);
 	Sun->SetCastShadows(Day > 0.02f);
+	Grade->Settings.AutoExposureMinBrightness = -FMath::Lerp(SunEv - 3.f, ShadeEv, Day);
+	Grade->Settings.AutoExposureMaxBrightness = -FMath::Lerp(SunEv - 3.f, SunEv, Day);
 
 	// Keep the planet's top (and the fog and clouds with it) under the view: correct horizon anywhere in the world.
 	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
@@ -142,8 +162,8 @@ void AWwGameMode::LogStats(const TCHAR* Why)
 	const double Average = Frames > 0 ? FrameTimeSum / Frames : 0;
 	const double P99 = FrameTimes.Num() > 0 ? FrameTimes[FMath::Min(FrameTimes.Num() - 1, (int32)(FrameTimes.Num() * 0.99))] : 0;
 	const FVector P = Player->GetActorLocation();
-	UE_LOG(LogWayfarer, Display, TEXT("WwStats[%s] pos=(%.0f, %.0f) m alt=%.0f m travelled=%.1f km tiles=%d desired=%d missing=%d pending=%d built=%lld avgBuild=%.2f ms maxCommit=%.2f ms fps=%.1f worstFrame=%.1f ms p99=%.1f ms mem=%.0f MB (start %.0f MB)"),
-		Why, P.X / 100, P.Y / 100, P.Z / 100, Player->GetDistanceTravelled() / 1000, Streamer->GetTileCount(), Streamer->GetDesiredCount(), Streamer->GetMissingCount(),
+	UE_LOG(LogWayfarer, Display, TEXT("WwStats[%s] pos=(%.0f, %.0f) m alt=%.0f m travelled=%.1f km tiles=%d trees=%d desired=%d missing=%d pending=%d built=%lld avgBuild=%.2f ms maxCommit=%.2f ms fps=%.1f worstFrame=%.1f ms p99=%.1f ms mem=%.0f MB (start %.0f MB)"),
+		Why, P.X / 100, P.Y / 100, P.Z / 100, Player->GetDistanceTravelled() / 1000, Streamer->GetTileCount(), Streamer->GetTreeCount(), Streamer->GetDesiredCount(), Streamer->GetMissingCount(),
 		Streamer->GetPendingCount(), Streamer->GetTilesBuilt(), Streamer->GetAverageBuildMs(), Streamer->GetMaxCommitMs(),
 		Average > 0 ? 1.0 / Average : 0.0, WorstFrame * 1000, P99 * 1000, FPlatformMemory::GetStats().UsedPhysical / 1048576.0, StartMemoryMb);
 	Frames = 0; FrameTimeSum = 0; WorstFrame = 0; FrameTimes.Reset();
@@ -207,8 +227,8 @@ void AWwHUD::DrawHUD()
 	if (const AWwGameState* State = GetWorld()->GetGameState<AWwGameState>())
 		if (const AWwTerrainStreamer* Streamer = State->GetStreamer())
 		{
-			Line(FString::Printf(TEXT("%.0f fps   tiles %d  building %d  missing %d   tile build %.1f ms"), 1.0 / FMath::Max(SmoothedFrame, 1e-4), Streamer->GetTileCount(),
-				Streamer->GetPendingCount(), Streamer->GetMissingCount(), Streamer->GetAverageBuildMs()), 16, Y, 1.0f);
+			Line(FString::Printf(TEXT("%.0f fps   tiles %d  trees %d  building %d  missing %d   tile build %.1f ms"), 1.0 / FMath::Max(SmoothedFrame, 1e-4), Streamer->GetTileCount(),
+				Streamer->GetTreeCount(), Streamer->GetPendingCount(), Streamer->GetMissingCount(), Streamer->GetAverageBuildMs()), 16, Y, 1.0f);
 			Y += 20;
 		}
 	Line(Player->IsFlying() ? TEXT("FLYING  WASD move, E/Q up/down, Shift fast, Ctrl very fast, F walk, Esc quit")

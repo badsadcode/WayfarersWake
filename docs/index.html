@@ -107,6 +107,40 @@
 
 <main>
 
+  <article class="panel" id="the-look">
+    <div class="date">Entry 3 · 10 November 2026</div>
+    <h2>Grass, rock and seventy-nine thousand trees</h2>
+    <p>Until today the ground was flat colour and nothing grew on it. This entry is the look of the land carried over from Thornwake: not a new look made with Unreal's tools, but the original's own rules, because Tom set the order of work plainly: first a remake as close to the original as possible, and only then whatever Unreal can add.</p>
+
+    <div class="stats">
+      <div class="stat"><b>79,102</b><span>trees standing around the player, each where Thornwake's rules put it</span></div>
+      <div class="stat"><b>17</b><span>tree species brought over from Thornwake's own woodland art</span></div>
+      <div class="stat"><b>1</b><span>ground shader, ported line by line from the original</span></div>
+      <div class="stat"><b>115&ndash;220 fps</b><span>standing still at 1280&times;720; less while flying fast</span></div>
+    </div>
+
+    <figure>
+      <img src="img/look-overview.png" alt="Screenshot from high above: green hills covered in scattered forest of green, orange and red trees with long shadows; beyond them bare pink and red rock country, and the sea on the horizon under a band of cloud.">
+      <figcaption>A kilometre above the 64 km world. The forest patches, the species and the bare red country beyond all come from the biome data.</figcaption>
+    </figure>
+
+    <h3>The ground</h3>
+    <p>Thornwake colours its ground in one long shader: grass that shifts between a fresh and a dry colour, a darker floor under forest, rock wherever the slope is steep, loose scree under cliffs, sand along the sea, mud and gravel on river banks, peat in wetland pools, snow by temperature. All of that is now in the Unreal material, with the same numbers. The rock uses Thornwake's own pixel-art rock texture, laid on from the sides so cliffs show layers.</p>
+
+    <h3>The trees</h3>
+    <p>Trees are not scattered at random. The world is divided into cells seven metres across, and each cell either holds one tree or none, decided from the seed, the forest cover, the biome, the height and the slope. So the same tree stands in the same place every time, on every machine. Near trees use the full models; farther ones a simpler model; beyond a kilometre and a half the ground itself takes the colour of a canopy.</p>
+    <figure>
+      <img src="img/look-forest.png" alt="Screenshot at ground level in shade: the block-figure explorer stands on a grassy bank among large pixel-textured oak trunks and white birches; a layered rock wall rises behind.">
+      <figcaption>Under the trees at the start place. The wall behind is real: the valley side climbs 700 m here.</figcaption>
+    </figure>
+
+    <h3>What went wrong on the way</h3>
+    <p>The first forest was grey: the imported tree materials were not prepared for being drawn thousands at a time, and Unreal quietly swapped in its default. The first pictures after that were almost black, because an exposure setting worked the opposite way from what was assumed. And for a while every picture from the air showed nothing but a rock wall. Part of that was a test switch that ignored the camera angle it was given; the rest was the land itself, a glacial valley with sides far steeper than expected. Tom spotted the same faulty switch from his side, as a loading screen that never ended.</p>
+
+    <h3>Still honest</h3>
+    <p>This has been looked at in screenshots, not yet set beside the Godot game. Left out for now: grass and flowers, bushes, rocks, the optional hand-painted ground textures, rain on the ground, tree collision and wind, and the plants that had no models in Thornwake either (palms, cacti). Large rock faces shimmer in bands from far away. Fast flight drops to about 75 frames a second while trees are added and removed.</p>
+  </article>
+
   <article class="panel" id="landforms">
     <div class="date">Entry 2 · 10 November 2026</div>
     <h2>Twenty-eight versions of the ground</h2>
@@ -245,7 +279,7 @@
     <ol class="trail">
       <li class="done"><b>1 · A working Unreal game</b><span>Project, player, camera, HUD, build and test commands. Compiled and launched.</span></li>
       <li class="now"><b>2 · Faithful terrain core</b><span>Done to terrain version 44, Thornwake's current, with exact parity, streamed with collision. All 23 world types. Left: sea stacks.</span></li>
-      <li><b>3 · A believable environment</b><span>Ground materials, forests and grass by biome, rocks, real rivers and shores, weather.</span></li>
+      <li class="now"><b>3 · A believable environment</b><span>Done: the original ground look and forests. Left: grass and ground cover, rocks, real rivers and shores, weather.</span></li>
       <li><b>4 · A playable exploration build</b><span>Choose a world on a creation screen, walk it, cross every kind of country.</span></li>
       <li><b>5 · Systems and persistence</b><span>Gathering, crafting, building, hunting, digging, saving only what the player changed.</span></li>
       <li><b>6 · Multiplayer and the long distances</b><span>Host and join, shared edits, precision tests at the far corners of the largest worlds.</span></li>

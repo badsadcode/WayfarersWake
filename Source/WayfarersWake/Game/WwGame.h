@@ -14,6 +14,8 @@ class USkyLightComponent;
 class UExponentialHeightFogComponent;
 class UVolumetricCloudComponent;
 
+class UPostProcessComponent;
+
 /// Sun, sky light, atmosphere, clouds and fog with a running time of day. Local to each machine; follows the view.
 UCLASS()
 class WAYFARERSWAKE_API AWwSky : public AActor
@@ -34,6 +36,10 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<USkyAtmosphereComponent> Atmosphere;
 	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UExponentialHeightFogComponent> Fog;
 	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UVolumetricCloudComponent> Clouds;
+	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UPostProcessComponent> Grade;
+	/// Exposure limits by day, in stops of brightening: deep shade and open sun (test switches -WwEv=, -WwEvSun=);
+	/// haze is the fog density (-WwFog=).
+	float ShadeEv = 3.2f, SunEv = 1.4f;
 };
 
 /// Replicates what defines the world; every machine builds the world from it and streams its own terrain.

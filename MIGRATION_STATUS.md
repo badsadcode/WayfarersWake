@@ -15,9 +15,12 @@ _Last updated 2026-11-10 (session 1, after the landform port). Keep this current
 | Terrain collision + player | Works | Player is placed by a line trace onto async-cooked tile collision (trace hit 77.7 m, generated 77.8 m) |
 | Water surfaces (sea, lakes, rivers, ponds) | First version | Flat translucent surfaces at the generator's levels; no waves, flow, foam or swimming |
 | Sky, sun, clouds, fog, time of day | First version | Engine sky atmosphere and volumetric clouds; the planet top follows the view |
+| Ground look (Thornwake's classic ground shader) | **Ported, visually inspected** | `M_WwTerrain`: biome grass / dry / rock colours, forest floor, rock texture on slopes and sheer faces, scree, beach sand, shore mud and gravel, wetland beds, snow, close-up speckle. Screenshots `docs/img/look-overview.png`, `look-forest.png`. Not compared side by side with the Godot game yet |
+| Forests (Thornwake's tree lattice and species rules) | **Ported, visually inspected** | `WwVegetation`: about 79,000 trees around the player from the 17 imported species, full models near, distant models to about 1.5 km; 115-200 fps at 1280x720. Positions not yet checked against Thornwake tree by tree |
+| Packaged Windows build (no editor needed) | **Built and launched** | `RunUAT BuildCookRun` (Development, 3 min) to `Dist/Windows/WayfarersWake.exe`, 980 MB, not in git. Launched once: world, ground, 79,102 trees, 200 fps standing still, 2.05 GB memory. Not played by hand |
 | Multiplayer shape | Designed in, never run | World settings replicate through `AWwGameState`; every machine rebuilds terrain locally |
 
-In the brief's terms: the generator is **tested**; the project is **compiled and launched**; terrain, collision and sky are **visually inspected** (two automatic screenshots in `docs/img/`); walking by hand with keyboard and mouse has **not been tried by a person**; multiplayer is **implemented, never run**.
+In the brief's terms: the generator is **tested**; the project is **compiled and launched**; terrain, collision, sky, ground look and forests are **visually inspected** (automatic screenshots in `docs/img/`); walking by hand with keyboard and mouse has **not been tried by a person**; multiplayer is **implemented, never run**.
 
 ## Not done / known gaps
 
@@ -25,8 +28,12 @@ In the brief's terms: the generator is **tested**; the project is **compiled and
 * The landforms are in the ground and water levels, but **the game does not draw them specially yet**: no falling water at waterfalls, no lava look (`FTerrainSample::Lava`), no scree stones (`Scree`), ponds and tarns drawn like any water.
 * Landform settings (amount and size per module) exist in `FTerrainStyle::Landforms` but there is no screen to set them; every module runs as designed.
 * No world-creation menu: the world is chosen on the command line.
-* No vegetation, rocks, props, wildlife, gameplay or saves.
-* The ground look is a placeholder (vertex colours from the biome palettes). Scene exposure is too bright and pale.
+* Trees have no collision, no wind, no felling, no middle-distance model (`_LOD1`), and stop at about 1.5 km (Thornwake's far forest is the ground's canopy colour, which is ported). The twelve placeholder plants (palms, cacti, cypresses and so on) have no models, so their biomes have no trees yet.
+* No grass, flowers, bushes, rocks, logs, props, wildlife, gameplay or saves.
+* Ground look, left out for now: Noor's pixel ground textures (the optional second style), the plant-patch tint (needs the flora fields), rain wetness and puddles, dug soil, lava, the second rock look where two biomes meet (one rock texture is used everywhere), rocky shore patches.
+* The rock texture shows moire bands on large rock faces seen from far away.
+* Exposure adapts between fixed limits tuned by eye on two scenes; night, dusk and snow have not been looked at.
+* The start place can be at the foot of a very tall valley wall (seed 7319: 700 m in 125 m). The heights are the generator's, and trees stand on such walls because Thornwake's slope test looks in one direction only; whether the Godot game shows the same has not been compared.
 * Wetland pools are drawn too large on coarse distant tiles (visible in `docs/img/far-world-4096km.png`).
 * The player walks on the bed of lakes and the sea (no swimming).
 * Memory during fast travel still rises slowly (+0.7 GB over 24 km, flattening). It needs a long soak test before it can be called bounded.
@@ -35,6 +42,16 @@ In the brief's terms: the generator is **tested**; the project is **compiled and
 * The engine logs two `LogEnhancedInput: Error ... Null player input` lines at start-up (not from project code; harmless so far).
 
 ## Commands that work
+
+Package a standalone build (about 3 minutes; output in `Dist/Windows`, run `WayfarersWake.exe`; `Dist/` is not in git):
+
+```
+D:\EPIC\UE_5.9\Engine\Build\BatchFiles\RunUAT.bat BuildCookRun -project=H:\BIW\WayfarersWake\WayfarersWake.uproject -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -archive -archivedirectory=H:\BIW\WayfarersWake\Dist -nocompileeditor -utf8output -unattended
+```
+
+Import Thornwake's art and build the materials (only needed again when the art or the ground shader changes; the results are in `Content/`): `Tools\ImportAssets.cmd`, then `Tools\CreateAssets.cmd`.
+
+Test switches added with the look: `-WwLook=pitch,yaw`, `-WwUp=<m>` (height for `-WwAutoFly`), `-WwHour=`, `-WwEv=` and `-WwEvSun=` (exposure limits), `-WwFog=`, `-WwProfile` (log the generated heights around the start place).
 
 ```bat
 rem Headless generator test (no engine): parity, sizes, tile timing
@@ -66,5 +83,5 @@ Controls: WASD, mouse look, Shift sprint, Space jump, F fly (E/Q up and down, Sh
 1. Play it by hand; fix what walking shows (seams, snagging, camera). Visit the landforms: none has been looked at up close in Unreal.
 2. Draw what the generator already knows: waterfalls, lava, scree, sea stacks.
 4. World-creation screen (type, size, seed, terrain version) and a world map.
-5. Ground materials, trees and grass from the biome data; fix exposure.
+5. Compare the look with the Godot game side by side (Tom's play test); then grass and ground cover, tree collision, the middle tree model, the placeholder plants.
 6. Long soak test for memory; benchmark scenes after `Content/WorldData/benchmarks.json`.

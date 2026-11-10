@@ -11,3 +11,4 @@ DerivedDataCache/
 *.VC.db
 *.VC.opendb
 .vsconfig
+Dist/

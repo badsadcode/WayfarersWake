@@ -106,7 +106,7 @@ void AWwCharacter::TryPlace()
 	{
 		double X = 0, Z = 0, Height = 0;
 		FString Override;
-		if (FParse::Value(FCommandLine::Get(), TEXT("WwAt="), Override)) // -WwAt=x,z in metres
+		if (FParse::Value(FCommandLine::Get(), TEXT("WwAt="), Override, false)) // -WwAt=x,z in metres
 		{
 			FString Left, Right;
 			if (Override.Split(TEXT(","), &Left, &Right)) { X = FCString::Atod(*Left); Z = FCString::Atod(*Right); Height = WorldSystem->GetSampler()->Height(X, Z); }
@@ -115,6 +115,14 @@ void AWwCharacter::TryPlace()
 		SpawnPoint = UWwWorldSubsystem::ToUnreal(X, Z, Height);
 		SetActorLocation(SpawnPoint + FVector(0, 0, 300), false, nullptr, ETeleportType::TeleportPhysics);
 		bHaveSpawn = true;
+		if (FParse::Param(FCommandLine::Get(), TEXT("WwProfile"))) // test switch: generated heights around the start place
+			for (int32 Dir = 0; Dir < 4; Dir++)
+			{
+				FString Line;
+				for (int32 Step = 0; Step <= 20; Step++)
+					Line += FString::Printf(TEXT(" %.0f"), WorldSystem->GetSampler()->Height(X + (Dir == 0 ? 25 : Dir == 1 ? -25 : 0) * Step, Z + (Dir == 2 ? 25 : Dir == 3 ? -25 : 0) * Step));
+				UE_LOG(LogWayfarer, Display, TEXT("Heights every 25 m to the %s:%s"), Dir == 0 ? TEXT("east") : Dir == 1 ? TEXT("west") : Dir == 2 ? TEXT("south") : TEXT("north"), *Line);
+			}
 		UE_LOG(LogWayfarer, Log, TEXT("Spawn at %.1f, %.1f (height %.1f m), biome %s"), X, Z, Height, *WorldSystem->BiomeNameAt(X, Z));
 	}
 	// Stand on the ground once its collision is in the scene.
@@ -127,11 +135,18 @@ void AWwCharacter::TryPlace()
 	SetActorLocation(Hit.ImpactPoint + FVector(0, 0, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5), false, nullptr, ETeleportType::TeleportPhysics);
 	bPlaced = true;
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
-		if (PC->IsLocalController()) { PC->SetInputMode(FInputModeGameOnly()); PC->bShowMouseCursor = false; PC->SetControlRotation(FRotator(-12, 35, 0)); }
+		if (PC->IsLocalController()) { PC->SetInputMode(FInputModeGameOnly()); PC->bShowMouseCursor = false; PC->SetControlRotation(FRotator(-12, 35, 0));
+			FString Look, Pitch, Yaw; // test switch -WwLook=pitch,yaw (degrees)
+			if (FParse::Value(FCommandLine::Get(), TEXT("WwLook="), Look, false) && Look.Split(TEXT(","), &Pitch, &Yaw)) PC->SetControlRotation(FRotator(FCString::Atod(*Pitch), FCString::Atod(*Yaw), 0)); }
 	LastPlace = GetActorLocation();
 	GetCharacterMovement()->GravityScale = 1;
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-	if (AutoFlySpeed > 0) { SetFly(true); AddActorWorldOffset(FVector(0, 0, 20000)); }
+	if (AutoFlySpeed > 0)
+	{
+		double Up = 200; // test switch -WwUp=<metres above the ground to fly at>
+		FParse::Value(FCommandLine::Get(), TEXT("WwUp="), Up);
+		SetFly(true); AddActorWorldOffset(FVector(0, 0, Up * 100.0));
+	}
 	UE_LOG(LogWayfarer, Log, TEXT("Player placed on the ground at Z %.1f m (generated height %.1f m)"), Hit.ImpactPoint.Z / 100.0, SpawnPoint.Z / 100.0);
 }
 
