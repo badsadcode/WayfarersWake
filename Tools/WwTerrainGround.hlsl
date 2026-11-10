@@ -34,6 +34,9 @@ struct FWwGround
 		float3 b = T.Sample(S, float3(u2, layer)).rgb;
 		return lerp(a, b, smoothstep(0.35, 0.65, vnoise(p * 0.045 + float2(layer * 7.3, 1.9))));
 	}
+	// A layer's mean colour: its smallest mip, which is the whole picture averaged. (Read from the texture, not written
+	// into the shader, so the ground's textures can be changed for another set while the game runs.)
+	float3 gmean(Texture2DArray T, SamplerState S, int layer) { return max(T.SampleLevel(S, float3(0.5, 0.5, layer), 20.0).rgb, 0.02); }
 	// The texture as detail over a biome colour: its light and shade around 1, with only a hint of its own hues.
 	float3 gdetail(Texture2DArray T, SamplerState S, int layer, float2 p, float3 mean)
 	{
@@ -44,7 +47,6 @@ struct FWwGround
 	}
 };
 FWwGround fn;
-static const float3 ground_mean[16] = { GROUND_MEANS };
 static const int G_GRASS = 0, G_DIRT = 1, G_SAND = 2, G_ROCK = 3, G_RIVER_BED = 4, G_SEA_BED = 5, G_FOREST = 6, G_GRAVEL = 7;
 static const int G_MUD = 8, G_WET_MUD = 9, G_MOSS = 10, G_SCREE = 11, G_SNOW = 12, G_PEAT = 13;
 float noor = step(0.5, Style.x), ground_variety = Style.y * noor;
@@ -87,17 +89,17 @@ float bare = smoothstep(0.62, 0.76, patches + (0.55 - cover) * 0.35 + (0.7 - bio
 	float w_gravel = smoothstep(0.35, 0.8, cold) * 0.75, w_sand = smoothstep(0.55, 0.95, dryness) * 0.55;
 	float w_moss = smoothstep(0.3, 0.7, biome_d.a) * 0.6;
 	float3 base = lerp(float3(0.40, 0.33, 0.25), biome_b.rgb * float3(0.8, 0.76, 0.7), 0.3);
-	float3 bare_detail = fn.gdetail(NoorTex, NoorTexSampler, G_DIRT, p, ground_mean[G_DIRT]);
-	base = lerp(base, float3(0.50, 0.48, 0.45), w_gravel); bare_detail = lerp(bare_detail, fn.gdetail(NoorTex, NoorTexSampler, G_GRAVEL, p, ground_mean[G_GRAVEL]), w_gravel);
-	base = lerp(base, float3(0.70, 0.63, 0.48), w_sand);   bare_detail = lerp(bare_detail, fn.gdetail(NoorTex, NoorTexSampler, G_SAND, p, ground_mean[G_SAND]), w_sand);
-	base = lerp(base, float3(0.28, 0.33, 0.19), w_moss);   bare_detail = lerp(bare_detail, fn.gdetail(NoorTex, NoorTexSampler, G_MOSS, p, ground_mean[G_MOSS]), w_moss);
+	float3 bare_detail = fn.gdetail(NoorTex, NoorTexSampler, G_DIRT, p, fn.gmean(NoorTex, NoorTexSampler, G_DIRT));
+	base = lerp(base, float3(0.50, 0.48, 0.45), w_gravel); bare_detail = lerp(bare_detail, fn.gdetail(NoorTex, NoorTexSampler, G_GRAVEL, p, fn.gmean(NoorTex, NoorTexSampler, G_GRAVEL)), w_gravel);
+	base = lerp(base, float3(0.70, 0.63, 0.48), w_sand);   bare_detail = lerp(bare_detail, fn.gdetail(NoorTex, NoorTexSampler, G_SAND, p, fn.gmean(NoorTex, NoorTexSampler, G_SAND)), w_sand);
+	base = lerp(base, float3(0.28, 0.33, 0.19), w_moss);   bare_detail = lerp(bare_detail, fn.gdetail(NoorTex, NoorTexSampler, G_MOSS, p, fn.gmean(NoorTex, NoorTexSampler, G_MOSS)), w_moss);
 	float3 b = base * lerp(float3(1.0, 1.0, 1.0), bare_detail, 0.9) * (0.92 + 0.16 * n3);
 	grass = lerp(grass, b, bare);
 }
 float3 woods = biome_a.rgb * float3(0.70, 0.71, 0.69); // forest floor / far canopy
-grass *= lerp(float3(1.0, 1.0, 1.0), fn.gdetail(NoorTex, NoorTexSampler, G_GRASS, p, ground_mean[G_GRASS]), 0.85 * g_detail * (1.0 - bare));
+grass *= lerp(float3(1.0, 1.0, 1.0), fn.gdetail(NoorTex, NoorTexSampler, G_GRASS, p, fn.gmean(NoorTex, NoorTexSampler, G_GRASS)), 0.85 * g_detail * (1.0 - bare));
 // Forest floor: Noor's leaf litter, a little of the biome's colour kept.
-woods = lerp(woods, fn.gtex(NoorTex, NoorTexSampler, G_FOREST, p) * lerp(float3(1.0, 1.0, 1.0), woods / max(ground_mean[G_FOREST], 0.02), 0.35), 0.9 * g_near);
+woods = lerp(woods, fn.gtex(NoorTex, NoorTexSampler, G_FOREST, p) * lerp(float3(1.0, 1.0, 1.0), woods / max(fn.gmean(NoorTex, NoorTexSampler, G_FOREST), 0.02), 0.35), 0.9 * g_near);
 float3 c = lerp(grass, woods, smoothstep(0.15, 0.75, forest) * 0.85);
 c = lerp(c, float3(0.470, 0.460, 0.350), smoothstep(1300.0, 2300.0, h) * 0.65 * min(1.0, biome_b.a)); // alpine meadow
 
@@ -113,7 +115,7 @@ rock_side /= 0.5;
 float rock_relief = dot(rock_side, float3(0.333, 0.333, 0.333)) - 1.0;
 float3 rock = biome_d.rgb * rock_side * (0.9 + 0.2 * fn.vnoise(float2(p.x + p.y, h) * 0.05));
 // Noor: rocky ground on gentle slopes uses Noor's cobbled rock in the biome's rock colour; cliffs keep theirs.
-float3 noor_rock = fn.gtex(NoorTex, NoorTexSampler, G_ROCK, p) * biome_d.rgb / max(dot(ground_mean[G_ROCK], float3(0.333, 0.333, 0.333)), 0.02);
+float3 noor_rock = fn.gtex(NoorTex, NoorTexSampler, G_ROCK, p) * biome_d.rgb / max(dot(fn.gmean(NoorTex, NoorTexSampler, G_ROCK), float3(0.333, 0.333, 0.333)), 0.02);
 rock = lerp(rock, noor_rock, (1.0 - smoothstep(0.3, 0.5, slope)) * 0.85 * g_near);
 // Bare rock: on steep slopes everywhere, and on gentler ground in rocky biomes (patchy).
 float exposure = Ex.x * (0.25 + 0.75 * smoothstep(0.35, 0.75, n2 + (n1 - 0.5) * 0.4));
@@ -121,7 +123,7 @@ float rocky = smoothstep(0.30, 0.52, slope + (n2 - 0.5) * 0.10 + mountain * 0.06
 	+ rock_relief * 0.16 + (fn.vnoise(p * 0.27 + 4.1) - 0.5) * 0.12);
 c = lerp(c, rock, rocky);
 // Noor: scree on the steeper slopes of mountains, below the bare rock.
-float3 noor_scree = fn.gtex(NoorTex, NoorTexSampler, G_SCREE, p) * biome_d.rgb / max(dot(ground_mean[G_SCREE], float3(0.333, 0.333, 0.333)), 0.02);
+float3 noor_scree = fn.gtex(NoorTex, NoorTexSampler, G_SCREE, p) * biome_d.rgb / max(dot(fn.gmean(NoorTex, NoorTexSampler, G_SCREE), float3(0.333, 0.333, 0.333)), 0.02);
 c = lerp(c, noor_scree, smoothstep(0.2, 0.5, mountain) * smoothstep(0.18, 0.28, slope + (n2 - 0.5) * 0.12) * (1.0 - smoothstep(0.34, 0.46, slope)) * 0.8 * g_near);
 // Scree: the talus under a wall is loose rock however gentle it lies, in a ragged-edged sheet.
 float talus = saturate(Ex.y);
@@ -130,7 +132,7 @@ c = lerp(c, rubble, smoothstep(0.15, 0.55, talus + (n2 - 0.5) * 0.3 + (fn.vnoise
 // Wet biomes (swamps): darker, muddier ground.
 c = lerp(c, c * float3(0.72, 0.7, 0.62), biome_d.a * smoothstep(0.3, 0.7, n2 + 0.2));
 float3 sand = lerp(float3(0.800, 0.725, 0.520), float3(0.700, 0.640, 0.470), n2);
-float3 sand_detail = fn.gdetail(NoorTex, NoorTexSampler, G_SAND, p, ground_mean[G_SAND]);
+float3 sand_detail = fn.gdetail(NoorTex, NoorTexSampler, G_SAND, p, fn.gmean(NoorTex, NoorTexSampler, G_SAND));
 sand *= lerp(float3(1.0, 1.0, 1.0), sand_detail, 0.9 * g_detail);
 c = lerp(c, sand, smoothstep(0.3, 0.65, wet + (n2 - 0.5) * 0.25) * (1.0 - smoothstep(0.25, 0.5, slope)));
 float3 bed = lerp(float3(0.360, 0.340, 0.260), float3(0.450, 0.420, 0.330), n2); // gravel and silt under water
@@ -175,7 +177,7 @@ bed = lerp(bed, peat, wetland);
 c = lerp(c, bed, submerged);
 // Snow from the biome and the cold, patchy at its edge; it does not hold on steep rock.
 float snow = smoothstep(0.25, 0.75, biome_a.a + (n1 - 0.5) * 0.35) * (1.0 - smoothstep(0.42, 0.62, slope + (n2 - 0.5) * 0.12));
-float3 snow_c = float3(0.93, 0.94, 0.96) * lerp(float3(1.0, 1.0, 1.0), fn.gdetail(NoorTex, NoorTexSampler, G_SNOW, p, ground_mean[G_SNOW]), 0.7 * g_detail);
+float3 snow_c = float3(0.93, 0.94, 0.96) * lerp(float3(1.0, 1.0, 1.0), fn.gdetail(NoorTex, NoorTexSampler, G_SNOW, p, fn.gmean(NoorTex, NoorTexSampler, G_SNOW)), 0.7 * g_detail);
 c = lerp(c, snow_c, snow);
 c *= 0.92 + 0.16 * n3;
 // Close-up detail (fades out by ~45 m): pixel-stepped speckle and small clumps at 6 cm texels.

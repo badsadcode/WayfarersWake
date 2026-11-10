@@ -447,6 +447,7 @@ void AWwTerrainStreamer::Commit(const TSharedPtr<FWwTileData>& Data)
 		Index = Slots.AddDefaulted();
 		Slots[Index].Mesh = Mesh;
 		Slots[Index].Material = UMaterialInstanceDynamic::Create(TerrainMaterial, this);
+		if (GroundSet) Slots[Index].Material->SetTextureParameterValue(TEXT("GroundSet"), GroundSet);
 	}
 	FWwTileSlot& Slot = Slots[Index];
 	UProceduralMeshComponent* Mesh = Slot.Mesh;
@@ -716,6 +717,11 @@ void AWwTerrainStreamer::LoadTreeMeshes()
 		RockMeshFirst = TreeMeshes.Num();
 		UMaterialInterface* Big = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Materials/M_WwRockBig.M_WwRockBig"));
 		if (!Big) Big = RockMaterial;
+		// (the stones wear instances of their materials, so the texture set can be changed under them: ApplyTextureSet)
+		RockLook = UMaterialInstanceDynamic::Create(RockMaterial, this);
+		BigRockLook = UMaterialInstanceDynamic::Create(Big, this);
+		RockMaterial = RockLook; Big = BigRockLook;
+		SetShown.Reset();
 		for (int32 Kind = 0; Kind < ww::FRocks::CliffRock; Kind++)
 			TreeMeshes.Add(WwBuildStaticMesh(this, ww::FPropShapes::Rock(Kind), RockMaterial, *FString::Printf(TEXT("WwRock%d"), Kind), Kind != ww::FRocks::Stone));
 		// Worn cliff blocks: six shapes near, the same coarse for the middle distance, the near ones again for a cliff's lip.
@@ -797,6 +803,7 @@ void AWwTerrainStreamer::Tick(float DeltaSeconds)
 			if (!PlantMesh) UE_LOG(LogWayfarer, Warning, TEXT("Plant meshes missing: run Tools/ImportAssets.cmd"));
 		}
 	}
+	ApplyTextureSet();
 	// How much is drawn (the menu's View page; the old test switches reach it there). A change draws the land again.
 	{
 		FWwSettings& Set = FWwSettings::Get();
@@ -899,6 +906,21 @@ void AWwTerrainStreamer::StartOcean()
 	}
 	FoamNet = WwMakeTexture(NetSize, PF_B8G8R8A8, MipCount, 4, All.GetData());
 	UE_LOG(LogWayfarer, Display, TEXT("Sea: textures and foam net made in %.0f ms"), (FPlatformTime::Seconds() - Started) * 1000.0);
+}
+
+void AWwTerrainStreamer::ApplyTextureSet()
+{
+	const FString Wanted = FWwSettings::Get().Option(TEXT("view.textures"));
+	if (Wanted == SetShown) return;
+	SetShown = Wanted;
+	auto Array = [&](const TCHAR* Kind) { const FString Name = FString::Printf(TEXT("TA_%s_%s"), Kind, *Wanted); return LoadObject<UTexture>(nullptr, *FString::Printf(TEXT("/Game/Terrain/Sets/%s.%s"), *Name, *Name)); };
+	UTexture* Ground = Array(TEXT("Ground")); UTexture* Stone = Array(TEXT("Stone")); UTexture* Cliff = Array(TEXT("Cliff"));
+	if (!Ground || !Stone || !Cliff) { UE_LOG(LogWayfarer, Warning, TEXT("Texture set %s is not in the project (run Tools/ImportTextures.cmd)"), *Wanted); return; }
+	GroundSet = Ground; StoneSet = Stone; CliffSet = Cliff;
+	for (FWwTileSlot& Slot : Slots) if (Slot.Material) Slot.Material->SetTextureParameterValue(TEXT("GroundSet"), GroundSet);
+	if (RockLook) RockLook->SetTextureParameterValue(TEXT("StoneSet"), StoneSet);
+	if (BigRockLook) { BigRockLook->SetTextureParameterValue(TEXT("StoneSet"), StoneSet); BigRockLook->SetTextureParameterValue(TEXT("CliffSet"), CliffSet); }
+	UE_LOG(LogWayfarer, Display, TEXT("Texture set: %s"), *Wanted);
 }
 
 void AWwTerrainStreamer::ApplyOcean(UMaterialInstanceDynamic* Water, double CornerX, double CornerZ) const

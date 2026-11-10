@@ -215,3 +215,8 @@
 
 * Hold to draw, release to loose; arrows that drop; a full draw kills a deer. Proved by a scripted shot at 73 m (the second of two arrows hit).
 * Tom added a second texture set (`Art/Textures/HandPainted`) and asked to switch between sets in the game.
+
+## 2026-11-11, session 1 (continued): texture sets side by side
+
+* Each folder under `Art/Textures` is now a set; the pixel art is a set too; the menu switches between them while the game runs. The materials stopped carrying each texture's mean colour as written numbers and read it from the texture's smallest mip, which is what made one material fit all sets.
+* Three sets photographed in a meadow and at a cliff: all load, all differ, no cost in speed.

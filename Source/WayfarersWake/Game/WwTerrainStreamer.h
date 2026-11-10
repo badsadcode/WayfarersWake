@@ -222,6 +222,14 @@ private:
 	bool bPlantShadows = true;
 	int32 DrawnSeen[5] = { -1, -1, -1, -1, -1 };
 	FLinearColor TouchShown = FLinearColor(0, 0, 0, 0);
+	/// The texture set in use (the menu's View page): its three arrays, and the stones' two materials pointed at them.
+	void ApplyTextureSet();
+	UPROPERTY(Transient) TObjectPtr<class UTexture> GroundSet;
+	UPROPERTY(Transient) TObjectPtr<class UTexture> StoneSet;
+	UPROPERTY(Transient) TObjectPtr<class UTexture> CliffSet;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> RockLook;
+	UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> BigRockLook;
+	FString SetShown;
 	FLinearColor WeatherShown = FLinearColor(0.496f, 0.868f, 0.69f, 0.5f);
 
 	TMap<FWwTileKey, FTile> Tiles;

@@ -7,6 +7,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
+#include "HAL/FileManager.h"
 #include "Internationalization/Regex.h"
 
 FWwSettings& FWwSettings::Get()
@@ -139,6 +140,17 @@ FWwSettings::FWwSettings()
 	Slider(TEXT("view.rays"), View, TEXT("Air"), TEXT("Light rays"), 0, 3, 0.05, 1, TEXT("x"), TEXT("How strongly the sun shows in the air.")).Needs = TEXT("view.volfog");
 	Slider(TEXT("view.mist"), View, TEXT("Air"), TEXT("Mist"), 0, 2, 0.05, 1, TEXT("x"), TEXT("Low mist on calm mornings, in the evening and in rain. 0 turns it off."));
 	Slider(TEXT("view.bloom"), View, TEXT("Air"), TEXT("Glow of bright things"), 0, 2, 0.05, 1, TEXT("x"), TEXT(""));
+	{
+		// The world's texture sets (Tools/ImportTextures.cmd makes one of each folder under Art/Textures, and "Pixel" of
+		// the original pixel art): whichever are in the project.
+		// (their names come from a list the import writes beside the game's other content files: in a packaged game the
+		// textures themselves are sealed in an archive and cannot be looked for on disk)
+		TArray<FString> Sets;
+		FFileHelper::LoadFileToStringArray(Sets, *(FPaths::ProjectContentDir() / TEXT("Gameplay/texture_sets.txt")));
+		Sets.RemoveAll([](const FString& Name) { return Name.TrimStartAndEnd().IsEmpty(); });
+		if (Sets.Num() == 0) Sets.Add(TEXT("Pixel"));
+		Choice(TEXT("view.textures"), View, TEXT("Ground and stone"), TEXT("Texture set"), Sets, FMath::Max(0, Sets.IndexOfByKey(FString(TEXT("Painted")))), TEXT("The textures of the ground, the stones and the cliffs. Changes at once, to compare sets."));
+	}
 	Add(TEXT("view.reflect"), View, TEXT("Water"), TEXT("Water mirrors its surroundings"), Toggle, 1, TEXT("The land, the trees and the clouds reflected in the water. Costs some speed."));
 	Add(TEXT("view.splashes"), View, TEXT("Water"), TEXT("Rain splashes"), Toggle, 1, TEXT("Small splashes where raindrops land near you, on the ground and on the water."));
 	Add(TEXT("view.stars"), View, TEXT("Light"), TEXT("Stars"), Toggle, 1, TEXT(""));

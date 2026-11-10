@@ -65,10 +65,6 @@ def default_tile_texture():
 def terrain(mat):
     with open(os.path.join(HERE, 'WwTerrainGround.hlsl'), 'r') as f:
         code = f.read()
-    # Each ground layer's mean colour (Tools/PrepareGround.py), so a texture can be used as detail over a biome colour.
-    with open(os.path.join(HERE, 'WwGroundMeans.txt'), 'r') as f:
-        means = ['float3(%s)' % ', '.join(line.split()) for line in f.read().splitlines() if line.strip()]
-    code = code.replace('GROUND_MEANS', ', '.join(means))
     node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -500, 0)
     node.set_editor_property('description', 'WwGround')
     node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT4)
@@ -117,10 +113,11 @@ def terrain(mat):
         raise RuntimeError('WwAssets: /Game/Terrain/T_Cliff_Rock_128 missing: run Tools/ImportAssets.cmd first')
     wire(expr(unreal.MaterialExpressionTextureObject, 1050, texture=rock, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_COLOR), '', 'RockTex')
 
-    noor = eal.load_asset('/Game/Terrain/TA_WwGround')
+    # (a parameter: the game points it at whichever texture set is chosen in the menu; Tools/ImportTextures.cmd makes the sets)
+    noor = eal.load_asset('/Game/Terrain/Sets/TA_Ground_Pixel')
     if noor is None:
-        raise RuntimeError('WwAssets: /Game/Terrain/TA_WwGround missing: run Tools/ImportAssets.cmd first')
-    wire(expr(unreal.MaterialExpressionTextureObject, 1200, texture=noor, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR), '', 'NoorTex')
+        raise RuntimeError('WwAssets: /Game/Terrain/Sets/TA_Ground_Pixel missing: run Tools/ImportTextures.cmd first')
+    wire(expr(unreal.MaterialExpressionTextureObjectParameter, 1200, parameter_name='GroundSet', texture=noor, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR), '', 'NoorTex')
     # x: ground style (0 classic colours, 1 Noor's textures: what Tom plays with), y: ground variety (bare and tint patches)
     wire(expr(unreal.MaterialExpressionVectorParameter, 1350, parameter_name='GroundStyle', default_value=unreal.LinearColor(1, 1, 0, 0)), '', 'Style')
 
@@ -436,8 +433,8 @@ float3 tx = RockArr.Sample(RockArrSampler, float3(p.z / tile, -p.y / tile, look)
 float3 ty = RockArr.Sample(RockArrSampler, float3(p.x / tile, p.z / tile, look)).rgb;
 float3 tz = RockArr.Sample(RockArrSampler, float3(p.x / tile, -p.y / tile, look)).rgb;
 // (each look's texture around its own mean brightness: its light and shade and a share of its hue, over the stone's colour)
-const float rock_means[6] = { ROCK_MEANS };
-float3 t = (tx * w.x + ty * w.y + tz * w.z) / rock_means[int(look)];
+float rock_mean = max(dot(RockArr.SampleLevel(RockArrSampler, float3(0.5, 0.5, look), 20.0).rgb, float3(0.333, 0.333, 0.333)), 0.05);
+float3 t = (tx * w.x + ty * w.y + tz * w.z) / rock_mean;
 float3 base = Vc * Tint.rgb;
 #if BIG
 {
@@ -446,16 +443,16 @@ float3 base = Vc * Tint.rgb;
 	float2 qy = float2(0.8 * p.x - 0.6 * p.z, 0.6 * p.x + 0.8 * p.z) / second_tile;
 	float2 qz = float2(0.8 * p.x - 0.6 * p.y, 0.6 * p.x + 0.8 * p.y) / second_tile;
 	float3 sx = RockArr.Sample(RockArrSampler, float3(qx, look)).rgb, sy = RockArr.Sample(RockArrSampler, float3(qy, look)).rgb, sz = RockArr.Sample(RockArrSampler, float3(qz, look)).rgb;
-	t = lerp(t, (sx * w.x + sy * w.y + sz * w.z) / rock_means[int(look)], 0.45);
+	t = lerp(t, (sx * w.x + sy * w.y + sz * w.z) / rock_mean, 0.45);
 	// Tom's cliff rocks on the sides: per rock look a first and a second texture, one over whole stretches of cliff.
 	const int cliff_first[6] = { 0, 3, 2, 3, 4, 1 }, cliff_second[6] = { 1, 1, 4, 5, 0, 2 };
-	const float cliff_means[6] = { CLIFF_MEANS }, cliff_contrast[6] = { 0.55, 0.85, 0.85, 0.85, 0.7, 0.85 };
+	const float cliff_contrast[6] = { 0.55, 0.85, 0.85, 0.85, 0.7, 0.85 };
 	int lk = int(look);
 	int layer = fn.rock_noise(p.xz / 260.0) > 0.58 ? cliff_second[lk] : cliff_first[lk];
 	float sides = w.x + w.z;
 	float3 cx = CliffArr.Sample(CliffArrSampler, float3(p.z / cliff_tile, -p.y / cliff_tile, layer)).rgb;
 	float3 cz = CliffArr.Sample(CliffArrSampler, float3(p.x / cliff_tile, -p.y / cliff_tile, layer)).rgb;
-	float3 cliff = (cx * w.x + cz * w.z) / max(sides, 1e-4) / cliff_means[layer];
+	float3 cliff = (cx * w.x + cz * w.z) / max(sides, 1e-4) / max(dot(CliffArr.SampleLevel(CliffArrSampler, float3(0.5, 0.5, layer), 20.0).rgb, float3(0.333, 0.333, 0.333)), 0.05);
 	cliff = lerp(float3(1.0, 1.0, 1.0), cliff, cliff_contrast[layer]);
 	float cliff_grey = dot(cliff, float3(0.333, 0.333, 0.333));
 	cliff = lerp(float3(cliff_grey, cliff_grey, cliff_grey), cliff, 0.45); // (less colour: the sandstone at full came out a hot orange-red)
@@ -488,10 +485,7 @@ def rock(big):
             i.set_editor_property('input_name', name)
             inputs.append(i)
         node.set_editor_property('inputs', inputs)
-        # (the mean brightness of each stone look and cliff face: Tools/PrepareTextures.py measures the textures)
-        with open(os.path.join(HERE, 'WwRockMeans.txt'), 'r') as f:
-            rock_means, cliff_means = [line.strip() for line in f.read().splitlines()[:2]]
-        node.set_editor_property('code', ROCK.replace('#if BIG', '#if %d' % (1 if big else 0)).replace('ROCK_MEANS', rock_means).replace('CLIFF_MEANS', cliff_means))
+        node.set_editor_property('code', ROCK.replace('#if BIG', '#if %d' % (1 if big else 0)))
 
         def expr(kind, x, y, **props):
             e = mel.create_material_expression(mat, kind, x, y)
@@ -513,11 +507,12 @@ def rock(big):
         mel.connect_material_expressions(expr(unreal.MaterialExpressionPerInstanceCustomData, -1400, 560, data_index=3), '', data, 'B')
         mel.connect_material_expressions(data, '', tint, '')
         mel.connect_material_expressions(tint, '', node, 'Tint')
-        for y, name, asset in ((650, 'RockArr', 'TA_WwRock'),) + (((800, 'CliffArr', 'TA_WwCliff'),) if big else ()):
-            array = eal.load_asset('/Game/Terrain/' + asset)
+        # (parameters: the game points them at the chosen texture set)
+        for y, name, asset, parameter in ((650, 'RockArr', 'TA_Stone_Pixel', 'StoneSet'),) + (((800, 'CliffArr', 'TA_Cliff_Pixel', 'CliffSet'),) if big else ()):
+            array = eal.load_asset('/Game/Terrain/Sets/' + asset)
             if array is None:
-                raise RuntimeError('WwAssets: /Game/Terrain/%s missing: run Tools/ImportAssets.cmd first' % asset)
-            mel.connect_material_expressions(expr(unreal.MaterialExpressionTextureObject, -900, y, texture=array, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_COLOR), '', node, name)
+                raise RuntimeError('WwAssets: /Game/Terrain/Sets/%s missing: run Tools/ImportTextures.cmd first' % asset)
+            mel.connect_material_expressions(expr(unreal.MaterialExpressionTextureObjectParameter, -900, y, parameter_name=parameter, texture=array, sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_COLOR), '', node, name)
         mel.connect_material_property(node, '', unreal.MaterialProperty.MP_BASE_COLOR)
         mel.connect_material_property(constant(mat, 0.9, -150, 200), '', unreal.MaterialProperty.MP_ROUGHNESS)
         mel.connect_material_property(constant(mat, 0.3, -150, 300), '', unreal.MaterialProperty.MP_SPECULAR)
