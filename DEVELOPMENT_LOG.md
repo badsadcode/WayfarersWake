@@ -119,3 +119,13 @@
 * Tom explained where Thornwake is going: atmosphere first, the present crafting and building only placeholders for multiplayer tests, multiplayer last. He asked for the light placeholder mechanics all the same, so there is something to do while walking (D26).
 * `FWwGameplay` runs the ported rules for the player: needs, the pack, E, the axe, eating, dying. The streamer takes felled trees out of its batches and draws trunks and piles as plain shapes.
 * A scripted run (`-WwPlayTest`) walks to the nearest tree and plays: fells it in 8 hits, cuts the trunk in 12, picks up 7 logs. The first run stood out of reach of any tree and proved only the grass and the eating.
+
+## 2026-11-10, session 1 (continued): day, night and weather
+
+* Tom: yes, day and weather next.
+* Clock, weather (the simple fronts model) and wind ported as engine-free code with 12 headless checks; then the sky actor: sun and moon from the clock, a star dome, the engine's clouds driven by the weather, cloud shadows, haze, rain and snow round the camera, lightning flashes; rain, wind and season reach the needs.
+* Lost an hour to a black picture that had nothing to do with the new code: my test camera stood inside a tree's crown. Found by taking the weather code out and seeing it was still black.
+* The engine's cloud material has no documentation in reach, so its coverage number was measured: four pictures from one viewpoint (-0.9 none, -0.4 scattered, 0.1 heavy, 0.6 a smooth deck). Before measuring I guessed its direction wrong twice, misled by a full deck that looks like smooth blue sky.
+* The star dome hid the real sky by day (a mesh drawn as sky stands in front of it); it now adds the sky's own light itself.
+* Night was black, then a blue day; settled on a dim blue night with moon shadows and faint stars.
+* Not done: wind in the plant, tree and water materials (still the fixed wind), rain sound, wet ground, the weather field Tom plays with.

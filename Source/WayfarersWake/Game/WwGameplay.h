@@ -25,6 +25,9 @@ public:
 	/// Every frame: game time passes, needs follow what the body feels, fires burn, berries and grass grow back.
 	/// X, Z, FeetY in metres; HourOfDay 0..24; GameHours: game hours passed this frame.
 	void Tick(double GameHours, double HourOfDay, double X, double Z, double FeetY, bool bSwimming, double Effort);
+	/// The weather of the moment, from the sky: the wind (where it blows to, m/s), rain 0..1, the season.
+	void SetWeather(double InWindX, double InWindZ, double InWindSpeed, double InRain, int InSeason, double InLatitude)
+	{ WindX = InWindX; WindZ = InWindZ; WindSpeed = InWindSpeed; Rain = InRain; Season = InSeason; Latitude = InLatitude; }
 	/// E: pick up what lies in a pile within reach, else pull long grass for fibre.
 	FString Use(double X, double Z, double FeetY);
 	/// The axe: a hit on the fallen trunk or the tree in front (DirX, DirZ: where the player looks, level).
@@ -64,6 +67,8 @@ private:
 	wr::FObjectRemovals Gone;
 	wr::FNeeds Needs;
 	double GameTime = 0;
+	double WindX = 0.496, WindZ = 0.868, WindSpeed = 5.5, Rain = 0, Latitude = 45;
+	int Season = 0;
 	TArray<TPair<int64, int64>> Felled;
 	bool bDied = false;
 	FString Error;

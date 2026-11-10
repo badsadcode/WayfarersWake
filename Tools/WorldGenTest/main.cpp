@@ -56,6 +56,7 @@ static std::string Fingerprint(const FTerrainSampler& s)
 }
 
 int OceanTest();
+int WeatherTest();
 int RulesTest(const std::string& root);
 
 int main(int argc, char** argv)
@@ -72,6 +73,7 @@ int main(int argc, char** argv)
 		else if (a.rfind("--dump=", 0) == 0) dump = a.substr(7);
 		else if (a == "--types") typesOnly = true;
 		else if (a == "--ocean") return OceanTest();
+		else if (a == "--weather") return WeatherTest();
 		else if (a == "--rules") return RulesTest(root);
 		else if (a.rfind("--dump-type=", 0) == 0) dumpType = a.substr(12);
 	}

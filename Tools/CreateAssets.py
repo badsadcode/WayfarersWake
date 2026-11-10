@@ -3,6 +3,7 @@
 #   M_WwWater         - the water: a port of Thornwake's water shader (Tools/WwWater.hlsl, WwSeaVertex.hlsl, WwSea.hlsl)
 #   M_WwUnderwater    - the underwater view, a post-process material (Tools/WwUnderwater.hlsl)
 #   M_WwFarTree       - distant tree cards (the drawn silhouettes of Thornwake's FarTree.gdshader)
+#   M_WwRain, M_WwStars - rain streaks and snowflakes; the night sky's star dome
 #   T_WwTileDefault   - a small linear texture: the default of the per-tile ground-colour texture
 # Run Tools/ImportAssets.cmd first (the ground uses the rock texture it imports).
 import os
@@ -671,3 +672,86 @@ def underwater(mat):
 
 
 make('M_WwUnderwater', underwater)
+
+
+def rain(mat):
+    """Rain streaks and snowflakes: small unlit see-through shapes the sky actor moves round the camera."""
+    mat.set_editor_property('blend_mode', unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property('shading_model', unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property('two_sided', True)
+    # Lit by the sky of the moment: grey by day, dark at night (the sun's light on the ground, softened).
+    light = mel.create_material_expression(mat, unreal.MaterialExpressionSkyAtmosphereLightIlluminanceOnGround, -700, 0)
+    colour = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -700, 200)
+    colour.set_editor_property('parameter_name', 'Colour')
+    colour.set_editor_property('default_value', unreal.LinearColor(0.10, 0.11, 0.12, 0.3))
+    times = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -400, 100)
+    mel.connect_material_expressions(light, '', times, 'A')
+    mel.connect_material_expressions(colour, '', times, 'B')
+    mel.connect_material_property(times, '', unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.connect_material_property(colour, 'A', unreal.MaterialProperty.MP_OPACITY)
+    mel.set_material_usage(mat, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
+
+
+STARS = r"""
+// The night sky's stars: points scattered over a dome that turns with the hours. Input: P (the pixel's place on the
+// dome, in the dome's own frame), Glow (0 by day .. the stars' brightness at night). Returns the light.
+struct F
+{
+	float hash3(float3 p) { p = frac(p * 0.1031); p += dot(p, p.yzx + 33.33); return frac((p.x + p.y) * p.z); }
+};
+F fn;
+float3 dir = normalize(P);
+float3 q = dir * 90.0;
+float3 cell = floor(q);
+float3 light = float3(0.0, 0.0, 0.0);
+for (int k = 0; k < 8; k++)
+{
+	float3 c = cell + float3(k & 1, (k >> 1) & 1, (k >> 2) & 1);
+	float h = fn.hash3(c);
+	if (h < 0.93) continue; // (most cells are empty)
+	float3 star = c + 0.5 * float3(fn.hash3(c + 7.1), fn.hash3(c + 13.7), fn.hash3(c + 29.3)) - 0.25;
+	float d = length(q - normalize(star) * 90.0);
+	float bright = (h - 0.93) / 0.07; // a few bright ones, many faint
+	float size = 0.10 + 0.14 * bright;
+	float3 tint = lerp(float3(1.0, 0.85, 0.7), float3(0.75, 0.85, 1.0), fn.hash3(c + 3.3));
+	light += tint * (bright * bright * 1.6 + 0.12) * saturate(1.0 - d / size);
+}
+return light * Glow * smoothstep(-0.05, 0.15, dir.z);
+"""
+
+
+def stars(mat):
+    """The star dome (drawn as sky: behind the clouds and the air)."""
+    mat.set_editor_property('shading_model', unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property('two_sided', True)
+    mat.set_editor_property('is_sky', True)
+    node = mel.create_material_expression(mat, unreal.MaterialExpressionCustom, -400, 0)
+    node.set_editor_property('description', 'WwStars')
+    node.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    inputs = []
+    for name in ['P', 'Glow']:
+        i = unreal.CustomInput()
+        i.set_editor_property('input_name', name)
+        inputs.append(i)
+    node.set_editor_property('inputs', inputs)
+    node.set_editor_property('code', STARS)
+    world = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1000, 0)
+    local = mel.create_material_expression(mat, unreal.MaterialExpressionTransformPosition, -750, 0)
+    local.set_editor_property('transform_source_type', unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_WORLD)
+    local.set_editor_property('transform_type', unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_LOCAL)
+    mel.connect_material_expressions(world, '', local, '')
+    mel.connect_material_expressions(local, '', node, 'P')
+    glow = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -750, 200)
+    glow.set_editor_property('parameter_name', 'Glow')
+    glow.set_editor_property('default_value', 0.0)
+    mel.connect_material_expressions(glow, '', node, 'Glow')
+    # The dome stands in front of the engine's own sky, so it shows that sky's light itself, with the stars on top.
+    air = mel.create_material_expression(mat, unreal.MaterialExpressionSkyAtmosphereViewLuminance, -400, 250)
+    both = mel.create_material_expression(mat, unreal.MaterialExpressionAdd, -150, 100)
+    mel.connect_material_expressions(node, '', both, 'A')
+    mel.connect_material_expressions(air, '', both, 'B')
+    mel.connect_material_property(both, '', unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
+make('M_WwRain', rain)
+make('M_WwStars', stars)

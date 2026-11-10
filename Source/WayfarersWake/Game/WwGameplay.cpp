@@ -40,7 +40,7 @@ bool FWwGameplay::Tree(long long cx, long long cz, double& x, double& z, double&
 	return true;
 }
 
-void FWwGameplay::Wind(double& x, double& z, double& speed) { x = UWwWorldSubsystem::WindX; z = UWwWorldSubsystem::WindZ; speed = UWwWorldSubsystem::WindSpeed; }
+void FWwGameplay::Wind(double& x, double& z, double& speed) { x = WindX; z = WindZ; speed = WindSpeed; }
 double FWwGameplay::Ground(double x, double z) { return Sampler ? Sampler->Height(x, z) : 0; }
 
 std::string FWwGameplay::WaterNear(double x, double z, double radius)
@@ -74,13 +74,14 @@ void FWwGameplay::Tick(double GameHours, double HourOfDay, double X, double Z, d
 	if (!IsValid() || GameHours <= 0) return;
 	GameTime += GameHours;
 	Rules->Step(GameHours * 60);
-	// What the body feels: the air (the place's climate and the hour), the wind, water, fires near by. No rain yet.
+	// What the body feels: the air (the place's climate, the season and the hour), the wind, rain, water, fires near by.
 	wr::FBodyInput Body;
-	double Temperature = 12, Rain = 0;
+	double Temperature = 12, YearlyRain = 0;
 	const ww::FWorldPlan& Plan = *Sampler->Plan;
-	Plan.Climate->At(X, Z, Ground(X, Z) - Plan.Profile().SeaLevel, Temperature, Rain);
-	Body.Air = wr::FNeeds::AirTemperature(Temperature, 45, 0, HourOfDay, 0);
-	Body.Wind = UWwWorldSubsystem::WindSpeed;
+	Plan.Climate->At(X, Z, Ground(X, Z) - Plan.Profile().SeaLevel, Temperature, YearlyRain);
+	Body.Air = wr::FNeeds::AirTemperature(Temperature, Latitude, Season, HourOfDay, Rain);
+	Body.Wind = WindSpeed;
+	Body.Rain = Rain;
 	Body.bSwimming = bSwimming;
 	Body.Fire = wr::FGameRules::FireWarmth(*Catalog, Rules->Objects, X, Z);
 	Body.Effort = Effort;

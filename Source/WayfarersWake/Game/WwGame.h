@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "WorldGen/WwWeather.h"
 #include "Components/SkyAtmosphereComponent.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
@@ -26,6 +27,15 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	/// Light and air settings in words (debug dump).
 	FString DebugInfo() const;
+	/// The clock, the weather and the wind of the moment (WwWeather).
+	const ww::FGameClock& GetClock() const { return Clock; }
+	const ww::FWeather& GetWeather() const { return Weather; }
+	const ww::FWind& GetWind() const { return Wind; }
+	/// Game hours that passed in the last frame (the clock runs day and night at their own speeds).
+	double GetHoursStep() const { return HoursStep; }
+	double GetLatitude() const { return Latitude; }
+	/// "Day 2, 14:30, light rain, wind 6 m/s from NW".
+	FString WeatherLine() const;
 	/// How far the camera is below a water surface, m (0 or less: above water).
 	float GetCameraDepth() const { return CameraDepth; }
 
@@ -44,12 +54,31 @@ private:
 	/// The underwater view (Thornwake's Underwater.gdshader as a post-process material), on while the camera is below a
 	/// water surface.
 	UPROPERTY(Transient) TObjectPtr<class UMaterialInstanceDynamic> Underwater;
+	/// The moon (a second light with its own disc in the sky), a flash for lightning, the clouds' material, the falling
+	/// rain or snow round the camera, and the star dome.
+	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UDirectionalLightComponent> Moon;
+	UPROPERTY(VisibleAnywhere, Category = "Sky") TObjectPtr<UDirectionalLightComponent> Flash;
+	UPROPERTY(Transient) TObjectPtr<class UMaterialInstanceDynamic> CloudMaterial;
+	UPROPERTY(Transient) TObjectPtr<class UInstancedStaticMeshComponent> Rain;
+	UPROPERTY(Transient) TObjectPtr<class UMaterialInstanceDynamic> RainMaterial;
+	UPROPERTY(Transient) TObjectPtr<class UStaticMeshComponent> Stars;
+	UPROPERTY(Transient) TObjectPtr<class UMaterialInstanceDynamic> StarMaterial;
+	void UpdateWeather(float DeltaSeconds, const FVector& View, float Day);
+	void UpdateRain(float DeltaSeconds, const FVector& View);
+	ww::FGameClock Clock;
+	ww::FWeather Weather;
+	ww::FWind Wind;
+	ww::FSkyState SkyNow;
+	double HoursStep = 0, LastHours = -1, Latitude = 45;
+	bool bClockSet = false, bWeatherTried = false, bSnowFalling = false;
+	float ForcedRain = -1, ForcedCloud = -1, FlashSeconds = 0, NextFlash = 8;
+	TArray<FVector> Drops;
 	void UpdateUnderwater(const FVector& View);
 	float CameraDepth = 0;
 	bool bUnderwaterTried = false;
 	/// Exposure limits by day, in stops of brightening: deep shade and open sun (test switches -WwEv=, -WwEvSun=);
 	/// haze is the fog density (-WwFog=).
-	float ShadeEv = 4.5f, SunEv = 0.6f, Saturation = 1.15f, ExposureBias = -0.7f;
+	float ShadeEv = 4.5f, SunEv = 0.6f, NightEv = 3.5f, Saturation = 1.15f, ExposureBias = -0.7f;
 };
 
 /// Replicates what defines the world; every machine builds the world from it and streams its own terrain.

@@ -401,7 +401,8 @@ void AWwCharacter::UpdateGameplay(float DeltaSeconds, APlayerController* PC, boo
 	const FVector Here = GetActorLocation();
 	const double X = Here.X / 100.0, Z = Here.Y / 100.0, Feet = (Here.Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) / 100.0;
 	// (developer flight is outside the game: no hunger or cold up there)
-	if (!bFly) Game->Tick(Sky ? Sky->HoursPerMinute * DeltaSeconds / 60.0 : 0.0, Sky ? Sky->Hour : 12.0, X, Z, Feet, bSwimming, bSprinting ? 1.0 : 0.0);
+	if (Sky) Game->SetWeather(Sky->GetWind().DirX, Sky->GetWind().DirZ, Sky->GetWind().Speed, Sky->GetWeather().Precipitation, Sky->GetClock().Season, Sky->GetLatitude());
+	if (!bFly) Game->Tick(Sky ? Sky->GetHoursStep() : 0.0, Sky ? Sky->Hour : 12.0, X, Z, Feet, bSwimming, bSprinting ? 1.0 : 0.0);
 	FString Said;
 	if (PC->WasInputKeyJustPressed(EKeys::I)) bPackOpen = !bPackOpen;
 	if (!bFly && PC->WasInputKeyJustPressed(EKeys::E)) Said = Game->Use(X, Z, Feet);
