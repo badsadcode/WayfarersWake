@@ -7,7 +7,8 @@
 //   Tile (noise x, noise z of the tile's corner, tile size m), Cells, Sea (m), GroundTex (per-tile biome colours),
 //   RockTex, NoorTex (Noor's 16 ground layers), Style (x: 1 = Noor's textures, y: ground variety).
 // Returns rgb = base colour (linear), a = roughness.
-// Not ported yet: plant-patch tint and plant-driven bare ground (need the flora fields), ground relief and parallax,
+// Returns also Bump: the surface normal with relief taken from the ground's own light and shade.
+// Not ported yet: plant-patch tint and plant-driven bare ground (need the flora fields), Thornwake's own relief and parallax,
 // rain wetness and puddles, dug soil, the lava map, the second rock look per biome pair.
 struct FWwGround
 {
@@ -192,4 +193,20 @@ detail = lerp(detail, float3(calm, calm, calm), max(snow, wet)); // calmer on sn
 c *= lerp(float3(1.0, 1.0, 1.0), detail, near_detail);
 float roughness = lerp(0.95, 0.55, snow);
 roughness = lerp(roughness, 0.55, damp * wetland * 0.7); // glistening mud at wetland pool margins
+// Relief (new here; Thornwake's ground relief and parallax are not ported): the ground has no normal maps, so the
+// surface is tilted by its own light and shade: where the texture is darker the ground is taken to lie lower. Worked
+// out from how the finished colour changes across the screen, so it costs no further texture reads. Near the camera
+// only (beyond, it would only shimmer); stronger on rock and bare ground than on grass, none on snow.
+float3 normal = normalize(N);
+{
+	float lum = dot(c, float3(0.3, 0.55, 0.15));
+	float3 dpx = ddx(Rel), dpy = ddy(Rel);
+	float dhx = ddx(lum), dhy = ddy(lum);
+	float3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
+	float det = dot(dpx, r1);
+	float3 grad = sign(det) * (dhx * r1 + dhy * r2);
+	float amount = (1.0 - smoothstep(25.0, 90.0, dist)) * lerp(4.0, 9.0, saturate(rocky + bare)) * (1.0 - snow);
+	normal = normalize(abs(det) * normal - amount * grad);
+}
+Bump = normal;
 return float4(pow(max(c, 0.0), 2.2), roughness);

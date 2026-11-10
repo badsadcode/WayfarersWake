@@ -79,7 +79,12 @@ def terrain(mat):
         i.set_editor_property('input_name', name)
         inputs.append(i)
     node.set_editor_property('inputs', inputs)
+    bump = unreal.CustomOutput()
+    bump.set_editor_property('output_name', 'Bump')
+    bump.set_editor_property('output_type', unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    node.set_editor_property('additional_outputs', [bump])
     node.set_editor_property('code', code)
+    mat.set_editor_property('tangent_space_normal', False)
 
     def wire(source, output, name):
         if not mel.connect_material_expressions(source, output, node, name):
@@ -130,6 +135,7 @@ def terrain(mat):
     mel.connect_material_property(colour, '', unreal.MaterialProperty.MP_BASE_COLOR)
     mel.connect_material_property(rough, '', unreal.MaterialProperty.MP_ROUGHNESS)
     mel.connect_material_property(constant(mat, 0.3, -150, 300), '', unreal.MaterialProperty.MP_SPECULAR)
+    mel.connect_material_property(node, 'Bump', unreal.MaterialProperty.MP_NORMAL)
 
 
 def with_sea(filename):
@@ -415,7 +421,10 @@ FWwRock fn;
 // (Thornwake's axes: x, up, z)
 float3 p = float3(Pos.x, Pos.z, Pos.y) / 100.0;
 float3 n = float3(N.x, N.z, N.y);
-float3 w = pow(abs(n), 4.0);
+// The texture is projected from the side each face truly looks to (from the surface itself, not from the mesh's
+// smoothed normals: on a low-poly stone those can point away from the face and the texture smeared along it).
+float3 face = normalize(cross(ddx(p), ddy(p)) + float3(0.0, 1e-6, 0.0));
+float3 w = pow(abs(face), 6.0);
 w /= w.x + w.y + w.z;
 float look = clamp(round(Tint.a), 0.0, 5.0);
 #if BIG

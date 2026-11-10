@@ -182,3 +182,11 @@
 * Tom's direction file read: single-player hunting, survival, exploration; sailing important; simple; no multiplayer or towns. First step agreed: the human character.
 * A Blender script rigs, skins and animates his six bodies; a second script imports them. Mistakes on the way, each found by looking: thigh bones placed out by the hands (hands hang at hip height in the A-pose and were averaged into the hips); splayed feet bound to the arms; animations missing from the file (muted tracks are not exported); the skin grey in the game (the material lacked the flag for skinned meshes), then pink and blue (the exported "colour" picture was the normal map, and the texture kept normal-map settings after the fix).
 * Tom, watching: skinning way off; then the run stiff and wide-legged. Both reworked. He suggested bodies of separate rigid parts as the next thing to try.
+
+## 2026-11-10, session 1 (continued): packs, stones, ground
+
+* Tom added asset packs to `Content` (free Fab animals, a whale, a megalodon, Synty Sidekick characters) and seven Synty POLYGON zips to `Art`. The repository is public: the packs and all zips are git-ignored. A commit of mine was staging the zips (`git add -A` without looking); stopped before anything was recorded, the partial objects pruned.
+* He showed NoorMD, his own program: a Markdown editor grown into an asset studio (trees with LODs, rocks, meshes, materials, sounds).
+* He named two faults: textures stretched on some sides of stones, and a flat ground with no normal map. Stones now choose their projection from the true face direction (screen derivatives) instead of the mesh's smoothed normals; the ground gets relief from its own light and shade. Both compile and run; the relief is subtle with 128 px textures and no stone was in my test pictures, so neither is confirmed by eye.
+* Gave him a list of the 28 textures the world uses (16 ground, 6 stone, 6 cliff) and asked for 2048 px, seamless, evenly lit, with normal maps: his other AI friend will make stylised ones.
+* Packaging had grown to 20 minutes and 1.1 GB: the packs' demo maps were being cooked. Only the game's own map is cooked now (not yet confirmed by a package run).
