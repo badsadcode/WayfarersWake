@@ -1,0 +1,291 @@
+{
+  "_comment": "Thornwake benchmark scenarios (docs/BENCHMARK.md). Every scene is a fixed place, view and hour in a world that generates the same on every PC; time and weather are frozen, V-Sync and the frame limit are off. Profiles set every graphics setting (others keep their defaults) so results compare across PCs; 'current' keeps the player's own settings.",
+  "version": 3,
+  "world": {
+    "id": "forest32",
+    "name": "Tom's test world: Vast continents (classic), 32 km, seed 42, dense forests",
+    "preset": "vast-world",
+    "seed": 42,
+    "gen": {
+      "gen.version": 0, "gen.size": 0, "gen.continents": 0, "gen.islands": -1, "gen.continent_size": 1.6, "gen.coast": 1.3,
+      "gen.ranges": 0, "gen.mountain_height": 1, "gen.mountain_width": 1, "gen.hill_height": 1, "gen.hills": 0.95,
+      "gen.plains": 0.6, "gen.rock": 1, "gen.coast_detail": 1, "gen.erosion": 1, "gen.shores": 1, "gen.rivers": 1,
+      "gen.river_width": 1, "gen.meanders": 1, "gen.wander": 1, "gen.width_variation": 1, "gen.banks": 1,
+      "gen.forest_cover": 2, "gen.forest_density": 1.6, "gen.rocks": 1, "gen.props": 1, "gen.lakes": 1, "gen.deltas": 1,
+      "gen.latitude": 45, "gen.latitude_span": 0, "gen.warmth": 0, "gen.wetness": 1, "gen.biome_placement": 0,
+      "gen.patch_size": 12
+    }
+  },
+  "worlds": {
+    "mountains42": { "name": "Tom's own world: Mountain kingdoms, seed 42 (default generation)", "preset": "mountainous", "seed": 42, "gen": {} },
+    "patch32": {
+      "name": "Tom's test world with biome patches (every biome near the start), for the atmosphere captures",
+      "preset": "vast-world",
+      "seed": 42,
+      "gen": {
+        "gen.version": 0, "gen.size": 0, "gen.continents": 0, "gen.islands": -1, "gen.continent_size": 1.6, "gen.coast": 1.3,
+        "gen.ranges": 0, "gen.mountain_height": 1, "gen.mountain_width": 1, "gen.hill_height": 1, "gen.hills": 0.95,
+        "gen.plains": 0.6, "gen.rock": 1, "gen.coast_detail": 1, "gen.erosion": 1, "gen.shores": 1, "gen.rivers": 1,
+        "gen.river_width": 1, "gen.meanders": 1, "gen.wander": 1, "gen.width_variation": 1, "gen.banks": 1,
+        "gen.forest_cover": 2, "gen.forest_density": 1.6, "gen.rocks": 1, "gen.props": 1, "gen.lakes": 1, "gen.deltas": 1,
+        "gen.latitude": 45, "gen.latitude_span": 0, "gen.warmth": 0, "gen.wetness": 1, "gen.biome_placement": 1,
+        "gen.patch_size": 12
+      }
+    }
+  },
+  "frozen": {
+    "time.paused": 1, "sim.weather": 0, "perf.vsync": 0, "perf.max_fps": 0, "sky.cloud_speed": 0, "sky.clouds": 0.35
+  },
+  "profiles": {
+    "low": {
+      "name": "Low",
+      "settings": {
+        "detail.grass_density": 0.5, "detail.grass_distance": 80, "view.terrain": 0, "view.horizon": 1, "view.terrain_detail": 1,
+        "view.trees": 0, "view.far_trees": 0, "view.scatter": 0.7, "fx.plant_shadows": 0, "fx.shadows": 1, "fx.ssao": 0,
+        "fx.ssil": 0, "fx.ssr": 0, "fx.water_reflections": 1, "fx.volumetric_fog": 0, "fx.sun_shafts": 0.3, "fx.light_beams": 0,
+        "fx.ground_fog": 0, "fx.ground_relief": 0, "fx.ground_parallax": 0, "sky.cloud_quality": 0, "sky.cloud_resolution": 0,
+        "perf.aa": 1, "perf.scale": 1, "view.fov": 70
+      }
+    },
+    "medium": {
+      "name": "Medium (game defaults)",
+      "settings": { "view.fov": 70 }
+    },
+    "high": {
+      "name": "High",
+      "settings": {
+        "detail.grass_density": 2, "detail.grass_distance": 200, "view.terrain": 2, "view.horizon": 2, "view.terrain_detail": 2,
+        "view.trees": 2, "view.far_trees": 2, "view.scatter": 1.5, "fx.plant_shadows": 1, "fx.shadows": 3, "fx.ssao": 1,
+        "fx.ssil": 1, "fx.ssr": 1, "fx.water_style": 5, "fx.foam_style": 1, "fx.ground_textures": 1, "fx.volumetric_fog": 1,
+        "fx.sun_shafts": 1, "fx.light_beams": 2, "fx.ground_fog": 2, "sky.cloud_quality": 2, "sky.cloud_resolution": 2,
+        "perf.aa": 3, "perf.scale": 1, "view.fov": 70
+      }
+    },
+    "ultra": {
+      "name": "Ultra (Tom's dense-forest settings)",
+      "settings": {
+        "detail.grass_density": 3, "detail.grass_distance": 400, "view.terrain": 3, "view.horizon": 2, "view.terrain_detail": 2,
+        "view.trees": 3, "view.far_trees": 4, "view.scatter": 4, "fx.plant_shadows": 1, "fx.shadows": 3, "fx.ssao": 1,
+        "fx.ssil": 1, "fx.ssr": 1, "fx.water_style": 5, "fx.foam_style": 1, "fx.ground_textures": 1, "fx.water_reflections": 2,
+        "fx.volumetric_fog": 1, "fx.sun_shafts": 3, "fx.god_ray_contrast": 0.9, "fx.light_beams": 4, "fx.ground_fog": 2,
+        "fx.haze": 1.95, "fx.glow": 1.5, "sky.cloud_quality": 3, "sky.cloud_resolution": 2, "perf.aa": 3, "perf.scale": 1,
+        "view.fov": 50
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "forest",
+      "name": "Dense forest, standing (Tom's forest B)",
+      "at": [-5286.068, 4604.638], "view": [62.938, 0.027, 5.288], "height": 0, "hour": 11.25,
+      "seconds": 20
+    },
+    {
+      "id": "lake",
+      "name": "Lake overlook from the air",
+      "at": [-5775.082, 5791.284], "view": [56.177, -0.084, 14.978], "height": 74, "hour": 16.25,
+      "seconds": 15
+    },
+    {
+      "id": "coast",
+      "name": "Coast",
+      "landmark": "Shore", "view": [1.57, -0.2, 10], "height": 0, "hour": 12,
+      "seconds": 15
+    },
+    {
+      "id": "mountains",
+      "name": "Foothills and mountains",
+      "landmark": "Foothills", "view": [1.57, -0.05, 14], "height": 0, "hour": 12,
+      "seconds": 15
+    },
+    {
+      "id": "flight",
+      "name": "Low flight over forest and lake (streaming)",
+      "path": [[-5286.068, 4604.638], [-5775.082, 5791.284], [-4200, 6900]], "altitude": 60, "speed": 70, "hour": 12,
+      "pitch": -0.12, "zoom": 8
+    },
+    {
+      "id": "atmo-forest-walk", "name": "Temperate forest, morning walk (08:30)", "world": "patch32", "move": "walk",
+      "path": [[-4705.8, 4410.6], [-4655.8, 4410.6]], "altitude": 0, "speed": 2.5, "hour": 8.5, "pitch": -0.05, "zoom": 6
+    },
+    { "id": "atmo-forest-noon", "name": "Temperate forest, noon (12:00), turning", "world": "patch32", "move": "turn",
+      "at": [-4641.8, 4412.6], "view": [0, -0.05, 6], "height": 0, "hour": 12, "seconds": 20 },
+    { "id": "atmo-forest-night", "name": "Temperate forest, night (23:00), turning", "world": "patch32", "move": "turn",
+      "at": [-4641.8, 4412.6], "view": [0, 0, 6], "height": 0, "hour": 23, "seconds": 15 },
+    { "id": "atmo-plains-evening", "name": "Plains, evening (17:30), turning", "world": "patch32", "move": "turn",
+      "at": [-4001.0, 5631.3], "view": [0, -0.03, 8], "height": 0, "hour": 17.5, "seconds": 20 },
+    { "id": "atmo-taiga-morning", "name": "Taiga, morning (09:00), turning", "world": "patch32", "move": "turn",
+      "at": [-1301.3, 3912.6], "view": [0, -0.05, 6], "height": 0, "hour": 9, "seconds": 20 },
+    { "id": "atmo-desert-noon", "name": "Desert, noon (13:00), turning", "world": "patch32", "move": "turn",
+      "at": [13911.8, -11306.2], "view": [0, -0.03, 8], "height": 0, "hour": 13, "seconds": 20 },
+    { "id": "atmo-swamp-dawn", "name": "Swamp, dawn (07:00), turning", "world": "patch32", "move": "turn",
+      "at": [-1399.8, -12060.2], "view": [0, -0.03, 6], "height": 0, "hour": 7, "seconds": 20, "settings": { "sky.clouds": 0.55 } },
+    { "id": "atmo-lake", "name": "Beside the lake, afternoon (16:15), turning", "world": "patch32", "move": "turn",
+      "at": [-5775.082, 5791.284], "view": [0, -0.05, 10], "height": 6, "hour": 16.25, "seconds": 20 },
+    { "id": "atmo-coast-dusk", "name": "Coast at dusk (20:00), turning", "world": "patch32", "move": "turn",
+      "at": [-3663.9, 6643.0], "view": [0, -0.03, 8], "height": 0, "hour": 20, "seconds": 20, "settings": { "sky.clouds": 0.5 } },
+    { "id": "art-water-horizon", "name": "Artefact: far water against the sky (sea, 15:00)", "world": "patch32", "face": "sea",
+      "at": [-3663.9, 6643.0], "view": [0, 0.02, 6], "height": 2, "hour": 15, "seconds": 6 },
+    { "id": "art-lake-horizon", "name": "Artefact: far water against the sky (lake, 16:15)", "world": "patch32", "face": "sea",
+      "at": [-5775.082, 5791.284], "view": [0, 0.02, 6], "height": 6, "hour": 16.25, "seconds": 6 },
+    { "id": "art-sun-low", "name": "Artefact: glare around a low sun (plains, 18:30)", "world": "patch32", "face": "sun",
+      "at": [-4001.0, 5631.3], "view": [0, 0.06, 8], "height": 0, "hour": 18.5, "seconds": 6 },
+    { "id": "art-forest-shafts", "name": "Artefact: sun shafts into the forest (09:00, facing the sun)", "world": "patch32", "face": "sun",
+      "at": [-4641.8, 4412.6], "view": [0, 0.32, 6], "height": 0, "hour": 9, "seconds": 6 },
+    { "id": "art-sky-seams", "name": "Artefact: sky seams (looking up, broken cloud, turning)", "world": "patch32", "move": "turn",
+      "at": [-4001.0, 5631.3], "view": [0, 0.55, 6], "height": 0, "hour": 12, "seconds": 20, "settings": { "sky.clouds": 0.6 } },
+    { "id": "rays-sunrise", "name": "M2 rays: temperate forest at sunrise (05:24, sun ~10° up, light mist), facing the sun (first person)", "world": "patch32",
+      "face": "sun", "at": [-3141.8, 2362.6], "view": [0, 0.12, 0.3], "height": 0, "hour": 5.4, "seconds": 6, "mist": [0.35],
+      "settings": { "fx.forest_rays": 1, "fx.light_model": 1, "fx.volumetric_fog": 1, "fx.ground_fog": 2 } },
+    { "id": "air-cliff", "name": "M2 air rays: lake below a cliff at sunrise (05:24, sun ~10° up, broken cloud), facing the sun", "world": "patch32",
+      "at": [-9202, -3036], "view": [-1.172, 0.08, 2.36], "height": 0, "hour": 5.4, "seconds": 12,
+      "settings": { "sky.clouds": 0.35, "time.season": 1 } },
+    { "id": "cloud-cumulus-close", "name": "M3 clouds: close cumulus, flying just under the base (14:00)", "world": "patch32",
+      "at": [-4001.0, 5631.3], "view": [0, 0.12, 8], "height": 1250, "hour": 14, "seconds": 6, "clouds": [0.8, 0, 0, 0], "settings": { "sky.clouds": 0.55 } },
+    { "id": "cloud-summit", "name": "M3 clouds: a cloud at a summit (Tom's world, 14:00)", "world": "mountains42",
+      "at": [-226338.0, 83152.4], "view": [-3.23, 0.23, 6.9], "height": 193, "hour": 14, "seconds": 6, "clouds": [0.6, 0, 0, 0], "settings": { "sky.clouds": 0.6 } },
+    { "id": "cloud-horizon-noon", "name": "M3 clouds: the horizon at noon over the plains", "world": "patch32",
+      "at": [-4001.0, 5631.3], "view": [0, 0.04, 8], "height": 0, "hour": 12, "seconds": 6, "clouds": [0.5, 0, 0.3, 0], "settings": { "sky.clouds": 0.45 } },
+    { "id": "cloud-horizon-sunset", "name": "M3 clouds: the horizon at sunset over the plains, facing the sun", "world": "patch32", "face": "sun",
+      "at": [-4001.0, 5631.3], "view": [0, 0.06, 8], "height": 25, "hour": 19.4, "seconds": 6, "clouds": [0.5, 0, 0.5, 0], "settings": { "sky.clouds": 0.45 } },
+    { "id": "cloud-broken-up", "name": "M3 clouds: broken cover, looking up (11:00)", "world": "patch32",
+      "at": [-4001.0, 5631.3], "view": [1.2, 0.55, 6], "height": 25, "hour": 11, "seconds": 6, "clouds": [0.7, 0, 0.2, 0], "settings": { "sky.clouds": 0.6 } },
+    { "id": "cloud-storm", "name": "M3 clouds: a storm deck coming over the plains (15:00)", "world": "patch32",
+      "at": [-4001.0, 5631.3], "view": [0, 0.1, 8], "height": 0, "hour": 15, "seconds": 6, "clouds": [0.3, 0.9, 0, 0], "settings": { "sky.clouds": 0.8 } },
+    { "id": "cloud-mountain-deck", "name": "M3 clouds: the deck seen from Tom's ridge (his dump 100445, 12:12)", "world": "mountains42",
+      "at": [-216238.6, 81823.6], "view": [10.289, -0.3, 0.1], "height": 388, "hour": 12.2, "seconds": 6, "settings": { "sky.clouds": 0.7 } },
+    { "id": "cloud-valley-peaks", "name": "M3 clouds: from a valley (1,900 m) toward the peaks (Tom's world, 10:40)", "world": "mountains42",
+      "at": [107878.7, -32103.2], "view": [9.666, 0.12, 2.36], "height": 2, "hour": 10.7, "seconds": 6, "clouds": [0.5, 0, 0.1, 0], "settings": { "sky.clouds": 0.55 } },
+    { "id": "cloud-turn", "name": "M3 clouds: a 10 s turn under broken cloud (ghosting check)", "world": "patch32", "move": "turn",
+      "at": [-4001.0, 5631.3], "view": [0, 0.2, 8], "height": 25, "hour": 13, "seconds": 10, "clouds": [0.6, 0, 0.3, 0], "settings": { "sky.clouds": 0.55 } },
+    { "id": "cloud-sea-valley", "name": "M3 clouds: under the broken cloud sea, a valley next to Tom's ridge (08:00)", "world": "mountains42",
+      "at": [-214638.0, 84223.0], "view": [0.585, 0.4, 0.1], "height": 40, "hour": 8, "seconds": 6, "settings": { "sky.clouds": 0.7, "sky.cloud_base": 1, "sky.cloud_sea": 2 } },
+    { "id": "cloud-sea-ridge", "name": "M3 clouds: the broken cloud sea from Tom's ridge, looking down (08:48)", "world": "mountains42",
+      "at": [-216238.6, 81823.6], "view": [11.489, -0.25, 0.1], "height": 388, "hour": 8.8, "seconds": 6, "settings": { "sky.clouds": 0.7, "sky.cloud_base": 1, "sky.cloud_sea": 2 } },
+    { "id": "cloud-bases-under", "name": "M3 clouds: cumulus bases from 400 m under them, looking up at an angle (13:00)", "world": "patch32", "at": [-4001.0, 5631.3], "view": [0.6, 0.38, 8], "height": 400, "hour": 13, "seconds": 6, "clouds": [0.8, 0, 0, 0], "settings": {"sky.clouds": 0.55} },
+    { "id": "cloud-bases-evening", "name": "M3 clouds: cumulus bases in the late afternoon, looking up (17:30)", "world": "patch32", "at": [-4001.0, 5631.3], "view": [2.4, 0.3, 8], "height": 60, "hour": 17.5, "seconds": 6, "clouds": [0.7, 0, 0.2, 0], "settings": {"sky.clouds": 0.6} },
+    { "id": "swamp-sunrise", "name": "M3 clouds: Tom's swamp at sunrise (dump 194902, 06:21)", "world": "mountains42",
+      "at": [-178138.5, -141323.7], "view": [17.119, -0.233, 2.161], "height": 93, "hour": 6.35, "seconds": 6, "settings": { "sky.clouds": 0.5 } },
+    { "id": "rays-dawn-turn", "name": "M2 rays: temperate forest, sunrise (05:24, sun ~10° up), light mist, turning", "world": "patch32",
+      "move": "turn", "at": [-3141.8, 2362.6], "view": [0, 0.08, 0.3], "height": 0, "hour": 5.4, "seconds": 20, "mist": [0.35],
+      "settings": { "fx.forest_rays": 3, "fx.light_model": 1, "fx.volumetric_fog": 1, "fx.ground_fog": 2, "perf.fog_quality": 3 } },
+    { "id": "rays-morning-turn", "name": "M2 rays: temperate forest, morning (08:30, sun ~40° up), light mist, turning", "world": "patch32",
+      "move": "turn", "at": [-3141.8, 2362.6], "view": [0, 0.08, 0.3], "height": 0, "hour": 8.5, "seconds": 20, "mist": [0.35],
+      "settings": { "fx.forest_rays": 3, "fx.light_model": 1, "fx.volumetric_fog": 1, "fx.ground_fog": 2, "perf.fog_quality": 3 } },
+    { "id": "rays-noon-turn", "name": "M2 rays: temperate forest, noon (12:00, sun ~68° up), light mist, turning", "world": "patch32",
+      "move": "turn", "at": [-3141.8, 2362.6], "view": [0, 0.08, 0.3], "height": 0, "hour": 12, "seconds": 20, "mist": [0.35],
+      "settings": { "fx.forest_rays": 3, "fx.light_model": 1, "fx.volumetric_fog": 1, "fx.ground_fog": 2, "perf.fog_quality": 3 } },
+    { "id": "rays-evening-turn", "name": "M2 rays: temperate forest, evening (18:30, sun ~10° up), light mist, turning", "world": "patch32",
+      "move": "turn", "at": [-3141.8, 2362.6], "view": [0, 0.08, 0.3], "height": 0, "hour": 18.5, "seconds": 20, "mist": [0.35],
+      "settings": { "fx.forest_rays": 3, "fx.light_model": 1, "fx.volumetric_fog": 1, "fx.ground_fog": 2, "perf.fog_quality": 3 } },
+    { "id": "rays-sunrise-turn", "name": "M2 rays: temperate forest at sunrise (05:24, light mist), turning", "world": "patch32",
+      "move": "turn", "at": [-3141.8, 2362.6], "view": [0, 0.08, 0.3], "height": 0, "hour": 5.4, "seconds": 20, "mist": [0.35],
+      "settings": { "fx.forest_rays": 1, "fx.light_model": 1, "fx.volumetric_fog": 1, "fx.ground_fog": 2 } },
+    {
+      "id": "atmo-ridge-clouds", "name": "Mountain ridge, flying through the cloud deck (10:00)", "world": "patch32", "move": "fly",
+      "path": [[-6952.0, -786.4], [-3952.0, -786.4]], "altitude": 260, "speed": 40, "hour": 10, "pitch": -0.08, "zoom": 8,
+      "settings": { "sky.clouds": 0.6 }
+    }
+  ],
+  "suites": {
+    "standard": { "name": "Standard (all scenes)", "scenarios": ["forest", "lake", "coast", "mountains", "flight"], "ablate": true },
+    "quick": { "name": "Quick (forest and flight)", "scenarios": ["forest", "flight"], "ablate": false },
+    "treedetail": {
+      "name": "Tree detail A/B (forest and lake: full-detail trees 80 / 140 / 220 m, tree shadows simplified / detailed)",
+      "scenarios": ["forest", "lake"],
+      "variants": [
+        { "view.tree_full_detail": 80, "fx.tree_shadows": 0 }, { "view.tree_full_detail": 140, "fx.tree_shadows": 0 },
+        { "view.tree_full_detail": 220, "fx.tree_shadows": 0 }, { "view.tree_full_detail": 80, "fx.tree_shadows": 1 },
+        { "view.tree_full_detail": 140, "fx.tree_shadows": 1 }, { "view.tree_full_detail": 220, "fx.tree_shadows": 1 }
+      ],
+      "ablate": false
+    },
+    "trees": {
+      "name": "Tree range A/B (forest, detailed trees 800 m to 6.4 km)",
+      "scenarios": ["forest", "lake"],
+      "variants": [ { "view.trees": 1 }, { "view.trees": 2 }, { "view.trees": 3 }, { "view.trees": 4 } ],
+      "ablate": true
+    },
+    "atmosphere": {
+      "name": "Atmosphere captures (stills and camera moves at fixed places, times and weather; Atmosphere 2.0 comparisons)",
+      "scenarios": ["atmo-forest-walk", "atmo-forest-noon", "atmo-forest-night", "atmo-plains-evening", "atmo-taiga-morning",
+        "atmo-desert-noon", "atmo-swamp-dawn", "atmo-lake", "atmo-coast-dusk", "atmo-ridge-clouds"],
+      "ablate": false, "capture": true, "stills": 8, "compare": "fx.light_model=0,1"
+    },
+    "artefacts": {
+      "name": "Atmosphere 2.0: the tracked artefacts, fixed shots (far water, low sun glare, forest sun shafts, sky seams)",
+      "scenarios": ["art-water-horizon", "art-lake-horizon", "art-sun-low", "art-forest-shafts", "art-sky-seams"],
+      "ablate": false, "capture": true, "stills": 3
+    },
+    "rays": {
+      "name": "Atmosphere 2.0 M2: forest rays shoot-out — every still with build 47, A (volumetric forest air) and B (screen-space shafts)",
+      "scenarios": ["art-forest-shafts", "atmo-forest-walk", "atmo-forest-noon"],
+      "ablate": false, "capture": true, "stills": 4, "compare": "fx.forest_rays=0,1,2"
+    },
+    "airrays": {
+      "name": "Atmosphere 2.0 M2: rays in open air, cost (off / low / medium / high)",
+      "scenarios": ["air-cliff"],
+      "variants": [ { "fx.air_rays": 0 }, { "fx.air_rays": 1 }, { "fx.air_rays": 2 }, { "fx.air_rays": 3 } ],
+      "ablate": false
+    },
+    "perfcheck": {
+      "name": "What the recent drafts cost with the player's settings (D193): grain smoothing, one pass, cloud layers, Living air, moonlight — each off vs on, A-B-A-B",
+      "scenarios": ["cloud-horizon-noon", "cloud-broken-up", "cloud-summit", "swamp-sunrise", "forest"],
+      "variants": [{ "sky.cloud_smooth": 0 }, { "sky.cloud_smooth": 1 }, { "sky.cloud_smooth": 0 }, { "sky.cloud_smooth": 1 },
+        { "fx.ambient_life": 0, "sky.cloud_layers": 0, "sky.cloud_one_pass": 0 }, { "fx.ambient_life": 2, "sky.cloud_layers": 1, "sky.cloud_one_pass": 1 },
+        { "fx.ambient_life": 0, "sky.cloud_layers": 0, "sky.cloud_one_pass": 0 }, { "fx.ambient_life": 2, "sky.cloud_layers": 1, "sky.cloud_one_pass": 1 }],
+      "ablate": false, "capture": false, "stills": 0
+    },
+    "cloudlevels": {
+      "name": "Cloud quality levels (D196): High / Medium / Low, A-B-C-A-B-C, the cloud scenes",
+      "scenarios": ["cloud-horizon-noon", "cloud-broken-up", "cloud-summit", "cloud-mountain-deck", "cloud-valley-peaks"],
+      "variants": [{ "sky.cloud_cost": 0 }, { "sky.cloud_cost": 1 }, { "sky.cloud_cost": 2 }, { "sky.cloud_cost": 0 }, { "sky.cloud_cost": 1 }, { "sky.cloud_cost": 2 }],
+      "ablate": false, "capture": true, "stills": 1
+    },
+    "cloudsoft": {
+      "name": "Cloud softness (D197): build 101 vs soft, close cumulus, broken, noon, summit, Tom's ridge",
+      "scenarios": ["cloud-cumulus-close", "cloud-broken-up", "cloud-horizon-noon", "cloud-summit", "cloud-mountain-deck"],
+      "variants": [{ "sky.cloud_soft": 0 }, { "sky.cloud_soft": 1 }],
+      "ablate": false, "capture": true, "stills": 1
+    },
+    "cloudbases": {
+      "name": "Cloud bases (D203): build 103 vs shaped, A-B, from under the bases",
+      "scenarios": ["cloud-bases-under", "cloud-cumulus-close", "cloud-broken-up", "cloud-bases-evening", "cloud-horizon-noon"],
+      "variants": [{ "sky.cloud_bases": 0 }, { "sky.cloud_bases": 1 }],
+      "ablate": false, "capture": true, "stills": 1
+    },
+    "posterize": {
+      "name": "Posterized clouds (D198): cloud shading build 101 vs smooth",
+      "scenarios": ["cloud-horizon-noon", "cloud-broken-up", "cloud-mountain-deck"],
+      "variants": [{ "sky.cloud_shading": 0 }, { "sky.cloud_shading": 1 }],
+      "ablate": false, "capture": true, "stills": 1
+    },
+    "cloudfine": {
+      "name": "Cloud detail (D199): build 101 vs fine, A-B-A-B",
+      "scenarios": ["cloud-cumulus-close", "cloud-horizon-noon", "cloud-broken-up", "cloud-mountain-deck"],
+      "variants": [{ "sky.cloud_fine": 0 }, { "sky.cloud_fine": 1 }, { "sky.cloud_fine": 0 }, { "sky.cloud_fine": 1 }],
+      "ablate": false, "capture": true, "stills": 1
+    },
+    "cloudcost": {
+      "name": "Atmosphere 2.0 M3: what the clouds cost (volumetric v2, volumetric v1 sky only, flat) at the cloud scenes and Tom's spots",
+      "scenarios": ["cloud-horizon-noon", "cloud-broken-up", "cloud-summit", "cloud-mountain-deck", "cloud-valley-peaks", "cloud-sea-valley", "cloud-sea-ridge", "swamp-sunrise"],
+      "variants": [{ "sky.cloud_quality": 3 }, { "sky.cloud_quality": 2 }, { "sky.cloud_quality": 1 }],
+      "ablate": false, "capture": true, "stills": 1
+    },
+    "clouds": {
+      "name": "Atmosphere 2.0 M3: cloud acceptance captures (close cumulus, summit, horizon noon and sunset, broken, storm, Tom's mountain deck, turn)",
+      "scenarios": ["cloud-cumulus-close", "cloud-summit", "cloud-horizon-noon", "cloud-horizon-sunset", "cloud-broken-up", "cloud-storm", "cloud-mountain-deck", "cloud-turn", "cloud-valley-peaks"],
+      "ablate": false, "capture": true, "stills": 2
+    },
+    "rays3": {
+      "name": "Atmosphere 2.0 M2: forest rays A2 through the day (sunrise, morning, noon, evening), forward scattering 0.75 / 0.3",
+      "scenarios": ["rays-dawn-turn", "rays-morning-turn", "rays-noon-turn", "rays-evening-turn"],
+      "ablate": false, "capture": true, "stills": 4, "compare": "fx.ray_scatter=0.75,0.3"
+    },
+    "rays2": {
+      "name": "Atmosphere 2.0 M2: forest rays at sunrise (target: Unity HDRP's volumetric lighting, D142)",
+      "scenarios": ["rays-sunrise", "rays-sunrise-turn"],
+      "ablate": false, "capture": true, "stills": 4
+    }
+  }
+}

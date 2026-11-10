@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wayfarer's Wake · Devlog</title>
+<meta name="description" content="Development log of Wayfarer's Wake, a procedural fantasy survival sandbox.">
+<style>
+  :root {
+    --ink: #2b2118; --ink-soft: #5d4a37; --parchment: #f6ecd7; --parchment-deep: #eadbbb; --line: #cdb58a;
+    --pine: #1f3a2c; --pine-deep: #142619; --teal: #2f6f6a; --gold: #d9a441; --ember: #c8642b; --sky: #f3c98b;
+    --stone: #8a8478; --ok: #2e6b3f; --wait: #9a6a1c; --no: #8a3a2a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--pine-deep); color: var(--ink); font: 17px/1.6 Georgia, "Iowan Old Style", "Palatino Linotype", serif; }
+  a { color: var(--teal); }
+  img { max-width: 100%; display: block; }
+
+  /* ---- hero: the view from the first summit */
+  .hero { position: relative; min-height: 78vh; display: grid; align-items: end; color: #fff7e6;
+    background: linear-gradient(180deg, #2a4a6b 0%, #6f8fae 30%, #f0b877 62%, #e58f4d 78%, #3c5a3d 100%); overflow: hidden; }
+  .hero img.art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(20,38,25,0) 35%, rgba(20,38,25,.55) 72%, var(--pine-deep) 100%); }
+  .hero-text { position: relative; z-index: 1; padding: 0 16px 44px; max-width: 980px; margin: 0 auto; width: 100%; }
+  .kicker { font: 600 13px/1 "Segoe UI", system-ui, sans-serif; letter-spacing: .28em; text-transform: uppercase; color: var(--sky); }
+  h1 { font-size: clamp(42px, 8vw, 86px); line-height: 1; margin: 12px 0 14px; font-weight: 700; text-shadow: 0 3px 0 rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.45); }
+  .lede { font-size: clamp(18px, 2.4vw, 23px); max-width: 34em; margin: 0; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+  .motto { margin-top: 18px; font-style: italic; color: var(--sky); }
+
+  /* ---- layout */
+  main { max-width: 980px; margin: 0 auto; padding: 0 16px 80px; }
+  .panel { background: var(--parchment); border: 3px solid var(--ink); box-shadow: 8px 8px 0 rgba(0,0,0,.35); padding: clamp(18px, 3.5vw, 36px); margin-top: 34px; }
+  h2 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 6px; line-height: 1.15; }
+  h3 { font-size: 20px; margin: 26px 0 6px; }
+  .date { font: 600 13px/1 "Segoe UI", system-ui, sans-serif; letter-spacing: .2em; text-transform: uppercase; color: var(--ember); }
+  p { margin: 12px 0; }
+  code { font: 14px/1.4 Consolas, "Cascadia Mono", monospace; background: var(--parchment-deep); padding: 1px 5px; border-radius: 2px; }
+  figure { margin: 22px 0 8px; }
+  figure img { border: 3px solid var(--ink); width: 100%; }
+  figcaption { font-size: 14.5px; color: var(--ink-soft); margin-top: 8px; font-style: italic; }
+
+  /* ---- stat blocks, like stacked stone */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 20px 0 6px; }
+  .stat { background: var(--pine); color: #f4e6c6; padding: 16px 16px 14px; border: 3px solid var(--ink); }
+  .stat b { display: block; font-size: 34px; line-height: 1; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .stat span { font: 14px/1.35 "Segoe UI", system-ui, sans-serif; display: block; margin-top: 8px; }
+
+  .table-wrap { overflow-x: auto; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; font: 15px/1.4 "Segoe UI", system-ui, sans-serif; min-width: 520px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 2px solid var(--ink); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tag { display: inline-block; font: 600 12px/1 "Segoe UI", system-ui, sans-serif; padding: 5px 8px; color: #fff; white-space: nowrap; }
+  .tag.ok { background: var(--ok); } .tag.wait { background: var(--wait); } .tag.no { background: var(--no); }
+
+  /* ---- the trail: milestones as waymarks */
+  .trail { list-style: none; margin: 18px 0 0; padding: 0; border-left: 4px solid var(--ink); }
+  .trail li { position: relative; padding: 2px 0 16px 26px; }
+  .trail li::before { content: ""; position: absolute; left: -12px; top: 6px; width: 16px; height: 16px; background: var(--parchment); border: 4px solid var(--ink); }
+  .trail li.done::before { background: var(--gold); }
+  .trail li.now::before { background: var(--ember); }
+  .trail b { display: block; }
+  .trail span { color: var(--ink-soft); font-size: 15.5px; }
+
+  /* ---- Alden, in blocks */
+  .alden-row { display: grid; grid-template-columns: 150px 1fr; gap: 26px; align-items: center; }
+  .alden { position: relative; width: 120px; height: 190px; margin: 0 auto; }
+  .alden i { position: absolute; display: block; }
+  .alden .hair { left: 38px; top: 0; width: 44px; height: 14px; background: #4a2f1c; }
+  .alden .head { left: 40px; top: 12px; width: 40px; height: 40px; background: #dba57b; }
+  .alden .eye1 { left: 49px; top: 28px; width: 6px; height: 6px; background: #2b2118; }
+  .alden .eye2 { left: 65px; top: 28px; width: 6px; height: 6px; background: #2b2118; }
+  .alden .beard { left: 44px; top: 40px; width: 32px; height: 14px; background: #4a2f1c; }
+  .alden .torso { left: 34px; top: 54px; width: 52px; height: 62px; background: var(--teal); }
+  .alden .arm1 { left: 18px; top: 56px; width: 16px; height: 46px; background: #2a625e; }
+  .alden .arm2 { left: 86px; top: 56px; width: 16px; height: 46px; background: #2a625e; }
+  .alden .hand1 { left: 18px; top: 102px; width: 16px; height: 14px; background: #dba57b; }
+  .alden .hand2 { left: 86px; top: 102px; width: 16px; height: 14px; background: #dba57b; }
+  .alden .belt { left: 32px; top: 110px; width: 56px; height: 9px; background: #3a2414; }
+  .alden .buckle { left: 54px; top: 109px; width: 12px; height: 11px; background: var(--gold); }
+  .alden .leg1 { left: 38px; top: 119px; width: 20px; height: 52px; background: #6a4528; }
+  .alden .leg2 { left: 62px; top: 119px; width: 20px; height: 52px; background: #6a4528; }
+  .alden .boot1 { left: 34px; top: 171px; width: 26px; height: 17px; background: #3a2414; }
+  .alden .boot2 { left: 60px; top: 171px; width: 26px; height: 17px; background: #3a2414; }
+  .alden .staff { left: 106px; top: 10px; width: 7px; height: 180px; background: #7a4f2a; }
+  .alden .roll { left: 28px; top: 46px; width: 64px; height: 10px; background: #c9a468; z-index: -1; }
+  blockquote { margin: 0; font-size: 19px; font-style: italic; border-left: 4px solid var(--gold); padding-left: 16px; }
+  blockquote footer { font-style: normal; font-size: 14.5px; color: var(--ink-soft); margin-top: 8px; }
+
+  footer.site { text-align: center; color: #b9ad90; font: 14px/1.6 "Segoe UI", system-ui, sans-serif; padding: 10px 16px 50px; }
+  footer.site a { color: var(--sky); }
+  @media (max-width: 560px) { .alden-row { grid-template-columns: 1fr; } .panel { box-shadow: 5px 5px 0 rgba(0,0,0,.35); } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <img class="art" src="ConceptArt/image-1794266313206.webp" alt="Concept art: a block-figure explorer with a pack and staff looks over forested islands, castles and snowy mountains at sunset." onerror="this.remove()">
+  <div class="hero-text">
+    <div class="kicker">Development log</div>
+    <h1>Wayfarer's Wake</h1>
+    <p class="lede">A procedural fantasy world to live in: explore, gather, build and survive across lands up to 4,096 km wide, every one grown from a seed.</p>
+    <p class="motto">Explore. Test. Break. Repeat.</p>
+  </div>
+</header>
+
+<main>
+
+  <article class="panel" id="day-one">
+    <div class="date">Entry 1 · 10 November 2026</div>
+    <h2>Day one: the world crosses over</h2>
+    <p>Wayfarer's Wake begins as a rebuild of Thornwake, a Godot survival game with an unusually careful world generator: continents and mountain belts, erosion that cuts real river valleys, lakes that fill to their spill level, a climate with rain shadows, eighteen biomes. The first job was to bring that generator to Unreal Engine 5.9 without losing a single metre of it.</p>
+    <p>Thornwake versions its terrain and keeps a frozen fingerprint of every version. So the port could be held to an exact standard: generate the same worlds in the new C++ code and compare fingerprints. All thirty matched.</p>
+
+    <div class="stats">
+      <div class="stat"><b>30 / 30</b><span>terrain fingerprints identical to the original generator</span></div>
+      <div class="stat"><b>4,096 km</b><span>largest world, generated in 13 seconds</span></div>
+      <div class="stat"><b>~215 fps</b><span>flying at 400 m/s, 1,050 km from the world's origin</span></div>
+      <div class="stat"><b>330</b><span>terrain tiles in view, whatever the world size</span></div>
+    </div>
+
+    <figure>
+      <img src="img/first-launch.png" alt="Screenshot: a block-figure explorer in a teal shirt stands on a green hillside above a coast under a cloudy sky; debug text shows 211 fps and 330 tiles.">
+      <figcaption>First launch. Alden stands on generated ground in a 64 km world (seed 7319), with the coast in the distance. The colours are placeholders: no textures, trees or grass yet.</figcaption>
+    </figure>
+
+    <h3>What is in the build</h3>
+    <p>The world is described by four values (seed, world type, size, terrain version) and rebuilt from them on demand. Nothing but a coarse plan of the whole world is kept in memory; the ground itself is made in tiles around the player on background threads, from 2 m detail underfoot to 16 km tiles at the horizon, and thrown away behind them. The same four values will be all a multiplayer client needs to stand in the same world.</p>
+
+    <figure>
+      <img src="img/far-world-4096km.png" alt="Screenshot from the air over a flat marsh of sand-coloured ground and grey pools reaching to the horizon; debug text reads 1057.61 km east, 4096 km world, 224 fps.">
+      <figcaption>A marsh 1,057 km east of the origin in a 4,096 km world, during a 24 km test flight. Motion blur is from the speed. The pools are drawn too large at this distance: on the list.</figcaption>
+    </figure>
+
+    <h3>Every world size</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>World</th><th class="num">Time to plan</th><th class="num">Plan memory</th><th class="num">Lakes</th><th class="num">River reaches</th></tr></thead>
+        <tbody>
+          <tr><td>32 km</td><td class="num">0.1 s</td><td class="num">6 MB</td><td class="num">6</td><td class="num">0</td></tr>
+          <tr><td>64 km</td><td class="num">0.1 s</td><td class="num">6 MB</td><td class="num">5</td><td class="num">4</td></tr>
+          <tr><td>128 km</td><td class="num">0.1 s</td><td class="num">6 MB</td><td class="num">18</td><td class="num">30</td></tr>
+          <tr><td>256 km</td><td class="num">0.2 s</td><td class="num">7 MB</td><td class="num">8</td><td class="num">105</td></tr>
+          <tr><td>512 km</td><td class="num">0.5 s</td><td class="num">23 MB</td><td class="num">8</td><td class="num">683</td></tr>
+          <tr><td>768 km</td><td class="num">1.0 s</td><td class="num">46 MB</td><td class="num">13</td><td class="num">1,516</td></tr>
+          <tr><td>1,024 km</td><td class="num">1.9 s</td><td class="num">84 MB</td><td class="num">13</td><td class="num">2,238</td></tr>
+          <tr><td>2,048 km</td><td class="num">5.2 s</td><td class="num">252 MB</td><td class="num">25</td><td class="num">10,561</td></tr>
+          <tr><td>4,096 km</td><td class="num">13.2 s</td><td class="num">802 MB</td><td class="num">40</td><td class="num">46,723</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>What is honest to say</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Part</th><th>State</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td>World generator, terrain versions 8–16</td><td><span class="tag ok">tested</span></td><td>Bit-identical to Thornwake, in the test tool and inside the engine.</td></tr>
+          <tr><td>Streaming terrain, collision, sky, player</td><td><span class="tag ok">running</span></td><td>Launched and checked from screenshots and logs; not yet played by hand.</td></tr>
+          <tr><td>Water</td><td><span class="tag wait">first pass</span></td><td>Flat surfaces at the right levels. No waves, current, foam or swimming.</td></tr>
+          <tr><td>Terrain versions 17–44</td><td><span class="tag no">not yet</span></td><td>Waterfalls, canyons, fjords, volcanoes, sea stacks and ten more landforms wait to be ported, each against its own fingerprint.</td></tr>
+          <tr><td>Forests, wildlife, crafting, building, saves</td><td><span class="tag no">not yet</span></td><td>They work in Thornwake; none has crossed over.</td></tr>
+          <tr><td>Multiplayer</td><td><span class="tag wait">shaped, not run</span></td><td>The world settings replicate; nothing has been tested with two machines.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <section class="panel" id="alden">
+    <div class="date">The first explorer</div>
+    <h2>Alden Wayfarer</h2>
+    <div class="alden-row">
+      <div class="alden" role="img" aria-label="Alden Wayfarer drawn in blocks: brown hair and beard, teal shirt, brown trousers, a bedroll and a walking staff.">
+        <i class="roll"></i><i class="hair"></i><i class="head"></i><i class="eye1"></i><i class="eye2"></i><i class="beard"></i>
+        <i class="torso"></i><i class="arm1"></i><i class="arm2"></i><i class="hand1"></i><i class="hand2"></i><i class="belt"></i><i class="buckle"></i>
+        <i class="leg1"></i><i class="leg2"></i><i class="boot1"></i><i class="boot2"></i><i class="staff"></i>
+      </div>
+      <div>
+        <blockquote>Before there were towns, roads, kingdoms, monsters, or stories, one man wandered the world simply because someone had to test it.
+          <footer>He went first because somebody had to.</footer>
+        </blockquote>
+        <p>Alden is the player figure in the current build, put together from seventeen blocks after the concept sheet: teal shirt, pack and bedroll, staff in hand.</p>
+      </div>
+    </div>
+    <figure>
+      <img src="ConceptArt/image-1794266336532.webp" alt="Concept sheet for Alden Wayfarer: turnaround views of the block figure, six poses, a stone statue with a plaque, and a summit view." onerror="this.closest('figure').remove()">
+      <figcaption>Concept sheet.</figcaption>
+    </figure>
+  </section>
+
+  <section class="panel" id="trail">
+    <div class="date">The trail ahead</div>
+    <h2>Milestones</h2>
+    <ol class="trail">
+      <li class="done"><b>1 · A working Unreal game</b><span>Project, player, camera, HUD, build and test commands. Compiled and launched.</span></li>
+      <li class="now"><b>2 · Faithful terrain core</b><span>Done to terrain version 16 with exact parity, streamed with collision. Next: the landform modules up to version 44, and the "natural" world types.</span></li>
+      <li><b>3 · A believable environment</b><span>Ground materials, forests and grass by biome, rocks, real rivers and shores, weather.</span></li>
+      <li><b>4 · A playable exploration build</b><span>Choose a world on a creation screen, walk it, cross every kind of country.</span></li>
+      <li><b>5 · Systems and persistence</b><span>Gathering, crafting, building, hunting, digging, saving only what the player changed.</span></li>
+      <li><b>6 · Multiplayer and the long distances</b><span>Host and join, shared edits, precision tests at the far corners of the largest worlds.</span></li>
+    </ol>
+  </section>
+
+</main>
+
+<footer class="site">
+  Wayfarer's Wake · built in Unreal Engine 5.9 from the world generator of Thornwake<br>
+  <a href="https://github.com/badsadcode/WayfarersWake">Source and project documents on GitHub</a>
+</footer>
+
+</body>
+</html>

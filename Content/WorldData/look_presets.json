@@ -1,0 +1,41 @@
+{
+  "_comment": "Look presets for the atmosphere (D164, Tom: 'it's really hard to decide on the settings'). Built-in presets that set only these look settings; quality and performance stay as the player has them. A first proposal for Tom to judge from captures; values can be changed here without code.",
+  "presets": [
+    {
+      "id": "clear", "name": "Clear",
+      "description": "Crisp, far views, little haze; rays only from the forest canopy when the weather allows.",
+      "settings": {
+        "fx.haze": 0.6, "fx.glow": 0.4, "fx.sun_shafts": 0.3, "fx.god_ray_contrast": 0, "fx.light_beams": 0.5,
+        "fx.forest_rays": 3, "fx.ray_scatter": 0.6, "fx.forest_sun_glare": 1, "fx.air_rays": 0, "fx.ray_weather": 1,
+        "fx.atmo_contrast": 0, "fx.ray_strength": 0.8, "fx.ground_fog": 2, "fx.wind_waves": 0.5, "fx.saturation": 1.05
+      }
+    },
+    {
+      "id": "natural", "name": "Natural",
+      "description": "Rays and haze only when the weather makes them (morning, after rain, near water); light and shadow from the land.",
+      "settings": {
+        "fx.haze": 1, "fx.glow": 0.6, "fx.sun_shafts": 0.6, "fx.god_ray_contrast": 0, "fx.light_beams": 1,
+        "fx.forest_rays": 3, "fx.ray_scatter": 0.5, "fx.forest_sun_glare": 1, "fx.air_rays": 2, "fx.ray_weather": 1,
+        "fx.atmo_contrast": 1, "fx.ray_strength": 1, "fx.ground_fog": 2, "fx.wind_waves": 1, "fx.saturation": 1
+      }
+    },
+    {
+      "id": "atmospheric", "name": "Atmospheric",
+      "description": "Hazier air with rays at any time of day; deep, layered distances.",
+      "settings": {
+        "fx.haze": 1.5, "fx.glow": 0.8, "fx.sun_shafts": 1, "fx.god_ray_contrast": 0.3, "fx.light_beams": 1.5,
+        "fx.forest_rays": 3, "fx.ray_scatter": 0.45, "fx.forest_sun_glare": 1, "fx.air_rays": 3, "fx.ray_weather": 0,
+        "fx.atmo_contrast": 1, "fx.ray_strength": 1.4, "fx.ground_fog": 2, "fx.wind_waves": 1, "fx.saturation": 1
+      }
+    },
+    {
+      "id": "dramatic", "name": "Dramatic",
+      "description": "Strong, contrasty shafts and glow, richer colour: the most cinematic, least subtle.",
+      "settings": {
+        "fx.haze": 1.2, "fx.glow": 1, "fx.sun_shafts": 1.6, "fx.god_ray_contrast": 0.7, "fx.light_beams": 2.5,
+        "fx.forest_rays": 3, "fx.ray_scatter": 0.75, "fx.forest_sun_glare": 1, "fx.air_rays": 3, "fx.ray_weather": 0,
+        "fx.atmo_contrast": 1, "fx.ray_strength": 1.8, "fx.ground_fog": 2, "fx.wind_waves": 1, "fx.saturation": 1.15
+      }
+    }
+  ]
+}

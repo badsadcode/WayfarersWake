@@ -1,0 +1,45 @@
+{
+  "_comment": "Atmosphere 2.0 light model 1: light by biome, time of day and weather (docs/ATMOSPHERE_2_0_REFERENCES.md). Curves are [sun elevation in degrees, colour]. Missing values come from 'temperate'. Biomes not listed use 'temperate'.",
+  "profiles": [
+    {
+      "id": "temperate", "name": "Temperate forest",
+      "biomes": ["temperate-forest", "ancient-forest"],
+      "shade": [[-10, "2e6c84"], [-4, "6f7cc8"], [2, "a69ad6"], [8, "9fc0de"], [20, "a3d3e3"], [90, "b4dcea"]],
+      "fog": [[-4, "8f86b8"], [2, "b8a2c4"], [10, "b4bccc"], [25, "aac4d2"], [90, "a9c6d6"]],
+      "night_fog": "0d2a36", "overcast": "b4b9c2", "storm": "8ea6b2",
+      "sun_tint": "ffffff", "shade_share": 0.3, "night_share": 0.5, "scatter": 1.0, "exposure": 0.0
+    },
+    {
+      "id": "plains", "name": "Plains",
+      "biomes": ["temperate-grassland", "savanna"],
+      "shade": [[-10, "34557e"], [-4, "7a76c8"], [2, "b49ad8"], [8, "b0bce0"], [20, "aed4ea"], [90, "b8dcf0"]],
+      "fog": [[-4, "9a82b6"], [2, "c2a0c4"], [10, "c4b8c8"], [25, "b2c6d6"], [90, "aec8da"]],
+      "night_fog": "122a40", "overcast": "b8bcc4", "storm": "96a8b4",
+      "sun_tint": "fff2dc", "shade_share": 0.28, "night_share": 0.5, "scatter": 1.15, "exposure": 0.0
+    },
+    {
+      "id": "taiga", "name": "Taiga and cold lands",
+      "biomes": ["taiga", "tundra", "arctic", "alpine"],
+      "shade": [[-10, "264f6e"], [-4, "5e74b8"], [2, "8e9ad0"], [8, "98b8d8"], [20, "9cc4dc"], [90, "aed2ea"]],
+      "fog": [[-4, "7f88b4"], [2, "a2a4c8"], [10, "b0bed2"], [25, "b6c8d8"], [90, "b8cadc"]],
+      "night_fog": "0e2436", "overcast": "b2b8c4", "storm": "8a9eb0",
+      "sun_tint": "f4f6ff", "shade_share": 0.34, "night_share": 0.55, "scatter": 0.8, "exposure": 0.0
+    },
+    {
+      "id": "desert", "name": "Desert and dry rock",
+      "biomes": ["desert", "badlands", "needle-rocks", "volcanic"],
+      "shade": [[-10, "38507a"], [-4, "8478b8"], [2, "c09ab8"], [8, "c0bcc4"], [20, "b8c8d4"], [90, "bcccd6"]],
+      "fog": [[-4, "a08aa8"], [2, "d8a890"], [10, "d6bea4"], [25, "d4c2a4"], [90, "d2c6ae"]],
+      "night_fog": "1a2236", "overcast": "c4bcb0", "storm": "a89e92",
+      "sun_tint": "fff4e0", "shade_share": 0.2, "night_share": 0.45, "scatter": 1.3, "exposure": -0.15
+    },
+    {
+      "id": "swamp", "name": "Swamp and wet lowland",
+      "biomes": ["swamp", "blighted-swamp", "marsh", "fen", "bayou", "jungle"],
+      "shade": [[-10, "1e4438"], [-4, "4f6a7e"], [2, "a09cb8"], [8, "9cb4b0"], [20, "98b8a8"], [90, "a4c4b4"]],
+      "fog": [[-4, "6e7890"], [2, "b0a8a8"], [10, "acb4a2"], [25, "a8b4a0"], [90, "a8b6a2"]],
+      "night_fog": "0c2420", "overcast": "aab0a8", "storm": "84988e",
+      "sun_tint": "f6f2d8", "shade_share": 0.4, "night_share": 0.55, "scatter": 0.7, "exposure": 0.1
+    }
+  ]
+}
